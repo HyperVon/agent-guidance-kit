@@ -269,10 +269,11 @@ def main() -> int:
     parser.add_argument("--max-files", type=int, default=50_000)
     args = parser.parse_args()
 
-    root = Path(args.root).expanduser().resolve()
-    if not root.is_dir() or root.is_symlink():
+    root = Path(args.root).expanduser()
+    if root.is_symlink() or not root.is_dir():
         print(f"error: root must be a real directory: {root}", file=sys.stderr)
         return 2
+    root = root.resolve()
     if args.max_files < 1:
         print("error: --max-files must be positive", file=sys.stderr)
         return 2

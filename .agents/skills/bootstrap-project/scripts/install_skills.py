@@ -456,7 +456,84 @@ def source_resolution_plan(kit_root: Path, target_root: Path) -> dict[str, Any]:
     }
 
 
-def configure_source_locator(kit_root: Path, target_root: Path) -> None:
+def read_optional_bytes(path: Path, label: str) -> bytes | None:
+    if path.is_symlink():
+        raise AdoptionError(f"{label} must not be a symlink: {path}")
+    if not path.exists():
+        return None
+    if not path.is_file():
+        raise AdoptionError(f"{label} must be a file: {path}")
+    try:
+        return path.read_bytes()
+    except OSError as error:
+        raise AdoptionError(f"cannot read {label}: {path}: {error}") from error
+
+
+def git_exclude_path(target_root: Path) -> Path:
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(target_root),
+                "rev-parse",
+                "--path-format=absolute",
+                "--git-path",
+                "info/exclude",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as error:
+        raise AdoptionError("Git is unavailable for source locator rollback") from error
+    if result.returncode != 0 or not result.stdout.strip():
+        raise AdoptionError("cannot resolve the target Git exclude file")
+    path = Path(result.stdout.strip())
+    read_optional_bytes(path, "Git exclude file")
+    return path
+
+
+def source_locator_snapshot(target_root: Path) -> dict[str, Any]:
+    locator = target_root / SOURCE_LOCATOR
+    exclude = git_exclude_path(target_root)
+    return {
+        "locator_path": locator,
+        "locator_bytes": read_optional_bytes(locator, "source locator"),
+        "exclude_path": exclude,
+        "exclude_bytes": read_optional_bytes(exclude, "Git exclude file"),
+    }
+
+
+def restore_source_locator(
+    before: dict[str, Any], after: dict[str, Any], token: str
+) -> None:
+    for path_key, bytes_key, label in (
+        ("locator_path", "locator_bytes", "source locator"),
+        ("exclude_path", "exclude_bytes", "Git exclude file"),
+    ):
+        path = before[path_key]
+        current = read_optional_bytes(path, label)
+        if current != after[bytes_key]:
+            raise AdoptionError(f"{label} changed during rollback: {path}")
+        previous = before[bytes_key]
+        if previous is None:
+            if current is not None:
+                path.unlink()
+            continue
+        temporary = path.parent / f".{path.name}.agent-guidance-kit-{token}"
+        if temporary.exists() or temporary.is_symlink():
+            raise AdoptionError(f"rollback path already exists: {temporary}")
+        with temporary.open("xb") as handle:
+            handle.write(previous)
+        os.replace(temporary, path)
+
+
+def configure_source_locator(
+    kit_root: Path, target_root: Path, token: str
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    before = source_locator_snapshot(target_root)
     result = run_source_resolver(
         kit_root,
         [
@@ -469,7 +546,11 @@ def configure_source_locator(kit_root: Path, target_root: Path) -> None:
     )
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip() or "unknown error"
+        after = source_locator_snapshot(target_root)
+        restore_source_locator(before, after, token)
         raise AdoptionError(f"cannot configure persistent source locator: {detail}")
+    after = source_locator_snapshot(target_root)
+    return before, after
 
 
 def difference_summary(
@@ -974,9 +1055,6 @@ def apply_plan(kit_root: Path, target_root: Path, plan: dict[str, Any]) -> Path:
             f"plan contains unsupported statuses for: {', '.join(unexpected)}"
         )
 
-    if source_resolution.get("status") == "CONFIGURE":
-        configure_source_locator(kit_root, target_root)
-
     ensure_safe_ancestors(target_root, Path(".agents"), create=True)
     ensure_safe_ancestors(target_root, TARGET_SKILLS, create=True)
     ensure_safe_ancestors(target_root, RECEIPTS, create=True)
@@ -993,6 +1071,7 @@ def apply_plan(kit_root: Path, target_root: Path, plan: dict[str, Any]) -> Path:
     moved: list[tuple[str, Path, Path, Path | None]] = []
     route_applied = False
     route_before: bytes | None = None
+    source_locator_state: tuple[dict[str, Any], dict[str, Any]] | None = None
     try:
         for item in plan_skills:
             if item["status"] not in {"CREATE", "UPDATE"}:
@@ -1031,12 +1110,22 @@ def apply_plan(kit_root: Path, target_root: Path, plan: dict[str, Any]) -> Path:
         if routing.get("status") != "UNCHANGED":
             route_before = write_routing(target_root, routing, plan["plan_id"])
             route_applied = True
+        if source_resolution.get("status") == "CONFIGURE":
+            source_locator_state = configure_source_locator(
+                kit_root, target_root, plan["plan_id"][:12]
+            )
         validate_installed(target_root, plan)
         receipt = receipt_for(plan)
         with receipt_path.open("x", encoding="utf-8") as handle:
             json.dump(receipt, handle, indent=2, sort_keys=True)
             handle.write("\n")
     except Exception:
+        if source_locator_state is not None:
+            restore_source_locator(
+                source_locator_state[0],
+                source_locator_state[1],
+                f"{plan['plan_id'][:12]}-rollback",
+            )
         if route_applied:
             restore_routing(target_root, routing, route_before)
         for status_value, destination, staged, previous in reversed(moved):
