@@ -170,9 +170,12 @@ whose current digest matches a prior receipt, maintains a digest-guarded route
 block, and writes a content-hash receipt. Local divergence is a conflict and is
 never overwritten.
 
-The first approved apply automatically configures the ignored target-local
-source locator when the target is a Git worktree. Verify that future sessions
-can rediscover the source:
+If no higher-priority portable source already resolves the approved kit, the
+first approved apply configures the ignored target-local source locator when the
+target is a Git worktree. If the environment setting, existing locator, or
+validated adjacent-sibling convention already resolves the same source, the
+plan records that method and does not create redundant locator state. Verify
+that future sessions can rediscover the source:
 
 ```text
 python <target-root>/.agents/skills/agent-guidance-maintenance/scripts/resolve_source.py \
@@ -180,7 +183,7 @@ python <target-root>/.agents/skills/agent-guidance-maintenance/scripts/resolve_s
 ```
 
 The resolver writes no tracked personal path. If automatic configuration is
-unavailable, the plan stops until the adjacent-sibling fallback or an
+unavailable, the plan stops until an existing adjacent-sibling fallback or
 environment setting provides a portable future source.
 
 ### 7. Integrate target-local guidance
