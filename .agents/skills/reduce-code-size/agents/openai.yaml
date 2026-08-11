@@ -1,0 +1,4 @@
+interface:
+  display_name: "Reduce Code Size"
+  short_description: "Simplify code without weakening behavior"
+  default_prompt: "Use $reduce-code-size to simplify this code while preserving behavior and verification."

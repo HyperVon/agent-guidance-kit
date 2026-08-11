@@ -1,0 +1,4 @@
+interface:
+  display_name: "Skill Reviewer"
+  short_description: "Review skill content for depth and usefulness"
+  default_prompt: "Use $skill-reviewer to find concrete content gaps in this project's agent skills."

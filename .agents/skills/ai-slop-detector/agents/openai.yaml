@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI Slop Detector"
+  short_description: "Audit artifacts for evidence-backed quality debt"
+  default_prompt: "Use $ai-slop-detector to audit this change for evidence-backed artifact quality problems."

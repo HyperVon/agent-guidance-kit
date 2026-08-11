@@ -1,0 +1,4 @@
+interface:
+  display_name: "Parallel Multi-Agent"
+  short_description: "Split independent work with clear ownership"
+  default_prompt: "Use $parallel-multi-agent to partition this task into safe, bounded independent tracks."

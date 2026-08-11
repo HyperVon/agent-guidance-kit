@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quality Hardening"
+  short_description: "Find and close meaningful correctness gaps"
+  default_prompt: "Use $quality-hardening to discover and fix a bounded set of high-value correctness gaps."
