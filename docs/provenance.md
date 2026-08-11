@@ -12,8 +12,8 @@ progressive disclosure, bounded delegation, verification discipline, safe
 external-guidance review, provenance, and context/output hygiene.
 
 Project-specific trading rules, product architecture, language ownership,
-milestone constraints, provider catalogs, credentials, model availability,
-runtime configuration, and private/local state are intentionally excluded.
+milestone constraints, credentials, and private/local state are intentionally
+excluded.
 
 The reusable skill text in this repository is generalized and rewritten for
 this project rather than copied as a universal policy from either source.
@@ -47,14 +47,14 @@ the catalog. Their text and bundled assets were not copied or executed.
 
 Disposition: `NEW_SKILL` for systematic debugging, security review, and skill
 evaluation; `IMPROVE_EXISTING` for skill-authoring and repository validation;
-`DEFER` for technology-specific skills and provider/runtime workflows.
+`DEFER` for technology-specific skills without enough portable evidence.
 
 ## First-use adoption evidence
 
-A first adoption in a separate sibling project exposed broken links after
-selective installation, no persistent maintenance route, and no portable way to
-rediscover the kit source. The target's private project details and filesystem
-paths are not retained here.
+A first adoption of the kit exposed broken links after selective installation,
+no persistent maintenance route, and no portable way to rediscover the kit
+source. The target's private project details and filesystem paths are not
+retained here.
 
 Disposition: `NEW_SKILL` for `agent-guidance-maintenance`;
 `IMPROVE_EXISTING` for bootstrap planning, receipt-aware refresh, dependency

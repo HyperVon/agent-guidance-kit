@@ -9,7 +9,7 @@ authority.
 ## Architecture
 
 ```text
-active harness LLM
+active coding agent
   -> identify its instruction and skill capabilities
   -> inspect target repository and existing guidance
   -> read reusable skill catalog
@@ -21,7 +21,7 @@ active harness LLM
   -> validate and report evidence
 ```
 
-The LLM owns interpretation and reconciliation because those tasks depend on
+The agent owns interpretation and reconciliation because those tasks depend on
 project meaning. Scripts own repeatable mechanical checks because those tasks
 benefit from determinism.
 
@@ -54,10 +54,10 @@ is required, and how discovery can be verified. It then chooses the thinnest
 working projection.
 
 Product-specific profiles document known behavior and test evidence, but they
-are not a runtime allowlist. An unknown future harness can use native discovery,
-a thin instruction pointer, a narrow projection, or a manual entrypoint without
-requiring a new release of the kit. The repository keeps one canonical owner
-for each rule or skill regardless of the adapter used.
+are not a fixed compatibility allowlist. An unknown future harness can use
+native discovery, a thin instruction pointer, a narrow projection, or a manual
+entrypoint without requiring a new release of the kit. The repository keeps one
+canonical owner for each rule or skill regardless of the adapter used.
 
 ## Safety model
 
@@ -70,12 +70,5 @@ for each rule or skill regardless of the adapter used.
 - A prior receipt permits refresh only while target content still matches the
   previously adopted digest. Local divergence fails closed.
 - Existing target guidance remains authoritative.
-- Scripts do not execute imported content or access networks, providers,
-  credentials, databases, logs, or runtime state.
-
-## Deliberate exclusions
-
-The v1 release does not include an LLM, embeddings, provider selection, model routing,
-worker spawning, process supervision, unattended updates, remote pack loading,
-marketplace behavior, or a managed-guidance service. Those capabilities must
-earn a separate boundary through demonstrated use.
+- Scripts do not execute imported content or access networks, credentials,
+  databases, logs, or application state.

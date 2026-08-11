@@ -18,11 +18,10 @@ DEFER, or SKIP, with evidence and an exact destination or owner. Include every
 proposed file creation or edit, dependency addition, collision, harness
 projection, validation command, and material exclusion.
 
-Do not use or install a local LLM, classifier, embeddings service, model router,
-provider runtime, plugin, or worker supervisor. Do not read credentials or
-runtime data, fetch remote guidance, execute imported scripts, overwrite local
-guidance, or modify the target yet. Stop after the exact plan and wait for my
-approval.
+Use the active coding agent for interpretation and keep inventory and planning
+read-only. Do not fetch remote guidance, read credentials or application data,
+execute imported scripts, overwrite local guidance, or modify the target yet.
+Stop after the exact plan and wait for my approval.
 ```
 
 If the harness does not discover repository skills natively, explicitly direct

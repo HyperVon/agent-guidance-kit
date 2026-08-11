@@ -1,8 +1,6 @@
 # Roadmap
 
-The roadmap has two independent tracks. Expanding the guidance library belongs
-here. Provider and worker runtime behavior belongs in a separate sibling
-project.
+This roadmap covers future work for the standalone Agent Guidance Kit.
 
 ## Library expansion
 
@@ -24,7 +22,7 @@ or execute it. For every candidate:
 5. require a distinct trigger, recurring need, useful decision procedure,
    explicit side effects, stop conditions, and verification contract;
 6. generalize and rewrite portable ideas rather than copying project-specific
-   commands, provider assumptions, credentials, or copyrighted prose;
+   commands, tool assumptions, credentials, or copyrighted prose;
 7. forward-test one matching prompt, one neighboring prompt, and one ambiguous
    prompt before admission;
 8. run the structural audit, official skill validation, link checks, and public
@@ -39,22 +37,3 @@ the order; this list is not a commitment to create each skill.
 This work can ship as backward-compatible catalog releases. A v2 is warranted
 only if the intake and comparison workflow itself earns reusable tooling or a
 new compatibility contract.
-
-## Optional routing runtime
-
-Automatic provider/model selection, quotas, credential handling, worker
-spawning, worktree ownership, retries, supervision, and recovery should be a
-separate sibling project with its own threat model, dependencies, tests, and
-release cadence.
-
-The integration boundary is intentionally small:
-
-- this kit defines task procedures, roles, authority, constraints, and expected
-  evidence;
-- the optional runtime translates an approved task packet into provider and
-  worker execution;
-- the active harness remains usable without that runtime;
-- this kit never reads provider credentials or silently installs the runtime.
-
-If a runtime integration is added later, it should be an optional adapter and
-must not become a prerequisite for project bootstrap or skill use.

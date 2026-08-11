@@ -6,19 +6,14 @@ actually needs.
 
 ## Product boundary
 
-The active coding harness and its current LLM perform semantic work: inspect the
-target repository, understand its constraints, select useful skills, reconcile
-them with local guidance, identify the harness's relevant capabilities, and
-explain the proposed integration.
+The active agent interprets the target repository, selects and reconciles useful
+guidance, and explains the proposed integration. Deterministic helpers handle
+inventory, content digests, structural validation, and file operations explicitly
+approved in an unchanged plan.
 
-Deterministic helpers may inventory files, calculate hashes, validate structure,
-and copy an approved set of files safely. They must not classify the project,
-select skills, call an LLM, fetch remote content, install a provider, route a
-model, or supervise workers.
-
-Keep provider/model routing, quota policy, process supervision, worktree worker
-ownership, and recovery in a separate future runtime project. Do not add those
-systems here.
+Helpers must not make semantic decisions, execute imported content, use network
+services, access credentials or application data, or write beyond the approved
+plan.
 
 ## Repository invariants
 
@@ -26,8 +21,9 @@ systems here.
   policy lives here; portable always-on behavior lives in `OPERATING.md`; deep
   procedures live in skills.
 - Adapt to harness capabilities rather than maintaining a closed product
-  allowlist. Known harness profiles are evidence and examples, not runtime
-  gates; unknown harnesses use the capability contract and manual fallback.
+  allowlist. Known harness profiles are evidence and examples, not fixed
+  compatibility gates; unknown harnesses use the capability contract and manual
+  fallback.
 - Prefer a small focused skill with a precise trigger over a broad framework or
   a second representation of the same guidance.
 - Before adding a skill, script, schema, adapter, or second representation, use
@@ -47,8 +43,8 @@ systems here.
   Repository-only validators may use small declared development dependencies
   when they materially improve format validation.
 - Keep examples generic. Never commit personal paths, usernames, hostnames,
-  credentials, tokens, account data, private repository coordinates, runtime
-  state, or secret-bearing fixtures.
+  credentials, tokens, account data, private repository coordinates,
+  application state, or secret-bearing fixtures.
 - Before creating a commit, confirm that the repository-configured author
   identity is the owner's intended public identity. Do not expose a personal
   email or rewrite existing history without explicit approval.
