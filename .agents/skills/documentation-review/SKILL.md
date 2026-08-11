@@ -34,13 +34,19 @@ or defer it. Never broaden a guarantee beyond what the evidence supports.
 
 ## Workflow
 
-1. **Scope and inventory.** Read the requested documents and only the
+1. **Scope and inventory.** Identify each document's intended audience and
+   purpose. Read the requested documents and only the
    implementation, build/configuration, tests, CI, generated artifacts, or
    primary references needed to verify their claims. Record the paths read.
-2. **Map claims to evidence.** Check setup, commands, versions, interfaces,
+2. **Map claims to evidence and audience.** Check setup, commands, versions, interfaces,
    behavior, security/safety statements, diagrams, links, screenshots, and
    status claims. Classify each finding as `WRONG`, `STALE`, `MISSING`,
-   `ORPHAN`, `UNVERIFIED`, or `BROKEN`.
+   `ORPHAN`, `UNVERIFIED`, or `BROKEN`. A true statement can still be an
+   `ORPHAN` when it is placed for the wrong audience or duplicates a canonical
+   owner. Keep a public README focused on understanding, installing, and using
+   the project; move detailed exclusions, trust models, and internal rationale
+   to design or security documentation unless users need them to avoid an
+   immediate misuse.
 3. **Report before broad edits.** For each finding, give the document location,
    claim, evidence anchor, impact, smallest correction, and size. Preserve
    unrelated work and do not invent new documentation scope.

@@ -55,6 +55,9 @@ of these, in descending strength:
 
 Style, verbosity, unusual formatting, artifact size, or formulaic language is
 only an investigation prompt. Do not call it a defect without evidence.
+Likewise, documentation placement is a finding only when internal rationale or
+repeated exclusions demonstrably obscure user tasks, displace setup and usage,
+or duplicate a more appropriate canonical design or security document.
 
 Every finding needs an anchor (path, line, diff, check, contract, or
 reproduction), the actual or credible impact, the smallest safe correction or
@@ -74,7 +77,12 @@ Separate observations, inferences, and unknowns.
    Treat an unrun check as a verification gap, not a passing result.
 4. **Test the claim.** Verify APIs, flags, paths, dependencies, contracts,
    test independence, error handling, and boundary ownership against current
-   source. Do not infer motive.
+   source. For a framework, toolkit, or generator, run or trace the smallest
+   primary consumer flow and compare its files, configuration, dependencies,
+   and context burden with the recurring need it claims to solve. Check whether
+   tests prove that outcome or only prove internal schemas and abstractions, and
+   whether reference-project concepts leaked into generic behavior without an
+   unrelated-target justification. Do not infer motive.
 5. **Report findings.** Prefer a short list of concrete findings over a
    list of suspicions. Include strengths or explicit non-issues when they
    prevent unnecessary churn.

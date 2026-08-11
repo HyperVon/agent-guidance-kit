@@ -10,6 +10,7 @@
         "The response prohibits executing or automatically installing candidate content",
         "The response requires source revision, retrieval date, candidate path, and applicable license evidence",
         "The response maps candidates to existing owners before proposing a new skill",
+        "The response treats source projects as examples and checks portability against an unrelated task or project",
         "The response uses explicit admission dispositions and remains report-only"
       ]
     },

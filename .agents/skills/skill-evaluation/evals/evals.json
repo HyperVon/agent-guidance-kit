@@ -32,6 +32,18 @@
         "The response requests the missing evaluation inputs",
         "The response does not claim quality from the question alone"
       ]
+    },
+    {
+      "id": 4,
+      "kind": "edge",
+      "prompt": "Compare a skill with its baseline. The shared temporary parent contains unrelated repositories, and after the first outputs I want to add an assertion because only the skill condition mentioned it.",
+      "expected_output": "The agent isolates the fixture, excludes contaminated runs, grounds assertions in an authoritative contract before comparison, and reruns every condition if a justified criterion changes.",
+      "assertions": [
+        "The response requires a dedicated evaluation root without unrelated repositories",
+        "The response excludes or reruns contaminated conditions",
+        "The response rejects post-hoc assertions based only on a favorable output difference",
+        "The response reruns every condition if an authoritative contract justifies a revised assertion"
+      ]
     }
   ]
 }

@@ -43,7 +43,8 @@ its decision impact, and the smallest validation that would close the gap.
 ## Workflow
 
 1. **Frame the decision.** State the review scope, question, constraints,
-   non-goals, and what would count as a meaningful improvement.
+   non-goals, the original user outcome, the primary consumer journey, and what
+   would count as a meaningful improvement.
 2. **Discover the as-is design.** Map entry points, components, data and
    control flows, ownership, trust and protocol boundaries, persistence,
    concurrency, configuration, and test or operational seams from source.
@@ -51,7 +52,12 @@ its decision impact, and the smallest validation that would close the gap.
 3. **Stress-test the design.** Check domain placement, module boundaries,
    failure and recovery behavior, concurrency and lifecycle, security and
    data handling, operability, testability, build cost, and team change cost.
-   Skip dimensions with no evidence of a relevant issue.
+   Trace the smallest real end-to-end consumer flow and distinguish tests of
+   internal abstractions from evidence that the user-facing outcome works. For
+   a product generalized from reference projects, test the proposed concepts
+   against at least one unrelated target: references are evidence and fixtures,
+   not the platform's default taxonomy or ontology. Skip dimensions with no
+   evidence of a relevant issue.
 4. **Compare alternatives.** For each real problem, compare a credible
    **Keep current** option with **Evolve**, **Replace**, or **Greenfield** only
    when warranted. State impact, evidence, cost, reversibility, migration
@@ -59,7 +65,9 @@ its decision impact, and the smallest validation that would close the gap.
 5. **Filter and deliver.** Drop taste-only churn, fashionable technology
    swaps, and proposals unsupported by a concrete quality, security,
    operability, correctness, or maintainability delta. Prefer fewer, sharper
-   recommendations.
+   recommendations. Do not recommend a new subsystem merely because a prompt,
+   roadmap, or abstraction can describe one; name the current consumer workflow
+   and evidence that a simpler change cannot satisfy it.
 6. **Stop before implementation.** Present the report and decision choices;
    wait for explicit selections before drafting an implementation plan or
    changing code.

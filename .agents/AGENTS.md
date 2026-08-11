@@ -30,6 +30,9 @@ systems here.
   gates; unknown harnesses use the capability contract and manual fallback.
 - Prefer a small focused skill with a precise trigger over a broad framework or
   a second representation of the same guidance.
+- Before adding a skill, script, schema, adapter, or second representation, use
+  `ai-slop-detector` to establish the current consumer workflow, canonical
+  owner, simpler alternative, and outcome-level verification that justify it.
 - Treat target-project guidance as authoritative. Adoption is proposal-first
   and approval-gated. New content is create-only; receipt-owned content may be
   refreshed only while its target digest is unchanged; local divergence fails
@@ -46,10 +49,17 @@ systems here.
 - Keep examples generic. Never commit personal paths, usernames, hostnames,
   credentials, tokens, account data, private repository coordinates, runtime
   state, or secret-bearing fixtures.
+- Before creating a commit, confirm that the repository-configured author
+  identity is the owner's intended public identity. Do not expose a personal
+  email or rewrite existing history without explicit approval.
 - Preserve public source provenance in `docs/provenance.md` without carrying
   source-project policy into the portable core.
 - Do not create a remote, publish, push, or open a pull request unless the user
   explicitly authorizes that external action.
+- Repository visibility and public-release timing are user-owned decisions.
+  Do not make publication, tagging, or release preparation the automatic next
+  phase merely because a candidate is ready; discuss them only when the user
+  asks to work on that phase.
 
 ## Skill index
 
