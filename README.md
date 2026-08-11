@@ -8,8 +8,8 @@ skills, and waits for approval. A deterministic installer then adds the kit's
 maintenance entrypoint, closes required dependencies, updates managed routing,
 and installs the approved skills without overwriting local divergence.
 
-> Status: early release. The catalog and integration workflow may change before
-> the first versioned release.
+> Status: early pre-1.0 release. The catalog and integration workflow may evolve
+> with documented release notes.
 
 ## Why use it
 
@@ -21,7 +21,7 @@ and installs the approved skills without overwriting local divergence.
 
 ## Quick start
 
-Clone the public checkout, or make an existing checkout available to your coding
+Clone the repository, or make an existing checkout available to your coding
 agent:
 
 ```text

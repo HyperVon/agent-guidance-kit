@@ -119,6 +119,23 @@ class InstallSkillsTest(unittest.TestCase):
             receipt, install_skills.apply_plan(self.kit, self.target, plan)
         )
 
+    def test_adjacent_source_resolution_does_not_create_locator(self) -> None:
+        adjacent_kit = Path(self.temp.name) / "agent-guidance-kit"
+        self.kit.rename(adjacent_kit)
+        self.kit = adjacent_kit
+        self.add_skill("alpha")
+        environment_value = os.environ.pop(install_skills.SOURCE_ENVIRONMENT, None)
+        try:
+            plan = install_skills.build_plan(self.kit, self.target, ["alpha"])
+            self.assertEqual("UNCHANGED", plan["source_resolution"]["status"])
+            self.assertEqual("adjacent sibling", plan["source_resolution"]["method"])
+            install_skills.apply_plan(self.kit, self.target, plan)
+        finally:
+            if environment_value is not None:
+                os.environ[install_skills.SOURCE_ENVIRONMENT] = environment_value
+
+        self.assertFalse((self.target / install_skills.SOURCE_LOCATOR).exists())
+
     def test_conflict_blocks_all_selected_skills(self) -> None:
         self.add_skill("alpha")
         self.add_skill("beta")
@@ -157,6 +174,8 @@ class InstallSkillsTest(unittest.TestCase):
         try:
             plan = install_skills.build_plan(self.kit, self.target, ["alpha"])
             self.assertEqual("CONFIGURE", plan["source_resolution"]["status"])
+            route_path = self.target / plan["routing"]["path"]
+            route_before = route_path.read_bytes() if route_path.exists() else None
 
             exclude_path = Path(
                 subprocess.run(
@@ -199,6 +218,14 @@ class InstallSkillsTest(unittest.TestCase):
 
         locator = self.target / install_skills.SOURCE_LOCATOR
         self.assertFalse(locator.exists())
+        self.assertFalse((self.target / ".agents/skills/alpha").exists())
+        self.assertFalse(
+            (self.target / ".agents/skills/agent-guidance-maintenance").exists()
+        )
+        if route_before is None:
+            self.assertFalse(route_path.exists())
+        else:
+            self.assertEqual(route_before, route_path.read_bytes())
         exclude_after = exclude_path.read_bytes() if exclude_path.exists() else None
         self.assertEqual(exclude_before, exclude_after)
         self.assertFalse(

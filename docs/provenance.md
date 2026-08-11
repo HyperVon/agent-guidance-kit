@@ -1,7 +1,7 @@
 # Source provenance
 
-This project was informed by agent-guidance patterns proven in two public
-software projects:
+This project was informed by agent-guidance patterns developed and exercised in
+two public software projects:
 
 - [HyperVon/new-kraken-rebalancer](https://github.com/HyperVon/new-kraken-rebalancer)
 - [HyperVon/rg-helloworld](https://github.com/HyperVon/rg-helloworld)

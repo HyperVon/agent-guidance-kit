@@ -46,8 +46,10 @@ Resolution order is:
 5. otherwise stop and ask for the checkout path.
 
 Never search unrelated directories, fetch a replacement, or write a personal
-path into tracked guidance. Initial adoption records an ignored locator when a
-Git worktree is available.
+path into tracked guidance. Initial adoption records an ignored locator when no
+higher-priority portable source already resolves the kit and a Git worktree is
+available; an already valid environment, locator, or adjacent-sibling result is
+preserved as the source-resolution method without redundant locator state.
 
 ## Workflow
 
