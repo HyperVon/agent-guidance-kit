@@ -35,6 +35,12 @@ context, documented project conventions, installed version output when safe,
 and existing repository markers. The agent may state which harness it is
 running in; do not introduce a classifier or separate model to infer it.
 
+A user-reported model or profile switch is current session evidence, not a
+harness capability change. Do not carry a stale model label from an earlier
+turn, ask the user to repeat a switch they already reported, or treat the switch
+as broader task authority. Claim an exact model only when the user or harness
+exposes it.
+
 Treat environment variables and filenames as clues, not proof. Do not inspect
 credentials, account files, telemetry, caches, conversation databases, or
 unrelated personal directories.

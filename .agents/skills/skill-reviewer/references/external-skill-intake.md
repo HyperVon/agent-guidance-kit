@@ -43,6 +43,12 @@ Do not use stars, download counts, prose volume, or a familiar skill name as
 evidence of quality. Verify referenced commands and interfaces only against
 authoritative sources, and label anything not verified.
 
+Treat source projects as examples, not as the catalog's taxonomy. Restate any
+candidate behavior in repository-agnostic terms and test it against at least one
+unrelated project or task. If the source project's nouns, layout, or domain
+assumptions remain necessary, classify the candidate as `PROJECT_SPECIFIC`
+instead of teaching those assumptions as a portable platform contract.
+
 ## Choose one disposition
 
 - `IMPROVE_EXISTING` — portable behavior belongs in a current owner.

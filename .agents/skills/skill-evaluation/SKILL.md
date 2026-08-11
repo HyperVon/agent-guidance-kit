@@ -33,6 +33,12 @@ on a neighboring request that did not ask for measurement.
 
 ## Design the cases
 
+Name the authoritative contract for the expected behavior, then freeze the
+expected outcomes and assertions before seeing condition outputs. Do not add an
+assertion merely because one condition happened to mention something useful.
+If a run exposes a missing or invalid criterion, document the reason, amend the
+case, and rerun every condition under the same revised case before scoring it.
+
 Start with at least three realistic prompts:
 
 1. **matching** — clearly belongs to the skill;
@@ -52,19 +58,24 @@ prompts rather than overfitting the three initial cases.
 ## Run and compare
 
 1. Snapshot the current skill before changing it when comparing versions.
-2. Run each case in a clean context with the skill and with the chosen
-   baseline—no skill or the previous version. Keep prompts, inputs, and output
-   locations equivalent.
-3. Grade every assertion with concrete evidence from the output or a
+2. Create a dedicated evaluation root containing only the declared fixtures.
+   Do not use a shared temporary parent, repository collection, or workspace
+   whose siblings the agent can inspect. Restrict file, tool, and network access
+   to the case when the harness supports it; otherwise state the limitation and
+   exclude any run contaminated by unrelated discovery.
+3. Run each case in a clean context with the skill and with the chosen
+   baseline—no skill or the previous version. Keep prompts, inputs, tools,
+   network access, model settings, and output locations equivalent.
+4. Grade every assertion with concrete evidence from the output or a
    deterministic checker. Do not award a pass because the output sounds
    plausible.
-4. Record timing and token data when the harness exposes it, while treating
+5. Record timing and token data when the harness exposes it, while treating
    those measurements as environment-specific.
-5. Perform human review of the outputs for usefulness, unnecessary work,
+6. Perform human review of the outputs for usefulness, unnecessary work,
    misleading confidence, and side effects that assertions missed.
-6. Repeat cases when model variance could change the decision; do not imply
+7. Repeat cases when model variance could change the decision; do not imply
    statistical confidence from one run per condition.
-7. Improve only the smallest validated gap, then rerun the full case set. If
+8. Improve only the smallest validated gap, then rerun the full case set. If
    the skill does not beat its baseline on meaningful cases—or adds context
    cost without a demonstrated benefit—merge it into an existing owner, defer,
    or reject it.

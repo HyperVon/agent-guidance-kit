@@ -15,6 +15,13 @@ Establish the repository state, relevant contracts, source of truth, and user
 intent before editing. Preserve unrelated changes and do not infer permission
 for commits, publication, external messages, or destructive actions.
 
+Treat the user's newest correction as the current scope and say what prior work
+it pauses or supersedes. “Continue” or “proceed” resumes the most recently
+stated unfinished scope; it does not authorize the next roadmap phase, a sibling
+project, release work, publication, or another external action. If a referenced
+plan or artifact is missing, recover its exact durable replacement or stop and
+ask rather than reconstructing new scope from memory.
+
 ## 3. Use the smallest applicable skill
 
 Load only the procedure needed for the task. Extend an existing owner skill
@@ -51,12 +58,19 @@ Search narrowly, summarize large outputs, retain only actionable excerpts, and
 store diagnostics outside tracked content. Do not dump secrets, dependency
 trees, full logs, or unrelated files into prompts or reports.
 
+For a model or session handoff, preserve a compact objective, current state,
+exact next step, authority, and stop conditions. Do not replay the full history
+or assume that a model-specific label from an earlier turn is still current.
+
 ## 9. Parallelize only independent work
 
 Use the active harness's native worker and model-selection capabilities when
 the user authorizes delegation. Give workers disjoint ownership, bounded
 context, explicit stop conditions, and no secret access. A role name is not
-proof of a provider or model. The parent owns integration and final checks.
+proof of a provider or model. Treat current user or harness evidence about a
+model switch as newer than a prior handoff, and do not ask for the same switch
+again without a verified reload need. A model change does not broaden task
+authority. The parent owns integration and final checks.
 
 ## 10. Leave a clean, recoverable state
 
@@ -64,3 +78,7 @@ Do not leave servers, watchers, temporary files, worktrees, or child workers
 running after they are no longer needed. Never share credentials or runtime
 state between worktrees. Keep public tracked files free of personal and secret
 data.
+
+Distinguish disposable execution artifacts from continuation artifacts. A plan,
+handoff, or PR body that the user may reference later needs a durable location
+or a named durable replacement before its temporary copy is removed.
