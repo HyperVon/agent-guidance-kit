@@ -2,7 +2,7 @@
 
 ## Goal
 
-Upgrade an arbitrary software repository with the smallest useful set of proven
+Upgrade an arbitrary software repository with the smallest useful set of curated
 agent skills and operating guidance while preserving that repository's local
 authority.
 

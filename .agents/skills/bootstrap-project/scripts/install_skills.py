@@ -32,6 +32,8 @@ ROUTE_END = "<!-- agent-guidance-kit:routes:end -->"
 TRANSIENT_DIRS = {"__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache"}
 TRANSIENT_FILES = {".DS_Store"}
 TRANSIENT_SUFFIXES = {".pyc", ".pyo", ".swp"}
+# Evaluation cases validate the kit and are not runtime guidance for targets.
+SOURCE_ONLY_DIRS = {"evals"}
 
 
 class AdoptionError(RuntimeError):
@@ -112,7 +114,11 @@ def tree_manifest(root: Path) -> list[dict[str, Any]]:
     ensure_no_symlink_tree(root)
     records: list[dict[str, Any]] = []
     for directory, dirnames, filenames in os.walk(root, followlinks=False):
-        dirnames[:] = sorted(name for name in dirnames if name not in TRANSIENT_DIRS)
+        dirnames[:] = sorted(
+            name
+            for name in dirnames
+            if name not in TRANSIENT_DIRS and name not in SOURCE_ONLY_DIRS
+        )
         current = Path(directory)
         for filename in sorted(filenames):
             if (

@@ -1,6 +1,6 @@
 # Agent Guidance Kit
 
-Agent Guidance Kit helps a coding agent add proven, project-local guidance to
+Agent Guidance Kit helps a coding agent add curated, project-local guidance to
 an existing software repository without replacing that repository's own rules.
 
 The agent inspects the target project, proposes the smallest relevant set of
@@ -21,7 +21,14 @@ and installs the approved skills without overwriting local divergence.
 
 ## Quick start
 
-Make this checkout available to your coding agent and ask it to read:
+Clone the public checkout, or make an existing checkout available to your coding
+agent:
+
+```text
+git clone https://github.com/HyperVon/agent-guidance-kit.git
+```
+
+Then ask the agent to read:
 
 ```text
 .agents/skills/bootstrap-project/SKILL.md
@@ -65,7 +72,8 @@ creates missing skills and may refresh an adopted skill only when its current
 content still matches a prior receipt. Local modifications or routing conflicts
 stop the entire operation. The approved plan also creates or updates a managed
 AGENTS routing block so future agents can discover maintenance without knowing
-the source checkout path.
+the source checkout path. Kit-side evaluation material under `evals/` is not
+copied into consuming repositories.
 
 ## Included skills
 
@@ -121,6 +129,8 @@ pinned development tools declared by the repository:
 
 - PyYAML for skill and metadata validation
 - Ruff for Python linting and formatting checks
+- Agent Skills reference validation via the `agentskills` command from the
+  pinned `skills-ref` package
 - markdownlint-cli2 for Markdown and MDC linting
 
 Node dependency lifecycle scripts are disabled during setup. The complete check
