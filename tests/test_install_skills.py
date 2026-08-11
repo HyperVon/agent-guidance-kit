@@ -293,6 +293,19 @@ class InstallSkillsTest(unittest.TestCase):
         self.assertFalse((destination / ".DS_Store").exists())
         self.assertFalse((destination / "notes.md~").exists())
 
+    def test_evaluation_material_is_not_planned_or_copied(self) -> None:
+        source = self.add_skill("alpha")
+        fixture = source / "evals/files/example.txt"
+        fixture.parent.mkdir(parents=True)
+        fixture.write_text("kit-only evaluation fixture\n", encoding="utf-8")
+
+        plan = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        planned = {item["path"] for item in plan["skills"][0]["files"]}
+        install_skills.apply_plan(self.kit, self.target, plan)
+
+        self.assertFalse(any(path.startswith("evals/") for path in planned))
+        self.assertFalse((self.target / ".agents/skills/alpha/evals").exists())
+
     def test_required_dependencies_are_added_but_related_skills_are_not(self) -> None:
         self.add_skill("alpha")
         self.add_skill("gamma")
