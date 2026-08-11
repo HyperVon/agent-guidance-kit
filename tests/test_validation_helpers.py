@@ -183,6 +183,21 @@ class ValidationHelpersTest(unittest.TestCase):
                 check.agent_skills_commands(root=root, python=str(python)),
             )
 
+    def test_agent_skills_command_finds_windows_scripts_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            skill = root / ".agents/skills/example"
+            skill.mkdir(parents=True)
+            python = root / "python.exe"
+            validator = root / "Scripts/agentskills.exe"
+            validator.parent.mkdir(parents=True)
+            validator.touch()
+
+            self.assertEqual(
+                [[str(validator), "validate", str(skill)]],
+                check.agent_skills_commands(root=root, python=str(python)),
+            )
+
     def test_existing_virtual_environment_is_reused(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             venv_dir = Path(temporary_directory) / ".venv"

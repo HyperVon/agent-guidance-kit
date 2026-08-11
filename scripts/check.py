@@ -25,13 +25,18 @@ def agent_skills_commands(
     root: Path = ROOT, python: str | None = None
 ) -> list[list[str]] | None:
     python_path = Path(python or sys.executable)
-    executable_dir = python_path.parent
+    executable_dirs = [python_path.parent]
+    if python_path.name.lower().endswith(".exe"):
+        executable_dirs.append(python_path.parent / "Scripts")
     validator = None
-    for name in ("agentskills", "skills-ref"):
-        for suffix in ("", ".exe"):
-            candidate = executable_dir / f"{name}{suffix}"
-            if candidate.is_file():
-                validator = candidate
+    for executable_dir in executable_dirs:
+        for name in ("agentskills", "skills-ref"):
+            for suffix in ("", ".exe"):
+                candidate = executable_dir / f"{name}{suffix}"
+                if candidate.is_file():
+                    validator = candidate
+                    break
+            if validator is not None:
                 break
         if validator is not None:
             break
