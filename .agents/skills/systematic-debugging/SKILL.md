@@ -25,23 +25,28 @@ description: >-
 
 ## Workflow
 
-1. Preserve the failure. Read the complete error, stack trace, warning, or
+1. Confirm that an observed failure exists. If the request is a general review,
+   planned feature, or quality pass without failing behavior, route it to
+   `code-review`, `quality-hardening`, or the ordinary implementation workflow
+   instead of inventing a reproduction or root cause.
+2. Preserve the failure. Read the complete error, stack trace, warning, or
    failing assertion. Record the exact command, inputs, environment, and
    expected versus observed result.
-2. Reproduce it with the smallest reliable case. If it is intermittent, narrow
+3. Reproduce it with the smallest reliable case. If it is intermittent, narrow
    the conditions and gather more evidence before guessing.
-3. Establish the change and data path. Inspect the relevant diff, recent
+4. Establish the change and data path. Inspect the relevant diff, recent
    changes, configuration, dependencies, and a known-working neighboring path.
    Trace the bad value or state backward to its first incorrect origin.
-4. State one falsifiable hypothesis: “X is the root cause because Y.” Run the
+5. State one falsifiable hypothesis: “X is the root cause because Y.” Run the
    smallest diagnostic or test that can distinguish it from the alternatives.
    Do not bundle multiple fixes into the experiment.
-5. Once the cause is confirmed, add or update the smallest regression test or
+6. Once the cause is confirmed, add or update the smallest regression test or
    repeatable reproduction. Apply the minimal root-cause correction, then run
    the focused test and the repository's relevant complete gate.
-6. If the hypothesis fails, record what the evidence ruled out and return to
-   investigation. After three failed hypotheses or fixes, stop and discuss
-   whether the architecture or problem framing is wrong.
+7. If the hypothesis fails, record what the evidence ruled out and return to
+   investigation. Continue only while the next experiment can add discriminating
+   evidence. If repeated attempts leave the same uncertainty, stop and discuss
+   whether the architecture, available evidence, or problem framing is wrong.
 
 ## Boundaries and gotchas
 
@@ -67,4 +72,4 @@ Report:
 
 Stop before changing code when the failure is not reproducible, the evidence
 supports multiple unresolved causes, the next action has external side effects
-without authority, or three investigation attempts have failed.
+without authority, or further attempts cannot add meaningful evidence.

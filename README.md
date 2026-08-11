@@ -4,8 +4,9 @@ Agent Guidance Kit helps a coding agent add proven, project-local guidance to
 an existing software repository without replacing that repository's own rules.
 
 The agent inspects the target project, proposes the smallest relevant set of
-skills, and waits for approval. A deterministic installer can then copy the
-approved skills without merging or overwriting existing guidance.
+skills, and waits for approval. A deterministic installer then adds the kit's
+maintenance entrypoint, closes required dependencies, updates managed routing,
+and installs the approved skills without overwriting local divergence.
 
 > Status: early release. The catalog and integration workflow may change before
 > the first versioned release.
@@ -39,7 +40,7 @@ request that also profiles the current harness.
 
 ### Optional deterministic installer
 
-The agent can prepare a create-only copy plan for selected skills:
+The agent can prepare a receipt-aware installation plan for selected skills:
 
 ```text
 python3 /path/to/agent-guidance-kit/.agents/skills/bootstrap-project/scripts/install_skills.py \
@@ -58,14 +59,20 @@ python3 /path/to/agent-guidance-kit/.agents/skills/bootstrap-project/scripts/ins
   --plan /path/to/plan.json --approve
 ```
 
-The installer creates missing skill directories only. If any destination
-conflicts with the plan, it refuses the entire operation.
+The installer always includes `agent-guidance-maintenance`, adds declared
+required dependencies, and leaves optional related skills unselected. It
+creates missing skills and may refresh an adopted skill only when its current
+content still matches a prior receipt. Local modifications or routing conflicts
+stop the entire operation. The approved plan also creates or updates a managed
+AGENTS routing block so future agents can discover maintenance without knowing
+the source checkout path.
 
 ## Included skills
 
 The initial catalog covers:
 
-- Adoption and compatibility: `bootstrap-project`, `harness-adaptation`
+- Adoption and compatibility: `agent-guidance-maintenance`, `bootstrap-project`,
+  `harness-adaptation`
 - Review and quality: `ai-slop-detector`, `architecture-review`, `code-review`,
   `documentation-review`, `quality-hardening`, `security-review`,
   `systematic-debugging`
@@ -125,6 +132,7 @@ same check on Windows, Ubuntu, and macOS with Python 3.11 and 3.14.
 - [Design and safety model](docs/design.md)
 - [Contributing](CONTRIBUTING.md)
 - [Source provenance](docs/provenance.md)
+- [Skill evaluation evidence](docs/evaluations/2026-08-10-catalog-expansion.md)
 - [Roadmap](docs/roadmap.md)
 - [Security policy](SECURITY.md)
 

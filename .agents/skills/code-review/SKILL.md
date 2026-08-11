@@ -18,13 +18,11 @@ explicitly requests application of selected findings. Keep review findings
 separate from implementation decisions.
 
 Use this skill for a focused diff or subsystem and its concrete behavior. Use
-[architecture-review](../architecture-review/SKILL.md) for redesign or
-refactor-versus-rewrite choices, [ai-slop-detector](../ai-slop-detector/SKILL.md)
-for broad artifact-quality and test-independence audits,
-[documentation-review](../documentation-review/SKILL.md) for factual docs
-sync, [quality-hardening](../quality-hardening/SKILL.md) for a bounded set of
-correctness fixes, and [reduce-code-size](../reduce-code-size/SKILL.md) when
-the goal is size reduction.
+`architecture-review` for redesign or refactor-versus-rewrite choices,
+`ai-slop-detector` for broad artifact-quality and test-independence audits,
+`documentation-review` for factual docs sync, `quality-hardening` for a bounded
+set of correctness fixes, and `reduce-code-size` when the goal is size
+reduction.
 
 ## Inputs and evidence
 

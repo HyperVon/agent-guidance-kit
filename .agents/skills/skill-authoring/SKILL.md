@@ -16,10 +16,10 @@ edits and validation; it does not replace a content review or a structural audit
 | Skill | Owns |
 | :--- | :--- |
 | **skill-authoring** | Approved skill edits and their validation |
-| [skill-reviewer](../skill-reviewer/SKILL.md) | Content recommendations; report-only by default |
-| [rules-and-skills-audit](../rules-and-skills-audit/SKILL.md) | Structure, overlap, routing, and drift findings |
-| [skill-optimizer](../skill-optimizer/SKILL.md) | Context-cost reduction and its preservation checks |
-| [harness-adaptation](../harness-adaptation/SKILL.md) | Harness capability profiles and thin projections |
+| `skill-reviewer` | Content recommendations; report-only by default |
+| `rules-and-skills-audit` | Structure, overlap, routing, and drift findings |
+| `skill-optimizer` | Context-cost reduction and its preservation checks |
+| `harness-adaptation` | Harness capability profiles and thin projections |
 
 Do not turn a domain skill into a generic coding procedure, an unrelated
 harness adapter, or a second copy of canonical project policy. A skill whose

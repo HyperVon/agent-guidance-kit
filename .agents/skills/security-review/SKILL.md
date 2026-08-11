@@ -4,7 +4,9 @@ description: >-
   Review a change, repository, service boundary, or agent workflow for
   evidence-backed security risks involving secrets, identity, authorization,
   input handling, data exposure, dependencies, paths, commands, network access,
-  or destructive authority. Report by default; do not probe external systems.
+  or destructive authority. Use for an explicit security review or a scoped
+  security concern; do not apply it to an ordinary bug or failing test without a
+  security-relevant boundary. Report by default; do not probe external systems.
 ---
 
 # Security Review
@@ -24,24 +26,28 @@ description: >-
 
 ## Workflow
 
-1. Establish scope and authority. Identify assets, trust boundaries, actors,
+1. Confirm that security review is the task. If the request only reports an
+   ordinary bug, build failure, or failing test without a security-relevant
+   boundary, hand it to `systematic-debugging` instead of inventing security
+   work.
+2. Establish scope and authority. Identify assets, trust boundaries, actors,
    entrypoints, data sensitivity, and what actions are explicitly allowed.
-2. Read the source of truth: changed files, callers, configuration, dependency
+3. Read the source of truth: changed files, callers, configuration, dependency
    manifests, CI, deployment settings, and existing security guidance. Do not
    infer protections from filenames or comments.
-3. Trace security-relevant flows end to end:
+4. Trace security-relevant flows end to end:
    - untrusted input to parsing, queries, templates, commands, paths, or output;
    - identity to authentication, authorization, tenancy, and privilege checks;
    - secrets from acquisition to storage, transport, logs, errors, and cleanup;
    - sensitive data across persistence, APIs, caches, telemetry, and exports;
    - dependencies, updates, network egress, and agent authority boundaries.
-4. Test only safe local properties that can support a finding: validation,
+5. Test only safe local properties that can support a finding: validation,
    permissions, redaction, path containment, dependency metadata, configuration
    parsing, and negative tests. Preserve sensitive values and redact evidence.
-5. Rank each finding by realistic impact, exploitability, affected boundary,
+6. Rank each finding by realistic impact, exploitability, affected boundary,
    evidence strength, and remediation cost. Separate confirmed defects from
    questions or hardening suggestions.
-6. Recommend the smallest correction and a regression or verification probe.
+7. Recommend the smallest correction and a regression or verification probe.
    Stop when the scope is exhausted or the next test would require external,
    destructive, credentialed, or unauthorized activity.
 

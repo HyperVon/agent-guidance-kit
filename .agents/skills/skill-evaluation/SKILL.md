@@ -4,7 +4,8 @@ description: >-
   Design or run clean-context evaluations for a project skill, comparing its
   behavior with no skill or a previous version using realistic matching,
   neighboring, and ambiguous prompts. Use when creating, revising, or deciding
-  whether a skill materially improves agent outcomes.
+  whether a skill materially improves agent outcomes; do not substitute it for
+  authoring or reviewing a skill when measurement was not requested.
 ---
 
 # Skill Evaluation
@@ -18,9 +19,17 @@ description: >-
   skill.
 - **Owner:** measuring skill routing and task-output value.
 - **Non-goals:** deciding the skill's domain content, replacing human review,
-  or treating one model run as proof of universal quality.
+  authoring a requested skill, or treating one model run as proof of universal
+  quality.
 - **Side effects:** write only to an explicitly chosen evaluation workspace;
   never place generated outputs or private inputs in the catalog by default.
+
+## Scope gate
+
+Use this workflow only when the user asks to measure routing or output quality.
+If the request is to create or revise a skill, use `skill-authoring`; if it asks
+what content is weak, use `skill-reviewer`. Do not impose an evaluation project
+on a neighboring request that did not ask for measurement.
 
 ## Design the cases
 
@@ -35,6 +44,11 @@ Each case needs a stable `id`, `kind`, `prompt`, and observable
 verified from the output. Use realistic paths and constraints, but do not add
 credentials, personal data, or live external targets.
 
+After the first comparison, remove assertions that pass both configurations
+without distinguishing useful behavior. When routing descriptions materially
+change, expand the routing set with varied should-trigger and should-not-trigger
+prompts rather than overfitting the three initial cases.
+
 ## Run and compare
 
 1. Snapshot the current skill before changing it when comparing versions.
@@ -48,7 +62,9 @@ credentials, personal data, or live external targets.
    those measurements as environment-specific.
 5. Perform human review of the outputs for usefulness, unnecessary work,
    misleading confidence, and side effects that assertions missed.
-6. Improve only the smallest validated gap, then rerun the full case set. If
+6. Repeat cases when model variance could change the decision; do not imply
+   statistical confidence from one run per condition.
+7. Improve only the smallest validated gap, then rerun the full case set. If
    the skill does not beat its baseline on meaningful cases—or adds context
    cost without a demonstrated benefit—merge it into an existing owner, defer,
    or reject it.
@@ -67,7 +83,8 @@ validator accepts this compact shape:
       "kind": "matching",
       "prompt": "A realistic request",
       "expected_output": "Observable success criteria",
-      "assertions": ["A concrete property to verify"]
+      "assertions": ["A concrete property to verify"],
+      "files": ["evals/files/fixture.txt"]
     }
   ]
 }
@@ -75,7 +92,9 @@ validator accepts this compact shape:
 
 Keep generated results in a temporary or explicitly named workspace. Do not
 claim a skill is verified when cases were only designed, not executed and
-graded.
+graded. A public, sanitized summary may record the harness, model, baseline,
+case outcomes, evidence, limitations, and decision without committing raw model
+outputs or private fixtures.
 
 ## Report and stop condition
 

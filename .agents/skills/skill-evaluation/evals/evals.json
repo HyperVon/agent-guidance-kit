@@ -9,7 +9,8 @@
       "assertions": [
         "The response includes a clean-context baseline comparison",
         "The response includes objective assertions with evidence requirements",
-        "The response accounts for human review and context cost"
+        "The response accounts for human review and context cost",
+        "The response identifies non-discriminating assertions or model variance as evaluation limits"
       ]
     },
     {

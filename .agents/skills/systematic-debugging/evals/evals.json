@@ -4,12 +4,13 @@
     {
       "id": 1,
       "kind": "matching",
-      "prompt": "The CI test for order recovery started failing after yesterday's persistence change. Diagnose it and propose the smallest safe fix.",
+      "prompt": "The CI test for order recovery started failing after yesterday's persistence change. Someone suggested adding a retry. Diagnose it and propose the smallest safe fix.",
       "expected_output": "The agent preserves and reproduces the failure, traces the changed data path, states one root-cause hypothesis, and does not propose a fix before evidence supports it.",
       "assertions": [
         "The response distinguishes observed evidence from hypotheses",
         "The response includes a reproducible command or explicitly records why reproduction is blocked",
-        "The response does not stack speculative fixes"
+        "The response does not stack speculative fixes",
+        "The response rejects retries, delays, or broad fallbacks as substitutes for root cause"
       ]
     },
     {

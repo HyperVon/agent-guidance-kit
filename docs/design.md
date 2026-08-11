@@ -15,7 +15,8 @@ active harness LLM
   -> read reusable skill catalog
   -> propose selection and integration plan
   -> stop for approval
-  -> copy approved skills with deterministic create-only helper
+  -> install approved skills with deterministic receipt-aware helper
+  -> persist maintenance routing and source resolution
   -> adapt target-local routing and invariants
   -> validate and report evidence
 ```
@@ -64,7 +65,10 @@ for each rule or skill regardless of the adapter used.
   policy.
 - Inventory and planning are read-only.
 - Adoption is approval-gated.
-- Mechanical copy is create-only and preflights every conflict before writing.
+- Mechanical adoption is create-only for new content and receipt-aware for
+  updates; it preflights every skill and managed-route conflict before writing.
+- A prior receipt permits refresh only while target content still matches the
+  previously adopted digest. Local divergence fails closed.
 - Existing target guidance remains authoritative.
 - Scripts do not execute imported content or access networks, providers,
   credentials, databases, logs, or runtime state.
@@ -72,6 +76,6 @@ for each rule or skill regardless of the adapter used.
 ## Deliberate exclusions
 
 V1 does not include an LLM, embeddings, provider selection, model routing,
-worker spawning, process supervision, automatic updates, remote pack loading,
-marketplace behavior, or a managed-guidance state machine. Those capabilities
-must earn a separate boundary through demonstrated use.
+worker spawning, process supervision, unattended updates, remote pack loading,
+marketplace behavior, or a managed-guidance service. Those capabilities must
+earn a separate boundary through demonstrated use.

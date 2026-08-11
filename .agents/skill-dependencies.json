@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "skills": {
+    "agent-guidance-maintenance": {
+      "related": [
+        "bootstrap-project",
+        "harness-adaptation",
+        "rules-and-skills-audit",
+        "skill-reviewer"
+      ],
+      "requires": [],
+      "route": "Adopt, add, audit, refresh, or update Agent Guidance Kit content"
+    },
+    "ai-slop-detector": {
+      "related": [
+        "architecture-review",
+        "code-review",
+        "documentation-review",
+        "reduce-code-size",
+        "rules-and-skills-audit",
+        "skill-reviewer"
+      ],
+      "requires": [],
+      "route": "Audit repository artifacts for evidence-backed quality defects"
+    },
+    "architecture-review": {
+      "related": [
+        "ai-slop-detector",
+        "code-review",
+        "documentation-review",
+        "reduce-code-size",
+        "rules-and-skills-audit"
+      ],
+      "requires": [],
+      "route": "Review architecture and compare Keep, Evolve, Replace, or Greenfield options"
+    },
+    "bootstrap-project": {
+      "related": [
+        "agent-guidance-maintenance",
+        "harness-adaptation",
+        "skill-authoring"
+      ],
+      "requires": [],
+      "route": "Inspect a project and propose an approval-gated guidance adoption"
+    },
+    "code-review": {
+      "related": [
+        "ai-slop-detector",
+        "architecture-review",
+        "documentation-review",
+        "quality-hardening",
+        "reduce-code-size",
+        "security-review"
+      ],
+      "requires": [],
+      "route": "Review a diff, branch, subsystem, or repository for concrete defects"
+    },
+    "documentation-review": {
+      "related": [
+        "code-review",
+        "skill-reviewer"
+      ],
+      "requires": [],
+      "route": "Verify and update documentation against implementation and build truth"
+    },
+    "harness-adaptation": {
+      "related": [
+        "bootstrap-project"
+      ],
+      "requires": [],
+      "route": "Adapt canonical guidance to the active agent harness"
+    },
+    "parallel-multi-agent": {
+      "related": [],
+      "requires": [],
+      "route": "Partition independent work among bounded concurrent workers"
+    },
+    "quality-hardening": {
+      "related": [
+        "code-review",
+        "systematic-debugging"
+      ],
+      "requires": [],
+      "route": "Find and close a bounded set of correctness gaps with regression coverage"
+    },
+    "reduce-code-size": {
+      "related": [
+        "ai-slop-detector",
+        "architecture-review",
+        "code-review",
+        "quality-hardening"
+      ],
+      "requires": [],
+      "route": "Reduce code size while preserving behavior and contracts"
+    },
+    "rules-and-skills-audit": {
+      "related": [
+        "skill-authoring",
+        "skill-optimizer",
+        "skill-reviewer"
+      ],
+      "requires": [],
+      "route": "Audit guidance overlap, conflicts, routing, and consolidation opportunities"
+    },
+    "security-review": {
+      "related": [
+        "code-review",
+        "systematic-debugging"
+      ],
+      "requires": [],
+      "route": "Review security boundaries, authority, secrets, and sensitive data flows"
+    },
+    "skill-authoring": {
+      "related": [
+        "harness-adaptation",
+        "rules-and-skills-audit",
+        "skill-optimizer",
+        "skill-reviewer"
+      ],
+      "requires": [
+        "skill-evaluation"
+      ],
+      "route": "Create or revise a project-local agent skill"
+    },
+    "skill-evaluation": {
+      "related": [
+        "skill-authoring",
+        "skill-reviewer"
+      ],
+      "requires": [],
+      "route": "Measure whether a skill improves routing or task outcomes"
+    },
+    "skill-optimizer": {
+      "related": [
+        "rules-and-skills-audit",
+        "skill-authoring"
+      ],
+      "requires": [],
+      "route": "Reduce guidance context cost without weakening behavior"
+    },
+    "skill-reviewer": {
+      "related": [
+        "documentation-review",
+        "rules-and-skills-audit",
+        "skill-authoring"
+      ],
+      "requires": [],
+      "route": "Review skill content for missing domain depth and practical usefulness"
+    },
+    "systematic-debugging": {
+      "related": [
+        "code-review",
+        "quality-hardening"
+      ],
+      "requires": [],
+      "route": "Diagnose an observed failure and find its root cause before fixing it"
+    }
+  }
+}

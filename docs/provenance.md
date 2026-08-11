@@ -48,3 +48,16 @@ the catalog. Their text and bundled assets were not copied or executed.
 Disposition: `NEW_SKILL` for systematic debugging, security review, and skill
 evaluation; `IMPROVE_EXISTING` for skill-authoring and repository validation;
 `DEFER` for technology-specific skills and provider/runtime workflows.
+
+## First-use adoption evidence
+
+A first adoption in a separate sibling project exposed broken links after
+selective installation, no persistent maintenance route, and no portable way to
+rediscover the kit source. The target's private project details and filesystem
+paths are not retained here.
+
+Disposition: `NEW_SKILL` for `agent-guidance-maintenance`;
+`IMPROVE_EXISTING` for bootstrap planning, receipt-aware refresh, dependency
+closure, managed AGENTS routing, ignored source location, and target-side link
+and index validation. Optional neighboring skills remain unlinked; only declared
+required dependencies create installation closure.
