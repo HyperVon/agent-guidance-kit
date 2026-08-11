@@ -151,6 +151,62 @@ class InstallSkillsTest(unittest.TestCase):
             install_skills.apply_plan(self.kit, self.target, plan)
         self.assertFalse((self.target / ".agents/skills/alpha").exists())
 
+    def test_source_locator_rolls_back_after_post_configuration_failure(self) -> None:
+        self.add_skill("alpha")
+        environment_value = os.environ.pop(install_skills.SOURCE_ENVIRONMENT, None)
+        try:
+            plan = install_skills.build_plan(self.kit, self.target, ["alpha"])
+            self.assertEqual("CONFIGURE", plan["source_resolution"]["status"])
+
+            exclude_path = Path(
+                subprocess.run(
+                    [
+                        "git",
+                        "-C",
+                        str(self.target),
+                        "rev-parse",
+                        "--path-format=absolute",
+                        "--git-path",
+                        "info/exclude",
+                    ],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+            )
+            exclude_before = (
+                exclude_path.read_bytes() if exclude_path.exists() else None
+            )
+
+            original_validate = install_skills.validate_installed
+
+            def fail_after_configuration(*args: object, **kwargs: object) -> None:
+                raise install_skills.AdoptionError(
+                    "injected post-configuration failure"
+                )
+
+            install_skills.validate_installed = fail_after_configuration
+            try:
+                with self.assertRaisesRegex(
+                    install_skills.AdoptionError, "post-configuration failure"
+                ):
+                    install_skills.apply_plan(self.kit, self.target, plan)
+            finally:
+                install_skills.validate_installed = original_validate
+        finally:
+            if environment_value is not None:
+                os.environ[install_skills.SOURCE_ENVIRONMENT] = environment_value
+
+        locator = self.target / install_skills.SOURCE_LOCATOR
+        self.assertFalse(locator.exists())
+        exclude_after = exclude_path.read_bytes() if exclude_path.exists() else None
+        self.assertEqual(exclude_before, exclude_after)
+        self.assertFalse(
+            any((self.target / install_skills.RECEIPTS).glob("*.json"))
+            if (self.target / install_skills.RECEIPTS).is_dir()
+            else False
+        )
+
     def test_target_drift_invalidates_plan(self) -> None:
         self.add_skill("alpha")
         plan = install_skills.build_plan(self.kit, self.target, ["alpha"])

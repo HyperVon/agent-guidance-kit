@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -60,6 +61,32 @@ class InventoryProjectTest(unittest.TestCase):
 
             self.assertTrue(result["truncated"])
             self.assertEqual(2, result["files_scanned"])
+
+    def test_inventory_rejects_symlinked_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            real_root = base / "real-root"
+            real_root.mkdir()
+            alias = base / "alias"
+            try:
+                os.symlink(real_root, alias)
+            except (AttributeError, NotImplementedError, OSError) as error:
+                self.skipTest(f"symlink creation is unavailable: {error}")
+
+            result = subprocess.run(
+                [
+                    os.sys.executable,
+                    str(SCRIPT),
+                    "--root",
+                    str(alias),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(2, result.returncode)
+            self.assertIn("real directory", result.stderr)
 
 
 if __name__ == "__main__":
