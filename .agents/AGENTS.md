@@ -58,10 +58,13 @@ systems here.
 | Review a diff, branch, subsystem, or repository for concrete defects | [code-review](skills/code-review/SKILL.md) |
 | Verify documentation against source, build, configuration, and CI truth | [documentation-review](skills/documentation-review/SKILL.md) |
 | Adapt canonical guidance to a known or future agent harness | [harness-adaptation](skills/harness-adaptation/SKILL.md) |
+| Diagnose an observed failure by finding its root cause before fixing it | [systematic-debugging](skills/systematic-debugging/SKILL.md) |
+| Review security boundaries, authority, secrets, and sensitive data flows | [security-review](skills/security-review/SKILL.md) |
 | Discover and close a bounded set of meaningful correctness gaps | [quality-hardening](skills/quality-hardening/SKILL.md) |
 | Simplify or split code while preserving behavior | [reduce-code-size](skills/reduce-code-size/SKILL.md) |
 | Partition independent work among bounded workers | [parallel-multi-agent](skills/parallel-multi-agent/SKILL.md) |
 | Create or update a project-local skill | [skill-authoring](skills/skill-authoring/SKILL.md) |
+| Measure whether a skill improves outcomes with clean-context evaluations | [skill-evaluation](skills/skill-evaluation/SKILL.md) |
 | Review skill content for missing domain depth and practical usefulness | [skill-reviewer](skills/skill-reviewer/SKILL.md) |
 | Audit guidance structure, overlap, conflicts, and routing | [rules-and-skills-audit](skills/rules-and-skills-audit/SKILL.md) |
 | Reduce guidance context cost without weakening behavior | [skill-optimizer](skills/skill-optimizer/SKILL.md) |

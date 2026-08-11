@@ -43,6 +43,47 @@ class ValidationHelpersTest(unittest.TestCase):
                 validate_repository.is_project_path(root / "docs/design.md", root)
             )
 
+    def test_evaluation_cases_require_routing_boundaries(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            evals = root / "evals/evals.json"
+            evals.parent.mkdir()
+            evals.write_text(
+                '{"skill_name":"example","evals":['
+                '{"id":1,"kind":"matching","prompt":"match",'
+                '"expected_output":"out"},'
+                '{"id":2,"kind":"neighboring","prompt":"near",'
+                '"expected_output":"out"},'
+                '{"id":3,"kind":"ambiguous","prompt":"unclear",'
+                '"expected_output":"out"}]}'
+            )
+            errors: list[str] = []
+
+            validate_repository.validate_evals(root, "example", errors)
+
+            self.assertEqual([], errors)
+
+    def test_evaluation_cases_reject_duplicate_ids_and_missing_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            evals = root / "evals/evals.json"
+            evals.parent.mkdir()
+            evals.write_text(
+                '{"skill_name":"example","evals":['
+                '{"id":1,"kind":"matching","prompt":"match",'
+                '"expected_output":"out"},'
+                '{"id":1,"kind":"edge","prompt":"edge",'
+                '"expected_output":"out"},'
+                '{"id":2,"kind":"edge","prompt":"edge",'
+                '"expected_output":"out"}]}'
+            )
+            errors: list[str] = []
+
+            validate_repository.validate_evals(root, "example", errors)
+
+            self.assertTrue(any("unique integer" in error for error in errors))
+            self.assertTrue(any("cover matching" in error for error in errors))
+
     def test_markdownlint_command_uses_published_cli_entrypoint(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

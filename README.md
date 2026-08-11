@@ -67,10 +67,11 @@ The initial catalog covers:
 
 - Adoption and compatibility: `bootstrap-project`, `harness-adaptation`
 - Review and quality: `ai-slop-detector`, `architecture-review`, `code-review`,
-  `documentation-review`, `quality-hardening`
+  `documentation-review`, `quality-hardening`, `security-review`,
+  `systematic-debugging`
 - Project and skill maintenance: `parallel-multi-agent`, `reduce-code-size`,
-  `rules-and-skills-audit`, `skill-authoring`, `skill-optimizer`,
-  `skill-reviewer`
+  `rules-and-skills-audit`, `skill-authoring`, `skill-evaluation`,
+  `skill-optimizer`, `skill-reviewer`
 
 Technology, product, and domain-specific guidance remains in the consuming
 repository.

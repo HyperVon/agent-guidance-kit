@@ -64,6 +64,9 @@ named skill does not authorize unrelated guidance, index, or runtime changes.
   ambiguous request with a stated tie-breaker.
 - Check every relative link and referenced script or option against the current
   tree. Remove unverifiable claims and unfinished placeholders.
+- For a new or materially changed skill, use
+  [skill-evaluation](../skill-evaluation/SKILL.md) to compare matching,
+  neighboring, and ambiguous cases before claiming that it improves outcomes.
 - Check the diff for whitespace errors, secrets, personal paths, provider
   assumptions, unintended files, and changes outside the approved scope.
 - Re-read the complete changed skill and report exactly what was validated,

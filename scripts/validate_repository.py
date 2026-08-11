@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -219,7 +220,59 @@ def validate_skills(errors: list[str]) -> set[str]:
             errors.append(
                 f"{metadata.relative_to(ROOT)}: default_prompt must mention ${name}"
             )
+        validate_evals(directory, name, errors)
     return names
+
+
+def validate_evals(directory: Path, name: str, errors: list[str]) -> None:
+    path = directory / "evals/evals.json"
+    if not path.is_file() or path.is_symlink():
+        return
+    path_label = str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else str(path)
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        errors.append(f"{path_label}: invalid evaluation JSON: {error}")
+        return
+    if not isinstance(value, dict) or value.get("skill_name") != name:
+        errors.append(f"{path_label}: skill_name must match {name!r}")
+        return
+    cases = value.get("evals")
+    if not isinstance(cases, list) or len(cases) < 3:
+        errors.append(f"{path_label}: evals must contain at least three cases")
+        return
+    ids: set[int] = set()
+    kinds: set[str] = set()
+    for index, case in enumerate(cases, start=1):
+        prefix = f"{path_label} case {index}"
+        if not isinstance(case, dict):
+            errors.append(f"{prefix}: case must be an object")
+            continue
+        case_id = case.get("id")
+        if isinstance(case_id, bool) or not isinstance(case_id, int) or case_id in ids:
+            errors.append(f"{prefix}: id must be a unique integer")
+        else:
+            ids.add(case_id)
+        kind = case.get("kind")
+        if kind not in {"matching", "neighboring", "ambiguous", "edge"}:
+            errors.append(
+                f"{prefix}: kind must be matching, neighboring, ambiguous, or edge"
+            )
+        else:
+            kinds.add(kind)
+        for key in ("prompt", "expected_output"):
+            if not isinstance(case.get(key), str) or not case[key].strip():
+                errors.append(f"{prefix}: {key} must be a non-empty string")
+        assertions = case.get("assertions", [])
+        if not isinstance(assertions, list) or any(
+            not isinstance(assertion, str) or not assertion.strip()
+            for assertion in assertions
+        ):
+            errors.append(f"{prefix}: assertions must contain non-empty strings")
+    if not {"matching", "neighboring", "ambiguous"}.issubset(kinds):
+        errors.append(
+            f"{path_label}: evals must cover matching, neighboring, and ambiguous cases"
+        )
 
 
 def validate_index(skill_names: set[str], errors: list[str]) -> None:
