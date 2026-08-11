@@ -1,0 +1,24 @@
+{
+  "config": {
+    "default": true,
+    "MD013": false,
+    "MD024": {
+      "siblings_only": true
+    },
+    "MD033": {
+      "allowed_elements": ["a", "br", "img", "p", "strong"]
+    }
+  },
+  "globs": [
+    "**/*.md",
+    "**/*.mdc"
+  ],
+  "ignores": [
+    "**/node_modules/**",
+    "**/.venv/**",
+    "**/.local/**",
+    "**/build/**",
+    "**/coverage/**",
+    "**/dist/**"
+  ]
+}

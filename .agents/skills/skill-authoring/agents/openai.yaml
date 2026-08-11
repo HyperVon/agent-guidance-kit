@@ -1,0 +1,4 @@
+interface:
+  display_name: "Skill Authoring"
+  short_description: "Create or update precise project skills"
+  default_prompt: "Use $skill-authoring to create or update a focused project skill."

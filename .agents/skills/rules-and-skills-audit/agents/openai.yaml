@@ -1,0 +1,4 @@
+interface:
+  display_name: "Rules and Skills Audit"
+  short_description: "Audit guidance overlap, drift, and routing"
+  default_prompt: "Use $rules-and-skills-audit to audit this guidance tree for overlap, conflicts, and routing problems."

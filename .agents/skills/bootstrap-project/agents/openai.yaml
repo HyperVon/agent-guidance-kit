@@ -1,0 +1,4 @@
+interface:
+  display_name: "Bootstrap Project"
+  short_description: "Plan and install project guidance safely"
+  default_prompt: "Use $bootstrap-project to inspect this repository and propose a minimal agent-guidance setup."
