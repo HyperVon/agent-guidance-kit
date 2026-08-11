@@ -17,7 +17,6 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-
 EXACT_NAMES = frozenset(
     {
         "AGENTS.md",
@@ -108,7 +107,9 @@ def role_for(root: Path, path: Path) -> str:
 
 
 def iter_files(root: Path):
-    for directory, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
+    for directory, dirnames, filenames in os.walk(
+        root, topdown=True, followlinks=False
+    ):
         base = Path(directory)
         dirnames[:] = sorted(
             name
@@ -209,7 +210,11 @@ def read_records(root: Path, scope: str):
         if len(paths) > 1
     ]
     repeated.sort(
-        key=lambda item: (item["possible_saved_characters"], item["characters"], item["paths"]),
+        key=lambda item: (
+            item["possible_saved_characters"],
+            item["characters"],
+            item["paths"],
+        ),
         reverse=True,
     )
     records.sort(key=lambda item: item["path"])
@@ -260,8 +265,12 @@ def as_markdown(root: Path, records, repeated) -> str:
                 excerpt += "..."
             lines.extend(
                 [
-                    f"{index}. **{item['characters']:,} chars / ~{item['proxy_tokens']:,} proxy tokens**; "
-                    f"possible duplicate saving if one copy remains: **{item['possible_saved_characters']:,} chars**",
+                    (
+                        f"{index}. **{item['characters']:,} chars / "
+                        f"~{item['proxy_tokens']:,} proxy tokens**; possible duplicate "
+                        "saving if one copy remains: "
+                        f"**{item['possible_saved_characters']:,} chars**"
+                    ),
                     f"   Files: {', '.join(f'`{path}`' for path in item['paths'])}",
                     f"   Text: {excerpt}",
                 ]
@@ -279,7 +288,9 @@ def main() -> int:
         default="active",
         help="Inspect active guidance (default) or include archive/related files",
     )
-    parser.add_argument("--output", help="Optional output file; stdout is used otherwise")
+    parser.add_argument(
+        "--output", help="Optional output file; stdout is used otherwise"
+    )
     args = parser.parse_args()
     root = Path(args.root).resolve()
     if not root.is_dir():
@@ -287,16 +298,19 @@ def main() -> int:
         return 2
     records, repeated = read_records(root, args.scope)
     if args.format == "json":
-        output = json.dumps(
-            {
-                "root": str(root),
-                "scope": args.scope,
-                "files": records,
-                "repeated_blocks": repeated,
-            },
-            indent=2,
-            sort_keys=True,
-        ) + "\n"
+        output = (
+            json.dumps(
+                {
+                    "root": str(root),
+                    "scope": args.scope,
+                    "files": records,
+                    "repeated_blocks": repeated,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n"
+        )
     else:
         output = as_markdown(root, records, repeated)
     if args.output:

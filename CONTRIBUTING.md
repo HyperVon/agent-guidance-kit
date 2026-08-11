@@ -35,5 +35,7 @@ configuration.
 
 Run `python scripts/setup_dev.py` once, then run `scripts/check.py` with the
 virtual environment's Python and inspect the complete diff. `make setup` and
-`make check` are optional macOS/Linux conveniences. Do not publish, push, or
-open a pull request unless the repository owner explicitly asks.
+`make check` are optional macOS/Linux conveniences. The complete check includes
+required Markdown lint plus Python lint and formatting checks; fix every
+finding before committing or pushing. Do not publish, push, or open a pull
+request unless the repository owner explicitly asks.

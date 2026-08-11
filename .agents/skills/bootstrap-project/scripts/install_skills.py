@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 SCHEMA_VERSION = 1
 SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SOURCE_SKILLS = Path(".agents/skills")
@@ -31,7 +30,9 @@ class AdoptionError(RuntimeError):
 
 
 def canonical_json(value: Any) -> bytes:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    return json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode("utf-8")
 
 
 def digest_bytes(value: bytes) -> str:
@@ -51,12 +52,18 @@ def validate_root(path: Path, label: str) -> Path:
     if not expanded.exists():
         raise AdoptionError(f"{label} does not exist: {expanded}")
     if expanded.is_symlink() or not expanded.is_dir():
-        raise AdoptionError(f"{label} must be a real directory, not a symlink: {expanded}")
+        raise AdoptionError(
+            f"{label} must be a real directory, not a symlink: {expanded}"
+        )
     return expanded.resolve()
 
 
 def validate_relative(path: Path, label: str) -> None:
-    if path.is_absolute() or not path.parts or any(part in {"", ".", ".."} for part in path.parts):
+    if (
+        path.is_absolute()
+        or not path.parts
+        or any(part in {"", ".", ".."} for part in path.parts)
+    ):
         raise AdoptionError(f"{label} must be a normalized relative path: {path}")
 
 
@@ -66,7 +73,9 @@ def ensure_no_symlink_tree(root: Path) -> None:
         for name in sorted(dirnames + filenames):
             path = current / name
             if path.is_symlink():
-                raise AdoptionError(f"symlinks are not allowed in skill content: {path.relative_to(root)}")
+                raise AdoptionError(
+                    f"symlinks are not allowed in skill content: {path.relative_to(root)}"
+                )
 
 
 def ensure_safe_ancestors(root: Path, relative: Path, create: bool = False) -> Path:
@@ -76,9 +85,13 @@ def ensure_safe_ancestors(root: Path, relative: Path, create: bool = False) -> P
         current = current / part
         if current.exists() or current.is_symlink():
             if current.is_symlink():
-                raise AdoptionError(f"symlinked destination component is not allowed: {current.relative_to(root)}")
+                raise AdoptionError(
+                    f"symlinked destination component is not allowed: {current.relative_to(root)}"
+                )
             if not current.is_dir():
-                raise AdoptionError(f"destination component is not a directory: {current.relative_to(root)}")
+                raise AdoptionError(
+                    f"destination component is not a directory: {current.relative_to(root)}"
+                )
         elif create:
             current.mkdir()
         else:
@@ -101,7 +114,9 @@ def tree_manifest(root: Path) -> list[dict[str, Any]]:
                 continue
             path = current / filename
             if not path.is_file():
-                raise AdoptionError(f"unsupported non-file entry: {path.relative_to(root)}")
+                raise AdoptionError(
+                    f"unsupported non-file entry: {path.relative_to(root)}"
+                )
             relative = path.relative_to(root)
             validate_relative(relative, "skill file")
             records.append(
@@ -116,7 +131,9 @@ def tree_manifest(root: Path) -> list[dict[str, Any]]:
     return records
 
 
-def copy_manifest(source: Path, destination: Path, manifest: list[dict[str, Any]]) -> None:
+def copy_manifest(
+    source: Path, destination: Path, manifest: list[dict[str, Any]]
+) -> None:
     destination.mkdir()
     for item in manifest:
         relative = Path(item["path"])
@@ -174,7 +191,9 @@ def normalize_skills(raw_skills: list[str]) -> list[str]:
     return sorted(skills)
 
 
-def difference_summary(source: list[dict[str, Any]], target: list[dict[str, Any]]) -> dict[str, list[str]]:
+def difference_summary(
+    source: list[dict[str, Any]], target: list[dict[str, Any]]
+) -> dict[str, list[str]]:
     source_map = {item["path"]: item for item in source}
     target_map = {item["path"]: item for item in target}
     return {
@@ -193,7 +212,10 @@ def inspect_skill(kit_root: Path, target_root: Path, name: str) -> dict[str, Any
     source_dir = kit_root / SOURCE_SKILLS / name
     if source_dir.is_symlink() or not source_dir.is_dir():
         raise AdoptionError(f"source skill does not exist as a real directory: {name}")
-    if not (source_dir / "SKILL.md").is_file() or (source_dir / "SKILL.md").is_symlink():
+    if (
+        not (source_dir / "SKILL.md").is_file()
+        or (source_dir / "SKILL.md").is_symlink()
+    ):
         raise AdoptionError(f"source skill is missing a real SKILL.md: {name}")
 
     source_manifest = tree_manifest(source_dir)
@@ -284,7 +306,9 @@ def write_new_json(path: Path, value: dict[str, Any]) -> None:
     if path.exists() or path.is_symlink():
         raise AdoptionError(f"refusing to overwrite existing file: {path}")
     if not path.parent.is_dir() or path.parent.is_symlink():
-        raise AdoptionError(f"output parent must be an existing real directory: {path.parent}")
+        raise AdoptionError(
+            f"output parent must be an existing real directory: {path.parent}"
+        )
     with path.open("x", encoding="utf-8") as handle:
         json.dump(value, handle, indent=2, sort_keys=True)
         handle.write("\n")
@@ -317,7 +341,9 @@ def validate_installed(target_root: Path, plan: dict[str, Any]) -> None:
         if path.is_symlink() or not path.is_dir():
             raise AdoptionError(f"installed skill is missing or unsafe: {item['name']}")
         if manifest_digest(tree_manifest(path)) != item["source_digest"]:
-            raise AdoptionError(f"installed skill no longer matches its receipt: {item['name']}")
+            raise AdoptionError(
+                f"installed skill no longer matches its receipt: {item['name']}"
+            )
 
 
 def apply_plan(kit_root: Path, target_root: Path, plan: dict[str, Any]) -> Path:
@@ -350,13 +376,23 @@ def apply_plan(kit_root: Path, target_root: Path, plan: dict[str, Any]) -> Path:
 
     current = build_plan(kit_root, target_root, skills)
     if current != plan:
-        raise AdoptionError("source or target state changed after planning; generate and approve a new plan")
-    conflicts = [item["name"] for item in plan_skills if item.get("status") == "CONFLICT"]
+        raise AdoptionError(
+            "source or target state changed after planning; generate and approve a new plan"
+        )
+    conflicts = [
+        item["name"] for item in plan_skills if item.get("status") == "CONFLICT"
+    ]
     if conflicts:
         raise AdoptionError(f"plan contains conflicts: {', '.join(conflicts)}")
-    unexpected = [item["name"] for item in plan_skills if item.get("status") not in {"CREATE", "UNCHANGED"}]
+    unexpected = [
+        item["name"]
+        for item in plan_skills
+        if item.get("status") not in {"CREATE", "UNCHANGED"}
+    ]
     if unexpected:
-        raise AdoptionError(f"plan contains unsupported statuses for: {', '.join(unexpected)}")
+        raise AdoptionError(
+            f"plan contains unsupported statuses for: {', '.join(unexpected)}"
+        )
 
     ensure_safe_ancestors(target_root, Path(".agents"), create=True)
     ensure_safe_ancestors(target_root, TARGET_SKILLS, create=True)
@@ -364,7 +400,9 @@ def apply_plan(kit_root: Path, target_root: Path, plan: dict[str, Any]) -> Path:
     if receipt_path.exists() or receipt_path.is_symlink():
         raise AdoptionError(f"receipt appeared during preflight: {receipt_relative}")
 
-    staging_relative = Path(".agents") / f".agent-guidance-kit-staging-{plan['plan_id'][:12]}"
+    staging_relative = (
+        Path(".agents") / f".agent-guidance-kit-staging-{plan['plan_id'][:12]}"
+    )
     staging = target_root / staging_relative
     if staging.exists() or staging.is_symlink():
         raise AdoptionError(f"staging path already exists: {staging_relative}")
@@ -386,7 +424,9 @@ def apply_plan(kit_root: Path, target_root: Path, plan: dict[str, Any]) -> Path:
             staged = staging / item["name"]
             destination = target_root / Path(item["destination"])
             if destination.exists() or destination.is_symlink():
-                raise AdoptionError(f"destination appeared during apply: {item['destination']}")
+                raise AdoptionError(
+                    f"destination appeared during apply: {item['destination']}"
+                )
             os.replace(staged, destination)
             moved.append((destination, staged))
 
@@ -397,7 +437,11 @@ def apply_plan(kit_root: Path, target_root: Path, plan: dict[str, Any]) -> Path:
             handle.write("\n")
     except Exception:
         for destination, staged in reversed(moved):
-            if destination.exists() and not destination.is_symlink() and not staged.exists():
+            if (
+                destination.exists()
+                and not destination.is_symlink()
+                and not staged.exists()
+            ):
                 os.replace(destination, staged)
         raise
     finally:
@@ -424,13 +468,19 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--kit-root", required=True)
     plan_parser.add_argument("--target", required=True)
     plan_parser.add_argument("--skill", action="append", required=True)
-    plan_parser.add_argument("--output", help="Write plan JSON to a new file; defaults to stdout")
+    plan_parser.add_argument(
+        "--output", help="Write plan JSON to a new file; defaults to stdout"
+    )
 
-    apply_parser = subparsers.add_parser("apply", help="Apply an unchanged approved plan")
+    apply_parser = subparsers.add_parser(
+        "apply", help="Apply an unchanged approved plan"
+    )
     apply_parser.add_argument("--kit-root", required=True)
     apply_parser.add_argument("--target", required=True)
     apply_parser.add_argument("--plan", required=True)
-    apply_parser.add_argument("--approve", action="store_true", help="Required explicit apply acknowledgement")
+    apply_parser.add_argument(
+        "--approve", action="store_true", help="Required explicit apply acknowledgement"
+    )
     return parser
 
 
@@ -449,10 +499,14 @@ def main() -> int:
             else:
                 json.dump(plan, sys.stdout, indent=2, sort_keys=True)
                 sys.stdout.write("\n")
-            return 1 if any(item["status"] == "CONFLICT" for item in plan["skills"]) else 0
+            return (
+                1 if any(item["status"] == "CONFLICT" for item in plan["skills"]) else 0
+            )
 
         if not args.approve:
-            raise AdoptionError("apply requires --approve after review of the exact plan")
+            raise AdoptionError(
+                "apply requires --approve after review of the exact plan"
+            )
         plan = read_json(Path(args.plan).expanduser())
         receipt = apply_plan(kit_root, target_root, plan)
         print(f"Applied plan {plan['plan_id']}")

@@ -9,7 +9,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 TEXT_SUFFIXES = {
     "",
@@ -43,18 +42,33 @@ FORBIDDEN_SUFFIXES = {".key", ".p12", ".pfx", ".pem"}
 def candidate_files() -> list[Path]:
     try:
         result = subprocess.run(
-            ["git", "-C", str(ROOT), "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+            [
+                "git",
+                "-C",
+                str(ROOT),
+                "ls-files",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+                "-z",
+            ],
             check=True,
             capture_output=True,
             timeout=10,
         )
-    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+    except (
+        FileNotFoundError,
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+    ):
         paths = []
         for directory, dirnames, filenames in os.walk(ROOT):
             dirnames[:] = sorted(name for name in dirnames if name != ".git")
             paths.extend(Path(directory) / name for name in sorted(filenames))
         return paths
-    return [ROOT / value.decode("utf-8") for value in result.stdout.split(b"\0") if value]
+    return [
+        ROOT / value.decode("utf-8") for value in result.stdout.split(b"\0") if value
+    ]
 
 
 def patterns() -> list[tuple[str, re.Pattern[str]]]:
@@ -84,7 +98,10 @@ def main() -> int:
         if path.name in FORBIDDEN_NAMES or path.suffix.lower() in FORBIDDEN_SUFFIXES:
             findings.append(f"{relative}: secret-bearing filename is not allowed")
             continue
-        if path.suffix.lower() not in TEXT_SUFFIXES and path.name not in {"Makefile", "Dockerfile"}:
+        if path.suffix.lower() not in TEXT_SUFFIXES and path.name not in {
+            "Makefile",
+            "Dockerfile",
+        }:
             continue
         try:
             text = path.read_text(encoding="utf-8")
@@ -97,9 +114,14 @@ def main() -> int:
     if findings:
         for finding in findings:
             print(f"ERROR {finding}", file=sys.stderr)
-        print(f"Public hygiene check failed with {len(findings)} finding(s).", file=sys.stderr)
+        print(
+            f"Public hygiene check failed with {len(findings)} finding(s).",
+            file=sys.stderr,
+        )
         return 1
-    print("Public hygiene check passed: no common secrets or personal filesystem paths found.")
+    print(
+        "Public hygiene check passed: no common secrets or personal filesystem paths found."
+    )
     return 0
 
 

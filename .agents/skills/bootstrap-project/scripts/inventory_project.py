@@ -11,7 +11,6 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-
 SKIP_DIRS = {
     ".git",
     ".gradle",
@@ -187,7 +186,10 @@ def inventory(root: Path, max_files: int) -> dict[str, object]:
                 guidance_files.append(rel)
             if rel in HARNESS_FILES:
                 harness_markers.add(rel)
-            if any(part.lower() in {"test", "tests", "spec", "specs"} for part in relative.parts[:-1]):
+            if any(
+                part.lower() in {"test", "tests", "spec", "specs"}
+                for part in relative.parts[:-1]
+            ):
                 test_paths.add(relative.parts[0])
             if relative.parts[:2] == (".github", "workflows") or filename in {
                 ".gitlab-ci.yml",
@@ -207,7 +209,9 @@ def inventory(root: Path, max_files: int) -> dict[str, object]:
         "root": str(root),
         "files_scanned": min(file_count, max_files),
         "truncated": truncated,
-        "languages_by_file_count": dict(sorted(languages.items(), key=lambda item: (-item[1], item[0]))),
+        "languages_by_file_count": dict(
+            sorted(languages.items(), key=lambda item: (-item[1], item[0]))
+        ),
         "build_files": sorted(build_files),
         "test_roots": sorted(test_paths),
         "ci_files": sorted(ci_files),
@@ -230,7 +234,8 @@ def markdown(data: dict[str, object]) -> str:
         "# Project inventory",
         "",
         f"- Root: `{data['root']}`",
-        f"- Files scanned: **{data['files_scanned']}**" + (" (limit reached)" if data["truncated"] else ""),
+        f"- Files scanned: **{data['files_scanned']}**"
+        + (" (limit reached)" if data["truncated"] else ""),
         f"- Git: **{'yes' if git['repository'] else 'no'}**; branch `{git['branch'] or 'unknown'}`; commit `{git['commit'] or 'unknown'}`; dirty `{git['dirty']}`",
         "",
         "## Languages by file count",
@@ -251,7 +256,9 @@ def markdown(data: dict[str, object]) -> str:
     ):
         lines.extend(["", f"## {title}", ""])
         values = data[key]
-        lines.extend(f"- `{value}`" for value in values) if values else lines.append("- None detected.")
+        lines.extend(f"- `{value}`" for value in values) if values else lines.append(
+            "- None detected."
+        )
     return "\n".join(lines) + "\n"
 
 

@@ -8,7 +8,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / ".agents/skills/bootstrap-project/scripts/install_skills.py"
 SPEC = importlib.util.spec_from_file_location("install_skills", SCRIPT)
@@ -54,7 +53,9 @@ class InstallSkillsTest(unittest.TestCase):
         self.assertTrue(installed.is_file())
         self.assertTrue(receipt.is_file())
         self.assertEqual(plan["plan_id"], json.loads(receipt.read_text())["plan_id"])
-        self.assertEqual(receipt, install_skills.apply_plan(self.kit, self.target, plan))
+        self.assertEqual(
+            receipt, install_skills.apply_plan(self.kit, self.target, plan)
+        )
 
     def test_conflict_blocks_all_selected_skills(self) -> None:
         self.add_skill("alpha")
@@ -75,7 +76,9 @@ class InstallSkillsTest(unittest.TestCase):
         plan = install_skills.build_plan(self.kit, self.target, ["alpha"])
         (source / "SKILL.md").write_text("changed after approval\n", encoding="utf-8")
 
-        with self.assertRaisesRegex(install_skills.AdoptionError, "changed after planning"):
+        with self.assertRaisesRegex(
+            install_skills.AdoptionError, "changed after planning"
+        ):
             install_skills.apply_plan(self.kit, self.target, plan)
         self.assertFalse((self.target / ".agents/skills/alpha").exists())
 
@@ -86,7 +89,9 @@ class InstallSkillsTest(unittest.TestCase):
         destination.mkdir(parents=True)
         (destination / "SKILL.md").write_text("appeared later\n", encoding="utf-8")
 
-        with self.assertRaisesRegex(install_skills.AdoptionError, "changed after planning"):
+        with self.assertRaisesRegex(
+            install_skills.AdoptionError, "changed after planning"
+        ):
             install_skills.apply_plan(self.kit, self.target, plan)
 
     def test_tampered_plan_is_rejected(self) -> None:
@@ -102,12 +107,16 @@ class InstallSkillsTest(unittest.TestCase):
         destination = self.target / ".agents/skills/alpha"
         destination.parent.mkdir(parents=True)
         shutil.copytree(source, destination)
-        before = install_skills.manifest_digest(install_skills.tree_manifest(destination))
+        before = install_skills.manifest_digest(
+            install_skills.tree_manifest(destination)
+        )
         plan = install_skills.build_plan(self.kit, self.target, ["alpha"])
 
         self.assertEqual("UNCHANGED", plan["skills"][0]["status"])
         install_skills.apply_plan(self.kit, self.target, plan)
-        after = install_skills.manifest_digest(install_skills.tree_manifest(destination))
+        after = install_skills.manifest_digest(
+            install_skills.tree_manifest(destination)
+        )
         self.assertEqual(before, after)
 
     def test_symlinked_target_ancestor_is_rejected(self) -> None:
@@ -119,7 +128,9 @@ class InstallSkillsTest(unittest.TestCase):
         except (AttributeError, NotImplementedError, OSError) as error:
             self.skipTest(f"symlink creation is unavailable: {error}")
 
-        with self.assertRaisesRegex(install_skills.AdoptionError, "symlinked destination"):
+        with self.assertRaisesRegex(
+            install_skills.AdoptionError, "symlinked destination"
+        ):
             install_skills.build_plan(self.kit, self.target, ["alpha"])
 
     def test_source_symlink_is_rejected(self) -> None:
@@ -131,7 +142,9 @@ class InstallSkillsTest(unittest.TestCase):
         except (AttributeError, NotImplementedError, OSError) as error:
             self.skipTest(f"symlink creation is unavailable: {error}")
 
-        with self.assertRaisesRegex(install_skills.AdoptionError, "symlinks are not allowed"):
+        with self.assertRaisesRegex(
+            install_skills.AdoptionError, "symlinks are not allowed"
+        ):
             install_skills.build_plan(self.kit, self.target, ["alpha"])
 
     def test_transient_development_files_are_not_planned_or_copied(self) -> None:

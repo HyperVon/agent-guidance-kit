@@ -6,7 +6,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / ".agents/skills/bootstrap-project/scripts/inventory_project.py"
 SPEC = importlib.util.spec_from_file_location("inventory_project", SCRIPT)
@@ -28,7 +27,9 @@ class InventoryProjectTest(unittest.TestCase):
             (root / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
             (root / "GEMINI.md").write_text("@./AGENTS.md\n", encoding="utf-8")
             (root / ".github/workflows").mkdir(parents=True)
-            (root / ".github/workflows/check.yml").write_text("name: check\n", encoding="utf-8")
+            (root / ".github/workflows/check.yml").write_text(
+                "name: check\n", encoding="utf-8"
+            )
             outside = Path(temp) / "outside"
             outside.mkdir()
             (outside / "private.py").write_text("secret = True\n", encoding="utf-8")

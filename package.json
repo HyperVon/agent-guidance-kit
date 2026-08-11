@@ -1,0 +1,15 @@
+{
+  "name": "agent-guidance-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Development checks for the Agent Guidance Kit",
+  "scripts": {
+    "lint:md": "markdownlint-cli2"
+  },
+  "devDependencies": {
+    "markdownlint-cli2": "0.23.2"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

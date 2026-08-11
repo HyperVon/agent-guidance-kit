@@ -116,7 +116,8 @@ levels](docs/harness-compatibility.md).
 
 ## Development
 
-Requirements: Python 3.11 or newer. `make` is optional.
+Requirements: Python 3.11 or newer and Node.js 22 or newer with npm. `make` is
+optional.
 
 Cross-platform setup:
 
@@ -144,18 +145,24 @@ make check
 ```
 
 The adoption and inventory tools use only the Python standard library. Project
-validation uses PyYAML as a development dependency so skill frontmatter and
-metadata are checked as real YAML. `make setup` installs it into the ignored
-project virtual environment; `make check` itself contacts no network service.
+validation uses PyYAML so skill frontmatter and metadata are checked as real
+YAML. Ruff checks and formats the Python code, and markdownlint-cli2 validates
+Markdown. `make setup` installs these into ignored project-local environments;
+`make check` itself contacts no network service.
 
 ### What setup installs
 
-`make setup` creates `.venv/` inside this checkout and installs only the
-development dependencies listed in `requirements-dev.txt`:
+`make setup` creates `.venv/` and `node_modules/` inside this checkout and
+installs only the pinned development dependencies declared in
+`requirements-dev.txt` and `package-lock.json`:
 
 - PyYAML — parses and validates `SKILL.md` frontmatter and `agents/openai.yaml`.
+- Ruff — lints Python and verifies its formatting before commit or push.
+- markdownlint-cli2 — lints every Markdown and MDC file before commit or push.
 
-It does not modify the system Python, install an LLM, download a model, add a
+Python packages are installed in `.venv/`; Node packages are installed in
+`node_modules/` with dependency lifecycle scripts disabled. Setup does not
+modify the system Python or Node.js, install an LLM, download a model, add a
 browser or agent plugin, authenticate a provider, or install dependencies into
 a target repository. The bootstrap workflow must propose any target-project
 tooling change separately and obtain the user's approval.

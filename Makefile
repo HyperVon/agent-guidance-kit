@@ -1,11 +1,19 @@
 VENV ?= .venv
 PYTHON ?= $(VENV)/bin/python
 SYSTEM_PYTHON ?= python3
+NODE ?= node
 
-.PHONY: setup test validate hygiene check
+.PHONY: setup lint-md lint-python test validate hygiene check
 
 setup:
 	$(SYSTEM_PYTHON) scripts/setup_dev.py
+
+lint-md:
+	$(NODE) node_modules/markdownlint-cli2/markdownlint-cli2-bin.mjs
+
+lint-python:
+	$(PYTHON) -m ruff check .
+	$(PYTHON) -m ruff format --check .
 
 test:
 	$(PYTHON) -m unittest discover -s tests -v

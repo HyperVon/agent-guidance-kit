@@ -75,6 +75,8 @@ make check
 ```
 
 The check must validate every skill, run deterministic script tests, verify
-relative links, reject unfinished templates, and scan tracked content for common
-secret and personal-path patterns. Report skipped optional tooling as skipped,
-never passed.
+relative links, lint all Markdown and MDC guidance, lint and format-check Python,
+reject unfinished templates, and scan tracked content for common secret and
+personal-path patterns. These checks are required before commit or push;
+address findings rather than skipping the gate. Report skipped optional tooling
+as skipped, never passed.
