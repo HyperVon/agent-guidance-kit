@@ -45,6 +45,31 @@ Do not modify anything until I approve the exact plan.
 The [adoption prompt](docs/adoption-prompt.md) provides a longer copy-paste
 request that also profiles the current harness.
 
+### Update an existing adoption
+
+After the target has the receipt-managed `agent-guidance-maintenance` skill,
+ask its agent to update the source checkout and prepare a refresh plan:
+
+```text
+Use agent-guidance-maintenance to update Agent Guidance Kit to the latest
+version. Resolve the existing kit checkout, verify that it is a clean `main`
+worktree for the intended source, and refresh it from `origin/main` using only
+fast-forward-safe Git operations. Show me the old and new source revisions, the
+receipt-aware target refresh plan, conflicts, and verification commands. Do not
+apply target changes until I approve the exact plan.
+```
+
+The source checkout is refreshed only for this explicit request. Dirty,
+detached, non-`main`, divergent, or unexpected-source checkouts stop for user
+direction. Refreshing the source does not itself approve changes in the target;
+the normal plan and approval gate still applies. To add newly available skills,
+ask the agent to review candidates separately; a refresh updates adopted
+receipt-owned content but does not silently add optional related skills.
+
+See the [prompt cookbook](docs/adoption-prompt.md#common-maintenance-prompts)
+for audit, refresh, skill-addition, harness-adaptation, verification, and
+conflict-investigation examples.
+
 ### Optional deterministic installer
 
 The agent can prepare a receipt-aware installation plan for selected skills:

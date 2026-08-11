@@ -33,8 +33,12 @@ replace stronger project-local guidance.
 - Do not use a local LLM, embedded classifier, embeddings, or a separate
   semantic service. The active harness model performs selection and
   reconciliation.
-- Do not fetch remote guidance, execute imported scripts, install packages,
-  authenticate providers, start services, or inspect credentials/runtime data.
+- Do not fetch remote guidance during initial adoption, execute imported
+  scripts, install packages, authenticate providers, start services, or inspect
+  credentials/runtime data. An existing target may explicitly request the
+  maintenance skill to refresh its already resolved, clean Agent Guidance Kit
+  checkout; follow that skill's guarded source-refresh procedure rather than
+  fetching arbitrary guidance.
 - Do not add provider routing, quota policy, worker supervision, or model
   catalogs to the target.
 - Do not overwrite, delete, rename, or silently merge locally modified target
