@@ -69,7 +69,7 @@ systems here.
 | Partition independent work among bounded workers | [parallel-multi-agent](skills/parallel-multi-agent/SKILL.md) |
 | Create or update a project-local skill | [skill-authoring](skills/skill-authoring/SKILL.md) |
 | Measure whether a skill improves outcomes with clean-context evaluations | [skill-evaluation](skills/skill-evaluation/SKILL.md) |
-| Review skill content for missing domain depth and practical usefulness | [skill-reviewer](skills/skill-reviewer/SKILL.md) |
+| Review skill content or external candidates for useful improvements | [skill-reviewer](skills/skill-reviewer/SKILL.md) |
 | Audit guidance structure, overlap, conflicts, and routing | [rules-and-skills-audit](skills/rules-and-skills-audit/SKILL.md) |
 | Reduce guidance context cost without weakening behavior | [skill-optimizer](skills/skill-optimizer/SKILL.md) |
 

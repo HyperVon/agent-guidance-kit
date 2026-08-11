@@ -145,7 +145,7 @@
         "skill-authoring"
       ],
       "requires": [],
-      "route": "Review skill content for missing domain depth and practical usefulness"
+      "route": "Review skill content or external candidates for useful improvements"
     },
     "systematic-debugging": {
       "related": [
