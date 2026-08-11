@@ -133,6 +133,7 @@ same check on Windows, Ubuntu, and macOS with Python 3.11 and 3.14.
 - [Contributing](CONTRIBUTING.md)
 - [Source provenance](docs/provenance.md)
 - [Catalog expansion evaluation](docs/evaluations/2026-08-10-catalog-expansion.md)
+- [Systematic debugging fixture evaluation](docs/evaluations/2026-08-11-systematic-debugging-fixture.md)
 - [External skill intake evaluation](docs/evaluations/2026-08-10-external-skill-intake.md)
 - [Roadmap](docs/roadmap.md)
 - [Security policy](SECURITY.md)
