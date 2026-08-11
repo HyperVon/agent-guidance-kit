@@ -132,7 +132,8 @@ same check on Windows, Ubuntu, and macOS with Python 3.11 and 3.14.
 - [Design and safety model](docs/design.md)
 - [Contributing](CONTRIBUTING.md)
 - [Source provenance](docs/provenance.md)
-- [Skill evaluation evidence](docs/evaluations/2026-08-10-catalog-expansion.md)
+- [Catalog expansion evaluation](docs/evaluations/2026-08-10-catalog-expansion.md)
+- [External skill intake evaluation](docs/evaluations/2026-08-10-external-skill-intake.md)
 - [Roadmap](docs/roadmap.md)
 - [Security policy](SECURITY.md)
 
