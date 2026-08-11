@@ -5,12 +5,18 @@
       "id": 1,
       "kind": "matching",
       "prompt": "The CI test for order recovery started failing after yesterday's persistence change. Someone suggested adding a retry. Diagnose it and propose the smallest safe fix.",
-      "expected_output": "The agent preserves and reproduces the failure, traces the changed data path, states one root-cause hypothesis, and does not propose a fix before evidence supports it.",
+      "expected_output": "The agent runs the failing fixture test, traces the persisted order state to the recovery decision, states one root-cause hypothesis, and does not propose a retry before evidence supports it.",
       "assertions": [
         "The response distinguishes observed evidence from hypotheses",
         "The response includes a reproducible command or explicitly records why reproduction is blocked",
         "The response does not stack speculative fixes",
         "The response rejects retries, delays, or broad fallbacks as substitutes for root cause"
+      ],
+      "files": [
+        "evals/files/order-recovery/app/__init__.py",
+        "evals/files/order-recovery/app/recovery.py",
+        "evals/files/order-recovery/docs/persistence-contract.md",
+        "evals/files/order-recovery/tests/test_recovery.py"
       ]
     },
     {
