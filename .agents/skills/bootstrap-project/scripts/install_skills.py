@@ -565,6 +565,29 @@ def managed_route_block(text: str) -> str | None:
     return f"{ROUTE_START}{body}{ROUTE_END}"
 
 
+def read_text_exact(path: Path) -> str:
+    try:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            return handle.read()
+    except (OSError, UnicodeDecodeError) as error:
+        raise AdoptionError(
+            f"cannot read UTF-8 routing file: {path}: {error}"
+        ) from error
+
+
+def newline_sequence(text: str) -> str:
+    crlf = text.count("\r\n")
+    lf = text.count("\n") - crlf
+    cr = text.count("\r") - crlf
+    if crlf and crlf >= lf and crlf >= cr:
+        return "\r\n"
+    if lf and lf >= cr:
+        return "\n"
+    if cr:
+        return "\r"
+    return os.linesep
+
+
 def routing_path(target_root: Path) -> Path:
     nested = target_root / ".agents/AGENTS.md"
     root = target_root / "AGENTS.md"
@@ -575,7 +598,7 @@ def routing_path(target_root: Path) -> Path:
                 raise AdoptionError(
                     f"routing owner must be a real file: {path.relative_to(target_root)}"
                 )
-            if ROUTE_START in path.read_text(encoding="utf-8"):
+            if ROUTE_START in read_text_exact(path):
                 managed.append(path)
     if len(managed) > 1:
         raise AdoptionError("multiple managed Agent Guidance Kit route blocks exist")
@@ -592,6 +615,7 @@ def route_block(
     path: Path,
     names: set[str],
     dependencies: dict[str, dict[str, Any]],
+    newline: str,
 ) -> str:
     if path.parent == target_root / ".agents":
         prefix = "skills"
@@ -610,19 +634,20 @@ def route_block(
         route = dependencies[name]["route"]
         lines.append(f"| {route} | [{name}]({prefix}/{name}/SKILL.md) |")
     lines.extend([ROUTE_END, ""])
-    return "\n".join(lines)
+    return newline.join(lines)
 
 
 def render_routing(current: str, block: str) -> str:
     start_count = current.count(ROUTE_START)
     end_count = current.count(ROUTE_END)
     if start_count == 0 and end_count == 0:
+        newline = newline_sequence(current or block)
         separator = (
             ""
-            if not current or current.endswith("\n\n")
-            else "\n"
-            if current.endswith("\n")
-            else "\n\n"
+            if not current or current.endswith(newline * 2)
+            else newline
+            if current.endswith(newline)
+            else newline * 2
         )
         return f"{current}{separator}{block}"
     if start_count != 1 or end_count != 1:
@@ -639,12 +664,14 @@ def inspect_routing(
 ) -> dict[str, Any]:
     path = routing_path(target_root)
     relative = path.relative_to(target_root)
-    current = path.read_text(encoding="utf-8") if path.exists() else ""
+    current = read_text_exact(path) if path.exists() else ""
     existing_names = managed_route_names(current)
     receipt_names = set(receipt_skill_digests(target_root))
     selected_names = {entry["name"] for entry in entries}
     names = (existing_names | receipt_names | selected_names) & set(dependencies)
-    block = route_block(target_root, path, names, dependencies)
+    block = route_block(
+        target_root, path, names, dependencies, newline_sequence(current)
+    )
     block_digest = digest_bytes(block.rstrip().encode("utf-8"))
     conflict = None
     missing_receipt_skills = sorted(
@@ -815,7 +842,7 @@ def validate_installed(target_root: Path, plan: dict[str, Any]) -> None:
     route_path = target_root / Path(str(routing.get("path", "")))
     if route_path.is_symlink() or not route_path.is_file():
         raise AdoptionError("managed AGENTS route file is missing or unsafe")
-    route_block_text = managed_route_block(route_path.read_text(encoding="utf-8"))
+    route_block_text = managed_route_block(read_text_exact(route_path))
     route_digest = (
         digest_bytes(route_block_text.encode("utf-8"))
         if route_block_text is not None
@@ -835,20 +862,23 @@ def write_routing(
     before_digest = digest_bytes(before) if before is not None else None
     if before_digest != routing.get("before_digest"):
         raise AdoptionError("managed AGENTS route changed after planning")
-    current = before.decode("utf-8") if before is not None else ""
+    try:
+        current = before.decode("utf-8") if before is not None else ""
+    except UnicodeDecodeError as error:
+        raise AdoptionError(f"managed AGENTS route is not UTF-8: {relative}") from error
     desired = render_routing(current, str(routing.get("block", "")))
     if digest_bytes(desired.encode("utf-8")) != routing.get("after_digest"):
         raise AdoptionError("managed AGENTS route does not match the approved plan")
     path.parent.mkdir(parents=True, exist_ok=True)
     if before is None:
-        with path.open("x", encoding="utf-8") as handle:
-            handle.write(desired)
+        with path.open("xb") as handle:
+            handle.write(desired.encode("utf-8"))
         return None
     temporary = path.parent / f".{path.name}.agent-guidance-kit-{plan_id[:12]}"
     if temporary.exists() or temporary.is_symlink():
         raise AdoptionError(f"temporary routing path already exists: {temporary}")
-    with temporary.open("x", encoding="utf-8") as handle:
-        handle.write(desired)
+    with temporary.open("xb") as handle:
+        handle.write(desired.encode("utf-8"))
     os.replace(temporary, path)
     return before
 
@@ -864,8 +894,8 @@ def restore_routing(
     temporary = path.parent / f".{path.name}.agent-guidance-kit-rollback"
     if temporary.exists() and not temporary.is_symlink():
         temporary.unlink()
-    with temporary.open("x", encoding="utf-8") as handle:
-        handle.write(before.decode("utf-8"))
+    with temporary.open("xb") as handle:
+        handle.write(before)
     os.replace(temporary, path)
 
 

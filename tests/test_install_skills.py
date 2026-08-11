@@ -296,6 +296,19 @@ class InstallSkillsTest(unittest.TestCase):
         self.assertEqual(1, content.count(install_skills.ROUTE_START))
         self.assertIn(".agents/skills/alpha/SKILL.md", content)
 
+    def test_crlf_agents_content_and_routes_keep_crlf_line_endings(self) -> None:
+        self.add_skill("alpha")
+        agents = self.target / "AGENTS.md"
+        agents.write_bytes(b"# Local rules\r\n\r\nKeep this content.\r\n")
+
+        plan = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        install_skills.apply_plan(self.kit, self.target, plan)
+
+        content = agents.read_bytes()
+        self.assertTrue(content.startswith(b"# Local rules\r\n\r\n"))
+        self.assertIn(install_skills.ROUTE_START.encode("utf-8"), content)
+        self.assertNotIn(b"\n", content.replace(b"\r\n", b""))
+
     def test_malformed_managed_route_block_is_a_plan_conflict(self) -> None:
         self.add_skill("alpha")
         (self.target / "AGENTS.md").write_text(
