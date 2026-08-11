@@ -57,10 +57,10 @@ independent superiority.
 
 ## Remaining evaluation work
 
-- Execute the committed `systematic-debugging` order-recovery fixture in a
-  clean-context comparison; adding the fixture alone does not establish that
-  the skill improves trace quality on real source and failing tests.
-- Repeat decision-sensitive cases across additional supported harnesses and
-  models before making portability or statistical claims.
+- Repeat the systematic-debugging fixture comparison across additional models
+  and supported harnesses before making portability or statistical claims; the
+  first smoke comparison is recorded separately.
+- Repeat other decision-sensitive cases across additional supported harnesses
+  and models before making portability or statistical claims.
 - Expand description-trigger testing when the catalog grows enough for routing
   collisions to become likely.
