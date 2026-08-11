@@ -12,21 +12,27 @@ contract, and a failing test where an `UNCERTAIN` order incorrectly becomes
   `systematic-debugging` skill.
 - Harness: ephemeral local Codex execution with read-only sandboxing, project
   rules disabled, and tool use prohibited by the evaluation prompt.
-- Model: `gpt-5.6-luna`, low reasoning effort.
-- One run per condition; raw outputs were not committed.
+- Scored model conditions: `gpt-5.6-luna` at low reasoning effort and
+  `gpt-5.6-sol` at xhigh reasoning effort, with one run per condition for each
+  model.
+- Raw outputs were not committed. Pi 0.80.3 was installed locally, but its
+  noninteractive runner had no configured model, so no Pi result is claimed.
 
 ## Results
 
-All four committed matching-case assertions passed in both conditions. A
-candidate fifth assertion was tested and rejected during review because it
+All four committed matching-case assertions passed in both conditions for both
+scored models. A candidate fifth assertion was tested and rejected during
+review because it
 conflicted with the fixture: the scenario explicitly defines unspecified
 states as `RELEASE`, so preserving that behavior is correct unless additional
 evidence changes the contract.
 
-| Condition | Assertions | Human review |
+| Model / condition | Assertions | Human review |
 | :--- | :--- | :--- |
-| No skill | 4/4 | Found the explicit `UNCERTAIN` bug, rejected a blind retry, and preserved the fixture's specified mappings. |
-| `systematic-debugging` | 4/4 | Found the same root cause, rejected a blind retry, and preserved the fixture's specified mappings. |
+| Luna low / no skill | 4/4 | Found the explicit `UNCERTAIN` bug, rejected a blind retry, and preserved the fixture's specified mappings. |
+| Luna low / `systematic-debugging` | 4/4 | Found the same root cause, rejected a blind retry, and preserved the fixture's specified mappings. |
+| Sol xhigh / no skill | 4/4 | Found the explicit `UNCERTAIN` bug, rejected a blind retry, and preserved the fixture's specified mappings. |
+| Sol xhigh / `systematic-debugging` | 4/4 | Found the same root cause, rejected a blind retry, and more explicitly bounded the identity-related uncertainty. |
 
 The rejected candidate assertion was:
 
@@ -39,9 +45,9 @@ skill. It is not part of the committed case set.
 ## Decision and limits
 
 `KEEP_PROVISIONAL`: the fixture confirms that the skill preserves the safety
-boundary and does not regress the matching case, but this comparison found no
-text-level advantage over the no-skill baseline. It is smoke-level evidence
-from one model and one run per condition, and does not establish
-model-independent or harness-wide behavior. Repeat the case across additional
-supported models and harnesses before making portability or statistical
-claims.
+boundary across two Codex model conditions, but the comparisons found no
+assertion-level advantage over the no-skill baseline. It is smoke-level
+evidence from two models and one run per condition for each model, and does not
+establish model-independent or harness-wide behavior. Repeat the case across
+additional supported models and harnesses before making portability or
+statistical claims.
