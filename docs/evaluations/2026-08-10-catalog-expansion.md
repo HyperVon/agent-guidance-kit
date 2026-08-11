@@ -57,9 +57,9 @@ independent superiority.
 
 ## Remaining evaluation work
 
-- Add a repository fixture for `systematic-debugging`; the current text-only
-  cases do not show whether the skill improves trace quality on real source and
-  failing tests.
+- Execute the committed `systematic-debugging` order-recovery fixture in a
+  clean-context comparison; adding the fixture alone does not establish that
+  the skill improves trace quality on real source and failing tests.
 - Repeat decision-sensitive cases across additional supported harnesses and
   models before making portability or statistical claims.
 - Expand description-trigger testing when the catalog grows enough for routing
