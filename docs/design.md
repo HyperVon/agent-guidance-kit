@@ -75,7 +75,7 @@ for each rule or skill regardless of the adapter used.
 
 ## Deliberate exclusions
 
-V1 does not include an LLM, embeddings, provider selection, model routing,
+The v1 release does not include an LLM, embeddings, provider selection, model routing,
 worker spawning, process supervision, unattended updates, remote pack loading,
 marketplace behavior, or a managed-guidance service. Those capabilities must
 earn a separate boundary through demonstrated use.

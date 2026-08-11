@@ -2,8 +2,8 @@
 
 ## Supported versions
 
-This project is in pre-v1 development. Security fixes apply to the current main
-development line.
+This project is at v1.0.0. Security fixes apply to the current main development
+line.
 
 ## Reporting a vulnerability
 
