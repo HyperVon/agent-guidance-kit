@@ -12,9 +12,10 @@ the kit's harness-adaptation skill. Then follow bootstrap-project to inventory
 the target, read all applicable target-local guidance, and propose the smallest
 useful set of skills and integration changes.
 
-Treat target-local guidance as authoritative. Classify each candidate as ADD,
-ADAPT, KEEP_LOCAL, DEFER, or SKIP, with evidence and an exact destination or
-owner. Include every proposed file creation or edit, collision, harness
+Treat target-local guidance as authoritative. Always include the kit-owned
+maintenance skill. Classify each other candidate as ADD, ADAPT, KEEP_LOCAL,
+DEFER, or SKIP, with evidence and an exact destination or owner. Include every
+proposed file creation or edit, dependency addition, collision, harness
 projection, validation command, and material exclusion.
 
 Do not use or install a local LLM, classifier, embeddings service, model router,
@@ -33,5 +34,7 @@ it to read these two entrypoints first:
 ```
 
 After approval, the harness should generate and review the deterministic
-create-only plan, apply it with `--approve`, make only separately approved
-integration edits, and report the receipt and verification evidence.
+receipt-aware plan, apply it with `--approve`, configure the ignored source
+locator when the plan calls for it, verify source rediscovery, run the adopted
+target validator, make only separately approved integration edits, and report
+the receipt and verification evidence.

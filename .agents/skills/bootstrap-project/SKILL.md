@@ -7,7 +7,7 @@ description: "Inspect an existing software repository, compare its local agent g
 
 Use the active coding harness and its current LLM to understand the target
 project and choose guidance. Use bundled scripts only for mechanical facts,
-hashes, create-only copy, and validation.
+hashes, dependency closure, receipt-aware application, and validation.
 
 ## Contract
 
@@ -16,14 +16,17 @@ hashes, create-only copy, and validation.
 - **Default output:** repository facts, guidance inventory, proposed selection,
   conflicts, integration edits, verification plan, and explicit approval gate.
 - **Default side effects:** none. Inventory and proposal work are read-only.
-- **Apply side effects:** copy only approved missing skill directories, then
-  make separately approved target-local guidance edits.
+- **Apply side effects:** install the maintenance entrypoint and approved
+  dependency-closed skills, refresh only receipt-owned unmodified content,
+  maintain a digest-guarded AGENTS route block, and then make any separately
+  approved semantic guidance edits.
 - **Stop conditions:** stop before mutation; stop on an unresolved collision,
   symlink, source drift, target drift, unclear canonical owner, secret exposure,
   or a material choice the user has not made.
 
-Do not install every skill. Do not add generic advice the base model already
-handles well. Do not replace stronger project-local guidance.
+Always include `agent-guidance-maintenance`; otherwise do not install every
+skill. Do not add generic advice the base model already handles well. Do not
+replace stronger project-local guidance.
 
 ## Hard boundaries
 
@@ -34,7 +37,9 @@ handles well. Do not replace stronger project-local guidance.
   authenticate providers, start services, or inspect credentials/runtime data.
 - Do not add provider routing, quota policy, worker supervision, or model
   catalogs to the target.
-- Do not overwrite, delete, rename, or silently merge existing target guidance.
+- Do not overwrite, delete, rename, or silently merge locally modified target
+  guidance. Receipt-owned adopted content may be refreshed only when its current
+  digest still matches a prior receipt and the exact update plan is approved.
 - Treat copied skills as target-local policy only after their content and
   integration have been reviewed and approved.
 
@@ -47,8 +52,11 @@ before interpreting it, including applicable `AGENTS.md` files and any
 harness-specific instruction files. Respect scope: a nested rule may govern one
 component without being repository-wide.
 
-If the kit root is unavailable, ask for it. Do not search unrelated personal
-directories or fetch a replacement from the network.
+Resolve the kit root from an explicit path for this invocation, the
+`AGENT_GUIDANCE_KIT_ROOT` environment setting, an ignored target-local locator,
+or a validated adjacent `agent-guidance-kit` sibling, in that order. If none
+works, ask. Do not search unrelated personal directories, fetch a replacement,
+or embed a personal absolute path in tracked guidance.
 
 ### 2. Inventory facts without interpretation
 
@@ -87,6 +95,11 @@ Classify each reviewed skill:
 - `KEEP_LOCAL` — target guidance is stronger or a same-name owner exists.
 - `DEFER` — potentially useful, but a project decision or evidence is missing.
 - `SKIP` — redundant, irrelevant, or generic advice with no demonstrated value.
+
+The installer always adds `agent-guidance-maintenance` and recursively closes
+declared `requires` dependencies. Declared `related` skills are suggestions,
+not automatic additions. A relative skill link is allowed only for a required
+dependency so a selective installation cannot create a broken link.
 
 ### 4. Reconcile the guidance hierarchy
 
@@ -138,8 +151,10 @@ python3 <kit-root>/.agents/skills/bootstrap-project/scripts/install_skills.py \
   --skill <approved-skill> --output <plan.json>
 ```
 
-Review the plan's source digest, selected skills, statuses, destinations, and
-conflicts. `CONFLICT` is a stop condition; do not bypass it.
+Review the plan's source digest, requested and automatically added skills,
+required versus related dependencies, create/update/unchanged statuses,
+destinations, managed AGENTS route, and conflicts. `CONFLICT` is a stop
+condition; do not bypass it.
 
 Apply only the unchanged approved plan:
 
@@ -150,12 +165,29 @@ python3 <kit-root>/.agents/skills/bootstrap-project/scripts/install_skills.py \
 ```
 
 The helper revalidates source and destination state, stages complete skill
-directories, creates only missing destinations, and writes a content-hash
-receipt. It never merges or overwrites.
+directories, creates missing destinations, atomically refreshes only content
+whose current digest matches a prior receipt, maintains a digest-guarded route
+block, and writes a content-hash receipt. Local divergence is a conflict and is
+never overwritten.
+
+The first approved apply automatically configures the ignored target-local
+source locator when the target is a Git worktree. Verify that future sessions
+can rediscover the source:
+
+```text
+python <target-root>/.agents/skills/agent-guidance-maintenance/scripts/resolve_source.py \
+  resolve --target <target-root>
+```
+
+The resolver writes no tracked personal path. If automatic configuration is
+unavailable, the plan stops until the adjacent-sibling fallback or an
+environment setting provides a portable future source.
 
 ### 7. Integrate target-local guidance
 
-Copying files is not integration. Apply only the approved edits needed to:
+The installer creates or updates a managed AGENTS route block for every adopted
+skill. That deterministic index is necessary but may not be sufficient semantic
+integration. Apply only the approved additional edits needed to:
 
 - route target tasks to the selected skills;
 - record project-specific invariants derived from source/build/config truth;
@@ -170,10 +202,17 @@ generic unless the approved plan explicitly makes them project-specific.
 ### 8. Verify and report
 
 Run the target's relevant guidance validator, link checks, and project gates.
+For a selective installation, run:
+
+```text
+python <target-root>/.agents/skills/agent-guidance-maintenance/scripts/validate_adoption.py \
+  --target <target-root>
+```
+
 Re-read every created or edited instruction as a future agent would encounter
 it. Confirm:
 
-- no local file was overwritten or deleted;
+- no locally modified adopted file was overwritten or deleted;
 - copied hashes match the receipt;
 - all skill names, links, descriptions, and index entries align;
 - no unfinished placeholders, personal paths, credentials, or private state

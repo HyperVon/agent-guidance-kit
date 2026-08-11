@@ -16,10 +16,10 @@ edits and validation; it does not replace a content review or a structural audit
 | Skill | Owns |
 | :--- | :--- |
 | **skill-authoring** | Approved skill edits and their validation |
-| [skill-reviewer](../skill-reviewer/SKILL.md) | Content recommendations; report-only by default |
-| [rules-and-skills-audit](../rules-and-skills-audit/SKILL.md) | Structure, overlap, routing, and drift findings |
-| [skill-optimizer](../skill-optimizer/SKILL.md) | Context-cost reduction and its preservation checks |
-| [harness-adaptation](../harness-adaptation/SKILL.md) | Harness capability profiles and thin projections |
+| `skill-reviewer` | Content recommendations; report-only by default |
+| `rules-and-skills-audit` | Structure, overlap, routing, and drift findings |
+| `skill-optimizer` | Context-cost reduction and its preservation checks |
+| `harness-adaptation` | Harness capability profiles and thin projections |
 
 Do not turn a domain skill into a generic coding procedure, an unrelated
 harness adapter, or a second copy of canonical project policy. A skill whose
@@ -64,6 +64,9 @@ named skill does not authorize unrelated guidance, index, or runtime changes.
   ambiguous request with a stated tie-breaker.
 - Check every relative link and referenced script or option against the current
   tree. Remove unverifiable claims and unfinished placeholders.
+- For a new or materially changed skill, use
+  [skill-evaluation](../skill-evaluation/SKILL.md) to compare matching,
+  neighboring, and ambiguous cases before claiming that it improves outcomes.
 - Check the diff for whitespace errors, secrets, personal paths, provider
   assumptions, unintended files, and changes outside the approved scope.
 - Re-read the complete changed skill and report exactly what was validated,

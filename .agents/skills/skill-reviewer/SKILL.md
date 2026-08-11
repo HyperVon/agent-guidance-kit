@@ -17,9 +17,9 @@ produces recommendations; it does not edit files during a review.
 | Neighbor | Use it for |
 | :--- | :--- |
 | **skill-reviewer** | Missing domain depth, anti-patterns, checklists, and usable prose |
-| [rules-and-skills-audit](../rules-and-skills-audit/SKILL.md) | Structural overlap, conflicts, drift, and routing |
-| [documentation-review](../documentation-review/SKILL.md) | Factual agreement with source or build truth |
-| [skill-authoring](../skill-authoring/SKILL.md) | Applying an explicitly approved edit |
+| `rules-and-skills-audit` | Structural overlap, conflicts, drift, and routing |
+| `documentation-review` | Factual agreement with source or build truth |
+| `skill-authoring` | Applying an explicitly approved edit |
 
 Choose one mode:
 

@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,11 +25,46 @@ class InstallSkillsTest(unittest.TestCase):
         self.target = base / "target"
         self.kit.mkdir()
         self.target.mkdir()
+        subprocess.run(
+            ["git", "init", "--quiet", str(self.target)],
+            check=True,
+            capture_output=True,
+        )
+        self.catalog: dict[str, dict[str, object]] = {}
+        self.add_skill("bootstrap-project")
+        installer = (
+            self.kit / ".agents/skills/bootstrap-project/scripts/install_skills.py"
+        )
+        installer.parent.mkdir(parents=True)
+        installer.write_text("# test installer marker\n", encoding="utf-8")
+        maintenance = self.add_skill("agent-guidance-maintenance")
+        resolver = maintenance / "scripts/resolve_source.py"
+        resolver.parent.mkdir()
+        shutil.copy2(
+            ROOT
+            / ".agents/skills/agent-guidance-maintenance/scripts/resolve_source.py",
+            resolver,
+        )
 
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def add_skill(self, name: str, body: str = "# Skill\n") -> Path:
+    def write_catalog(self) -> None:
+        path = self.kit / ".agents/skill-dependencies.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps({"schema_version": 1, "skills": self.catalog}),
+            encoding="utf-8",
+        )
+
+    def add_skill(
+        self,
+        name: str,
+        body: str = "# Skill\n",
+        *,
+        requires: list[str] | None = None,
+        related: list[str] | None = None,
+    ) -> Path:
         directory = self.kit / ".agents/skills" / name
         (directory / "agents").mkdir(parents=True)
         (directory / "SKILL.md").write_text(
@@ -40,18 +76,44 @@ class InstallSkillsTest(unittest.TestCase):
             f'  default_prompt: "Use ${name} for this test."\n',
             encoding="utf-8",
         )
+        self.catalog[name] = {
+            "requires": requires or [],
+            "related": related or [],
+            "route": f"Use {name} for its test workflow",
+        }
+        self.write_catalog()
         return directory
 
     def test_plan_apply_and_idempotent_receipt(self) -> None:
         self.add_skill("alpha")
         plan = install_skills.build_plan(self.kit, self.target, ["alpha"])
 
-        self.assertEqual("CREATE", plan["skills"][0]["status"])
+        statuses = {item["name"]: item["status"] for item in plan["skills"]}
+        self.assertEqual(
+            {"agent-guidance-maintenance": "CREATE", "alpha": "CREATE"},
+            statuses,
+        )
         receipt = install_skills.apply_plan(self.kit, self.target, plan)
 
         installed = self.target / ".agents/skills/alpha/SKILL.md"
         self.assertTrue(installed.is_file())
         self.assertTrue(receipt.is_file())
+        self.assertTrue((self.target / "AGENTS.md").is_file())
+        locator = self.target / ".agents/.agent-guidance-kit/source.json"
+        self.assertTrue(locator.is_file())
+        ignored = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(self.target),
+                "check-ignore",
+                "--quiet",
+                "--",
+                ".agents/.agent-guidance-kit/source.json",
+            ],
+            check=False,
+        )
+        self.assertEqual(0, ignored.returncode)
         self.assertEqual(plan["plan_id"], json.loads(receipt.read_text())["plan_id"])
         self.assertEqual(
             receipt, install_skills.apply_plan(self.kit, self.target, plan)
@@ -66,7 +128,14 @@ class InstallSkillsTest(unittest.TestCase):
         plan = install_skills.build_plan(self.kit, self.target, ["alpha", "beta"])
 
         statuses = {item["name"]: item["status"] for item in plan["skills"]}
-        self.assertEqual({"alpha": "CREATE", "beta": "CONFLICT"}, statuses)
+        self.assertEqual(
+            {
+                "agent-guidance-maintenance": "CREATE",
+                "alpha": "CREATE",
+                "beta": "CONFLICT",
+            },
+            statuses,
+        )
         with self.assertRaisesRegex(install_skills.AdoptionError, "conflicts"):
             install_skills.apply_plan(self.kit, self.target, plan)
         self.assertFalse((self.target / ".agents/skills/alpha").exists())
@@ -112,7 +181,8 @@ class InstallSkillsTest(unittest.TestCase):
         )
         plan = install_skills.build_plan(self.kit, self.target, ["alpha"])
 
-        self.assertEqual("UNCHANGED", plan["skills"][0]["status"])
+        statuses = {item["name"]: item["status"] for item in plan["skills"]}
+        self.assertEqual("UNCHANGED", statuses["alpha"])
         install_skills.apply_plan(self.kit, self.target, plan)
         after = install_skills.manifest_digest(
             install_skills.tree_manifest(destination)
@@ -166,6 +236,302 @@ class InstallSkillsTest(unittest.TestCase):
         self.assertFalse((destination / "scripts/__pycache__").exists())
         self.assertFalse((destination / ".DS_Store").exists())
         self.assertFalse((destination / "notes.md~").exists())
+
+    def test_required_dependencies_are_added_but_related_skills_are_not(self) -> None:
+        self.add_skill("alpha")
+        self.add_skill("gamma")
+        self.add_skill(
+            "beta",
+            "# Skill\n\nUse [alpha](../alpha/SKILL.md). Related: `gamma`.\n",
+            requires=["alpha"],
+            related=["gamma"],
+        )
+
+        plan = install_skills.build_plan(self.kit, self.target, ["beta"])
+
+        self.assertEqual(
+            ["agent-guidance-maintenance", "alpha", "beta"],
+            [item["name"] for item in plan["skills"]],
+        )
+        self.assertIn(
+            "required by beta", plan["selection"]["automatically_added"]["alpha"]
+        )
+        self.assertNotIn("gamma", [item["name"] for item in plan["skills"]])
+
+    def test_relative_link_to_optional_skill_is_rejected_during_planning(self) -> None:
+        self.add_skill("alpha")
+        self.add_skill(
+            "beta",
+            "# Skill\n\nUse [alpha](../alpha/SKILL.md).\n",
+            related=["alpha"],
+        )
+
+        with self.assertRaisesRegex(
+            install_skills.AdoptionError, "relative links to non-required"
+        ):
+            install_skills.build_plan(self.kit, self.target, ["beta"])
+
+    def test_required_dependency_does_not_need_a_prose_link(self) -> None:
+        self.add_skill("alpha")
+        self.add_skill("beta", requires=["alpha"])
+
+        plan = install_skills.build_plan(self.kit, self.target, ["beta"])
+
+        self.assertEqual(
+            ["agent-guidance-maintenance", "alpha", "beta"],
+            [item["name"] for item in plan["skills"]],
+        )
+
+    def test_existing_agents_content_is_preserved_around_managed_routes(self) -> None:
+        self.add_skill("alpha")
+        agents = self.target / "AGENTS.md"
+        agents.write_text("# Local rules\n\nKeep this content.\n", encoding="utf-8")
+
+        plan = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        self.assertEqual("APPEND", plan["routing"]["status"])
+        install_skills.apply_plan(self.kit, self.target, plan)
+
+        content = agents.read_text(encoding="utf-8")
+        self.assertIn("Keep this content.", content)
+        self.assertEqual(1, content.count(install_skills.ROUTE_START))
+        self.assertIn(".agents/skills/alpha/SKILL.md", content)
+
+    def test_crlf_agents_content_and_routes_keep_crlf_line_endings(self) -> None:
+        self.add_skill("alpha")
+        agents = self.target / "AGENTS.md"
+        agents.write_bytes(b"# Local rules\r\n\r\nKeep this content.\r\n")
+
+        plan = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        install_skills.apply_plan(self.kit, self.target, plan)
+
+        content = agents.read_bytes()
+        self.assertTrue(content.startswith(b"# Local rules\r\n\r\n"))
+        self.assertIn(install_skills.ROUTE_START.encode("utf-8"), content)
+        self.assertNotIn(b"\n", content.replace(b"\r\n", b""))
+
+    def test_malformed_managed_route_block_is_a_plan_conflict(self) -> None:
+        self.add_skill("alpha")
+        (self.target / "AGENTS.md").write_text(
+            f"# Local\n\n{install_skills.ROUTE_START}\n",
+            encoding="utf-8",
+        )
+
+        plan = install_skills.build_plan(self.kit, self.target, ["alpha"])
+
+        self.assertEqual("CONFLICT", plan["routing"]["status"])
+        with self.assertRaisesRegex(install_skills.AdoptionError, "routing conflict"):
+            install_skills.apply_plan(self.kit, self.target, plan)
+
+    def test_locally_modified_managed_route_block_is_a_conflict(self) -> None:
+        self.add_skill("alpha")
+        initial = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        install_skills.apply_plan(self.kit, self.target, initial)
+        agents = self.target / "AGENTS.md"
+        agents.write_text(
+            agents.read_text(encoding="utf-8").replace(
+                "Use alpha for its test workflow",
+                "Locally customized alpha route",
+            ),
+            encoding="utf-8",
+        )
+        self.add_skill("beta")
+
+        plan = install_skills.build_plan(self.kit, self.target, ["beta"])
+
+        self.assertEqual("CONFLICT", plan["routing"]["status"])
+        self.assertIn("receipt-owned", plan["routing"]["conflict"]["reason"])
+
+    def test_local_content_outside_managed_routes_is_preserved_on_route_update(
+        self,
+    ) -> None:
+        self.add_skill("alpha")
+        initial = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        install_skills.apply_plan(self.kit, self.target, initial)
+        agents = self.target / "AGENTS.md"
+        agents.write_text(
+            agents.read_text(encoding="utf-8") + "\nLocal owner note.\n",
+            encoding="utf-8",
+        )
+        self.add_skill("beta")
+
+        plan = install_skills.build_plan(self.kit, self.target, ["beta"])
+        self.assertEqual("UPDATE", plan["routing"]["status"])
+        install_skills.apply_plan(self.kit, self.target, plan)
+
+        content = agents.read_text(encoding="utf-8")
+        self.assertIn("Local owner note.", content)
+        self.assertIn(".agents/skills/beta/SKILL.md", content)
+
+    def test_missing_receipt_owned_skill_blocks_a_later_plan(self) -> None:
+        self.add_skill("alpha")
+        initial = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        install_skills.apply_plan(self.kit, self.target, initial)
+        shutil.rmtree(self.target / ".agents/skills/alpha")
+        self.add_skill("beta")
+
+        plan = install_skills.build_plan(self.kit, self.target, ["beta"])
+
+        self.assertEqual("CONFLICT", plan["routing"]["status"])
+        self.assertIn("alpha", plan["routing"]["conflict"]["reason"])
+
+    def test_malformed_receipt_skill_identity_fails_closed(self) -> None:
+        self.add_skill("alpha")
+        directory = self.target / install_skills.RECEIPTS
+        directory.mkdir(parents=True)
+        (directory / "malformed.json").write_text(
+            json.dumps(
+                {"skills": [{"name": "../../escape", "source_digest": "a" * 64}]}
+            ),
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(
+            install_skills.AdoptionError, "identity or digest is malformed"
+        ):
+            install_skills.build_plan(self.kit, self.target, ["alpha"])
+
+    def test_receipt_owned_skill_updates_but_local_modification_conflicts(self) -> None:
+        source = self.add_skill("alpha", "# Skill\n\nVersion one.\n")
+        initial = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        install_skills.apply_plan(self.kit, self.target, initial)
+
+        (source / "SKILL.md").write_text(
+            '---\nname: alpha\ndescription: "A sufficiently detailed test skill description for validation."\n---\n\n# Skill\n\nVersion two.\n',
+            encoding="utf-8",
+        )
+        update = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        statuses = {item["name"]: item["status"] for item in update["skills"]}
+        self.assertEqual("UPDATE", statuses["alpha"])
+        install_skills.apply_plan(self.kit, self.target, update)
+        self.assertIn(
+            "Version two",
+            (self.target / ".agents/skills/alpha/SKILL.md").read_text(),
+        )
+
+        (self.target / ".agents/skills/alpha/SKILL.md").write_text(
+            "local modification\n", encoding="utf-8"
+        )
+        (source / "SKILL.md").write_text("source version three\n", encoding="utf-8")
+        conflict = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        statuses = {item["name"]: item["status"] for item in conflict["skills"]}
+        self.assertEqual("CONFLICT", statuses["alpha"])
+
+    def test_selective_install_has_closed_links_and_complete_managed_index(
+        self,
+    ) -> None:
+        plan_path = Path(self.temp.name) / "selective-plan.json"
+        environment = dict(os.environ)
+        environment.pop(install_skills.SOURCE_ENVIRONMENT, None)
+        planned = subprocess.run(
+            [
+                os.sys.executable,
+                str(SCRIPT),
+                "plan",
+                "--kit-root",
+                str(ROOT),
+                "--target",
+                str(self.target),
+                "--skill",
+                "ai-slop-detector",
+                "--skill",
+                "security-review",
+                "--skill",
+                "skill-authoring",
+                "--output",
+                str(plan_path),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        self.assertEqual(0, planned.returncode, planned.stderr)
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+
+        denied = subprocess.run(
+            [
+                os.sys.executable,
+                str(SCRIPT),
+                "apply",
+                "--kit-root",
+                str(ROOT),
+                "--target",
+                str(self.target),
+                "--plan",
+                str(plan_path),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        self.assertEqual(2, denied.returncode)
+        self.assertIn("requires --approve", denied.stderr)
+        self.assertFalse((self.target / ".agents/skills/ai-slop-detector").exists())
+
+        applied = subprocess.run(
+            [
+                os.sys.executable,
+                str(SCRIPT),
+                "apply",
+                "--kit-root",
+                str(ROOT),
+                "--target",
+                str(self.target),
+                "--plan",
+                str(plan_path),
+                "--approve",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        self.assertEqual(0, applied.returncode, applied.stderr)
+        validator = (
+            self.target
+            / ".agents/skills/agent-guidance-maintenance/scripts/validate_adoption.py"
+        )
+
+        result = subprocess.run(
+            [
+                str(Path(os.sys.executable)),
+                str(validator),
+                "--target",
+                str(self.target),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        selected = {item["name"] for item in plan["skills"]}
+        self.assertEqual(
+            {
+                "agent-guidance-maintenance",
+                "ai-slop-detector",
+                "security-review",
+                "skill-authoring",
+                "skill-evaluation",
+            },
+            selected,
+        )
+
+        shutil.rmtree(self.target / ".agents/skills/security-review")
+        missing = subprocess.run(
+            [
+                str(Path(os.sys.executable)),
+                str(validator),
+                "--target",
+                str(self.target),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(1, missing.returncode)
+        self.assertIn("receipt-owned skill is missing", missing.stderr)
 
 
 if __name__ == "__main__":

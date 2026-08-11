@@ -17,11 +17,10 @@ inspect and report; do not edit. Work only in the requested scope. Preserve
 public behavior, interfaces, wire formats, security boundaries, error
 semantics, retries, idempotency, and distinct tests.
 
-Use [code-review](../code-review/SKILL.md) for a review without a size goal,
-[ai-slop-detector](../ai-slop-detector/SKILL.md) for an evidence-based cleanup
-audit, [architecture-review](../architecture-review/SKILL.md) for redesign or
-boundary changes, and [quality-hardening](../quality-hardening/SKILL.md) for
-correctness work whose primary goal is not reduction.
+Use `code-review` for a review without a size goal, `ai-slop-detector` for an
+evidence-based cleanup audit, `architecture-review` for redesign or boundary
+changes, and `quality-hardening` for correctness work whose primary goal is not
+reduction.
 
 ## Inputs and baseline
 

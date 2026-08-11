@@ -25,17 +25,17 @@ to inspect.
 
 ## Neighboring skills
 
-- [code-review](../code-review/SKILL.md) owns focused diff or subsystem review;
+- `code-review` owns focused diff or subsystem review;
   use this skill instead for cross-artifact quality and evidence problems.
-- [architecture-review](../architecture-review/SKILL.md) owns redesign and
+- `architecture-review` owns redesign and
   refactor-versus-keep recommendations.
-- [documentation-review](../documentation-review/SKILL.md) owns a full factual
+- `documentation-review` owns a full factual
   documentation audit against source.
-- [rules-and-skills-audit](../rules-and-skills-audit/SKILL.md) owns structural
+- `rules-and-skills-audit` owns structural
   consolidation, overlap, and routing conflicts in guidance.
-- [skill-reviewer](../skill-reviewer/SKILL.md) owns missing domain depth in a
+- `skill-reviewer` owns missing domain depth in a
   skill; use this skill when the concern is an evidence-backed defect instead.
-- [reduce-code-size](../reduce-code-size/SKILL.md) owns behavior-preserving
+- `reduce-code-size` owns behavior-preserving
   simplification after a validated size or complexity goal.
 
 Use one owner skill when it fully covers the request. Combine skills only when

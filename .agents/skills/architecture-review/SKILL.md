@@ -20,12 +20,10 @@ approved implementation. A later, explicit implementation request is a
 separate step.
 
 Use this skill for system or subsystem design decisions. Hand off focused
-changed-code defects to [code-review](../code-review/SKILL.md), artifact-level
-quality defects to [ai-slop-detector](../ai-slop-detector/SKILL.md), factual
-documentation drift to [documentation-review](../documentation-review/SKILL.md),
-and behavior-preserving simplification to
-[reduce-code-size](../reduce-code-size/SKILL.md). Structural guidance overlap
-belongs to [rules-and-skills-audit](../rules-and-skills-audit/SKILL.md).
+changed-code defects to `code-review`, artifact-level quality defects to
+`ai-slop-detector`, factual documentation drift to `documentation-review`, and
+behavior-preserving simplification to `reduce-code-size`. Structural guidance
+overlap belongs to `rules-and-skills-audit`.
 
 ## Inputs and evidence
 
