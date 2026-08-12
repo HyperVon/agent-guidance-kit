@@ -37,3 +37,63 @@ the order; this list is not a commitment to create each skill.
 This work can ship as backward-compatible catalog releases. A v2 is warranted
 only if the intake and comparison workflow itself earns reusable tooling or a
 new compatibility contract.
+
+## Active plan — Comprehensive improvements (2026-08-12)
+
+Branch: `feat/roadmap-comprehensive-improvements` — tracks the full review
+from 2026-08-11/12. The checklist below is the source of truth for progress;
+update it in the same PR that implements each item and keep `make check` green.
+
+### Tranche 1 — Fixes (evidence-backed, low risk)
+
+- [ ] **F1** Resolve `pyproject.toml` absence vs `docs/release.md` version field
+  — add `pyproject.toml` as canonical version/config owner or update docs.
+- [ ] **F2** Extend `scripts/validate_repository.py` harness validation to
+  `.github/copilot-instructions.md`.
+- [ ] **F3** Add `.kilo`, `.idea`, `.cursor`, `.vscode`, `.clinerules` to
+  `EXCLUDED_DIRECTORIES` in `scripts/validate_repository.py` and hygiene/markdown ignores.
+- [ ] **F4** Clarify Node support: `scripts/setup_dev.py >=22` vs CI `26.6.0` —
+  document range and add `22` to CI matrix.
+- [ ] **F5** Harden `requirements-dev.txt` — add hashes or `pip --require-hashes`
+  path and update `scripts/setup_dev.py`.
+- [ ] **F6** Expand `scripts/public_hygiene_check.py` patterns (Anthropic, npm,
+  generic tokens) + tests.
+- [ ] **F7** Document `inventory_project.py` truncation default and surface
+  `truncated` in markdown summary.
+
+### Tranche 2 — Enhancements to existing features
+
+- [ ] **2A** Centralize Python config in `pyproject.toml` (`[tool.ruff]`,
+  `[project]` version).
+- [ ] **2B** `scripts/check.py --quick` / `--fix` hints (keep full gate for CI).
+- [ ] **2C** `install_skills` UX: `plan --diff` and `plan --check` (conflict-only).
+- [ ] **2D** `scripts/validate_repository.py --json` and `related`-link checks.
+- [ ] **2E** Harness verification probe `scripts/verify_harness.py` to move
+  `muse code` from `BEST_EFFORT` → `VERIFIED` (`docs/harness-compatibility.md`).
+- [ ] **2F** `pre-commit` config + `.devcontainer` for uniform setup.
+
+### Tranche 3 — New skills
+
+- [ ] **3A** `git-github-workflow` (distributed) — branching, atomic commits
+  (conventional, no personal email leak), push approval, PR/issue hygiene
+  (`pull_request_template.md`, issue forms, `CODEOWNERS`), branch protection,
+  release tagging, hygiene `make check`. Requires `skill-authoring` +
+  `skill-evaluation` (`matching`/`neighboring`/`ambiguous`) before admission.
+- [ ] **3B** `catalog-discovery` (**SOURCE_ONLY**, not shipped to targets) —
+  proactive GitHub/harness-docs search for candidate workflows, provenance-tracked
+  evidence table → `IMPROVE_EXISTING`/`NEW_SKILL`/`PROJECT_SPECIFIC`/`DEFER`/`REJECT`
+  handoff to `skill-reviewer` (`references/external-skill-intake.md`). Enforces
+  `docs/roadmap.md:14` 8-step gate, no execution of fetched content, no network
+  in deterministic helpers.
+
+### Tranche 4 — Docs and process
+
+- [ ] Mermaid diagram for `docs/design.md` architecture.
+- [ ] `docs/adr/` for schema bumps (`SCHEMA_VERSION`, `skill-dependencies`).
+- [ ] `README.md` adoption-health badge from `validation-matrix.md`.
+- [ ] `CONTRIBUTING.md` pre-commit workflow note.
+
+Progress is tracked here and in the PR description. Each tranche lands as one
+or more focused commits with `make check` evidence. Distribution impact: 3A
+ships to targets; 3B remains repository-only and is excluded from
+`install_skills` manifests.
