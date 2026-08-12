@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "run_id": "2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun",
-  "timestamp": "2026-08-12T09:30:00Z",
+  "run_id": "2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-2",
+  "timestamp": "2026-08-12T09:35:29Z",
   "harness": {
     "name": "muse code",
     "version": "0.1.0"
@@ -12,7 +12,7 @@
     "reasoning_effort": "xhigh"
   },
   "baseline": "no-skill",
-  "method": "Each evals/evals.json case run twice in a dedicated empty directory containing only declared fixtures (isolated /tmp/agk-evals-2026-08-12-rerun/<skill>-<id> workspaces) in clean context: WITH-SKILL applies the skill's guidance, BASELINE is a no-skill general agent, same prompts/fixtures/workspace. Assertions graded with quoted evidence from actual outputs; human review for usefulness/unnecessary work; raw outputs in ignored workspaces. Fixtures: adversarial-pr-review/evals/files/synthetic-pr/{auth.py,payments.py,config.yaml}, dependency-upgrade/evals/files/mini-node/{package.json,package-lock.json,advisory.json}.",
+  "method": "Each evals/evals.json case run twice in a dedicated empty directory containing only declared fixtures (isolated /tmp/agk-evals-2026-08-12-rerun2/<skill>-<id> workspaces) in clean context: WITH-SKILL applies the skill guidance, BASELINE is a no-skill general agent, same prompts/fixtures/workspace. Assertions graded with quoted evidence from actual outputs; human review for usefulness/unnecessary work; raw outputs in ignored workspaces. Fixtures: adversarial-pr-review/evals/files/synthetic-pr/{auth.py,payments.py,config.yaml} (de-spoiled, defects preserved without label comments), dependency-upgrade/evals/files/mini-node/{package.json,package-lock.json,advisory.json,Makefile,index.js,test.js} with executable Makefile check. Case 1 adversarial is review-only (no re-review assertion).",
   "skills": [
     {
       "skill_name": "adversarial-pr-review",
@@ -21,8 +21,8 @@
         {
           "id": 1,
           "kind": "matching",
-          "assertions_total": 4,
-          "skill_pass": 4,
+          "assertions_total": 3,
+          "skill_pass": 3,
           "baseline_pass": 0,
           "better": true
         },

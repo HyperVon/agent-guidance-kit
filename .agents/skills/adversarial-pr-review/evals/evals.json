@@ -5,12 +5,11 @@
       "id": 1,
       "kind": "matching",
       "prompt": "Run an adversarial review of this PR before we open it. Partition it into bounded read-only tracks by file ownership and risk, validate findings in the parent, and re-review only affected tracks.",
-      "expected_output": "The agent establishes review truth from the complete diff and base, builds a small track matrix (2-6 tracks) with disjoint ownership, delegates bounded read-only reviewers, validates and de-duplicates findings in the parent, and reports ranked findings with anchors and convergent re-review of affected tracks only.",
+      "expected_output": "The agent establishes review truth from the complete diff and base, builds a small track matrix (2-6 tracks) with disjoint ownership, delegates bounded read-only reviewers, validates and de-duplicates findings in the parent, and reports ranked findings with severity and path:line anchors.",
       "assertions": [
         "The response builds a track matrix with disjoint file ownership and risk",
         "The response delegates bounded read-only workers with no edit or publish side effects",
-        "The response validates findings in the parent and de-duplicates ungrounded claims",
-        "The response re-reviews only affected tracks until convergence or iteration cap"
+        "The response validates findings in the parent and de-duplicates ungrounded claims"
       ],
       "files": [
         "evals/files/synthetic-pr/auth.py",

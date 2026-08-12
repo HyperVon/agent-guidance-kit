@@ -12,6 +12,7 @@ dev = [
   "PyYAML==6.0.3",
   "ruff==0.16.2",
   "skills-ref==0.1.1",
+  "click==8.4.2",
 ]
 
 [tool.ruff]

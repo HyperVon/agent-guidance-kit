@@ -14,7 +14,10 @@
       "files": [
         "evals/files/mini-node/package.json",
         "evals/files/mini-node/package-lock.json",
-        "evals/files/mini-node/advisory.json"
+        "evals/files/mini-node/advisory.json",
+        "evals/files/mini-node/Makefile",
+        "evals/files/mini-node/index.js",
+        "evals/files/mini-node/test.js"
       ]
     },
     {

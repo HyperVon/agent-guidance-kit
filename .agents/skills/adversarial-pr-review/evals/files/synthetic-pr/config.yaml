@@ -1,7 +1,5 @@
-# Synthetic config with intentional reviewable issue
 service:
   name: payments
   timeout: 30
-# Intentional issue: secret placeholder that should be via env
 secrets:
-  api_key: "sk-test-12345"
+  api_key: "[REDACTED]"
