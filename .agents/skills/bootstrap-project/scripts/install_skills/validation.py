@@ -21,10 +21,6 @@ def validate_root(path: Path, label: str) -> Path:
     return expanded.resolve()
 
 
-def validate_directory(path: Path, label: str) -> Path:
-    return validate_root(path, label)
-
-
 def validate_relative(path: Path, label: str) -> None:
     if (
         path.is_absolute()

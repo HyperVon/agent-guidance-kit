@@ -208,28 +208,20 @@ class BootstrapIntegrationTest(unittest.TestCase):
         ):
             install_skills.validate_installed(self.target, clean_plan)
 
-    def test_migration_from_monolithic_to_package_wrapper(self) -> None:
-        """Simulate upgrade from old monolithic install_skills.py to package wrapper.
+    def test_package_wrapper_and_update_detection(self) -> None:
+        """Verify the package wrapper layout and update/conflict detection.
 
-        Mirrors the 4f3cd82 → 56859e5 migration that new-kraken-rebalancer
-        would see: receipt at old revision, current kit has wrapper + package.
-        Ensures UPDATE is detected and apply succeeds without local-divergence
-        false positives.
+        Confirms the thin ``install_skills.py`` wrapper delegates to the
+        ``install_skills`` package, that a clean apply is idempotent (re-plan
+        yields UNCHANGED), and that local modification of an installed skill
+        produces a CONFLICT rather than a silent UPDATE.
         """
         requested = ["agent-guidance-maintenance"]
         # Initial plan/apply with current kit (acts as old receipt baseline)
         initial_plan = install_skills.build_plan(ROOT, self.target, requested)
         install_skills.apply_plan(ROOT, self.target, initial_plan)
-        # Simulate old receipt digest by modifying source to appear unchanged?
-        # Instead verify that a second build detects UPDATE when source changes
-        # (the wrapper change) and that the package-based installer still
-        # validates. We assert the re-plan is UPDATE and re-apply preserves
-        # idempotency after the migration.
-        # Tamper the installed skill to simulate outdated source digest scenario
-        # by rewriting the source file in a temp kit copy (not needed — we
-        # already have UPDATE detection for modified source in other tests;
-        # here we simply ensure the package path resolves and the skill is
-        # installable).
+        # No migration fixture is constructed; this verifies the current package
+        # layout (wrapper + package) and the idempotent/conflict contract.
         self.assertTrue(
             (
                 ROOT / ".agents/skills/bootstrap-project/scripts/install_skills.py"

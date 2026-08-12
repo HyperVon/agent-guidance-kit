@@ -356,8 +356,8 @@ def generate_diff(plan: dict[str, Any], kit_root: Path, target_root: Path) -> st
                     )
                     continue
                 try:
-                    src_text = src.read_text(encoding="utf-8").splitlines(keepends=True)
-                    dst_text = dst.read_text(encoding="utf-8").splitlines(keepends=True)
+                    src_text = src.read_text(encoding="utf-8").splitlines()
+                    dst_text = dst.read_text(encoding="utf-8").splitlines()
                 except OSError:
                     continue
                 if src_text == dst_text:
@@ -391,8 +391,8 @@ def generate_diff(plan: dict[str, Any], kit_root: Path, target_root: Path) -> st
             if current != desired:
                 lines.append(f"--- ROUTING {rel} ({rstatus})")
                 diff = difflib.unified_diff(
-                    current.splitlines(keepends=True),
-                    desired.splitlines(keepends=True),
+                    current.splitlines(),
+                    desired.splitlines(),
                     fromfile=f"a/{rel}",
                     tofile=f"b/{rel}",
                     lineterm="",
@@ -406,99 +406,62 @@ def generate_diff(plan: dict[str, Any], kit_root: Path, target_root: Path) -> st
         lines.append(
             f"--- ROUTING CONFLICT {routing.get('path')}: {routing.get('conflict', {}).get('reason', 'unknown')}"
         )
-    # Harness & AGENTS.md recommendations (read-only, via harness_recommendations.py)
-    # HEAD's elaborate loader handles both present and absent harness_recommendations.py
-    # (origin/main deleted the script, so this gracefully falls back to simple notes)
+    # Harness & AGENTS.md recommendations are deterministic diagnostics. The
+    # recommender is kit-owned code executed from the selected kit_root; failures
+    # are surfaced rather than silently masked as successful advisory output.
     try:
         import importlib.util
         import sys as _sys
 
-        # Prefer kit_root location (handles different kit layouts), fallback to repo layout
         harness_script = kit_root / "scripts" / "harness_recommendations.py"
         if not harness_script.is_file():
             harness_script = (
-                Path(__file__).resolve().parents[5]
+                Path(__file__).resolve().parents[0]
                 / "scripts"
                 / "harness_recommendations.py"
             )
         if not harness_script.is_file():
-            harness_script = (
-                Path(__file__).resolve().parents[4]
-                / "scripts"
-                / "harness_recommendations.py"
+            raise FileNotFoundError(
+                f"harness_recommendations.py not found under {kit_root}"
             )
-        if harness_script.is_file():
-            spec = importlib.util.spec_from_file_location(
-                "harness_recommendations", harness_script
-            )
-            hr = importlib.util.module_from_spec(spec)
-            _sys.modules["harness_recommendations"] = hr
-            spec.loader.exec_module(hr)
-            hr_recs = hr.collect_harness_recommendations(kit_root, target_root)
-            if hr_recs:
-                lines.append(
-                    "--- HARNESS & AGENTS.md RECOMMENDATIONS (informational, no auto-apply) ---"
+        spec = importlib.util.spec_from_file_location(
+            "harness_recommendations", harness_script
+        )
+        hr = importlib.util.module_from_spec(spec)
+        _sys.modules["harness_recommendations"] = hr
+        spec.loader.exec_module(hr)
+        hr_recs = hr.collect_harness_recommendations(kit_root, target_root)
+    except (FileNotFoundError, ImportError, OSError, ValueError) as error:
+        lines.append(
+            "--- HARNESS & AGENTS.md RECOMMENDATIONS (informational, no auto-apply) ---"
+        )
+        lines.append(f"*** recommender unavailable: {error}")
+        return "\n".join(lines) + ("\n" if lines else "")
+
+    if hr_recs:
+        lines.append(
+            "--- HARNESS & AGENTS.md RECOMMENDATIONS (informational, no auto-apply) ---"
+        )
+        for rec in hr_recs:
+            lines.append(f"*** {rec['file']} [{rec['status']}]: {rec['reason']}")
+            lines.append(f"    -> {rec['action']}")
+            if rec.get("current") is not None and rec.get("desired") is not None:
+                diff = difflib.unified_diff(
+                    rec["current"].splitlines(),
+                    rec["desired"].splitlines(),
+                    fromfile=f"a/{rec['file']}",
+                    tofile=f"b/{rec['file']}",
+                    lineterm="",
                 )
-                for rec in hr_recs:
-                    lines.append(
-                        f"*** {rec['file']} [{rec['status']}]: {rec['reason']}"
-                    )
-                    lines.append(f"    -> {rec['action']}")
-                    if (
-                        rec.get("current") is not None
-                        and rec.get("desired") is not None
-                    ):
-                        diff = difflib.unified_diff(
-                            rec["current"].splitlines(keepends=True),
-                            rec["desired"].splitlines(keepends=True),
-                            fromfile=f"a/{rec['file']}",
-                            tofile=f"b/{rec['file']}",
-                            lineterm="",
-                        )
-                        dtext = "".join(diff)
-                        if dtext.strip():
-                            # Indent diff for readability inside plan diff
-                            lines.append(dtext.rstrip())
-                lines.append(
-                    "*** Run: python scripts/harness_recommendations.py --kit-root <kit> --target <target> --diff"
-                )
-                lines.append(
-                    "*** Then apply via harness-adaptation / skill-authoring with approval gate."
-                )
-            # Fallback simple notes if no hr_recs
-            if not hr_recs:
-                # Keep minimal check for backward compat: no output
-                pass
-        else:
-            raise FileNotFoundError
-    except Exception:
-        # Fallback to legacy simple notes (matches origin/main behavior)
-        harness_notes: list[str] = []
-        for harness_file in (
-            "AGENTS.md",
-            "CLAUDE.md",
-            "GEMINI.md",
-            ".github/copilot-instructions.md",
-        ):
-            p = target_root / harness_file
-            if p.exists() and not p.is_symlink():
-                try:
-                    txt = p.read_text(encoding="utf-8")
-                    has_canonical = ".agents/AGENTS.md" in txt or "AGENTS.md" in txt
-                    if not has_canonical and harness_file != "AGENTS.md":
-                        harness_notes.append(
-                            f"harness {harness_file} does not reference canonical .agents/AGENTS.md"
-                        )
-                except OSError:
-                    pass
-        if harness_notes:
-            lines.append(
-                "--- HARNESS RECOMMENDATIONS (informational, no auto-apply) ---"
-            )
-            lines.extend(f"*** {note}" for note in harness_notes)
-            lines.append(
-                "*** Run harness-adaptation for paste-ready thin-pointer updates."
-            )
+                dtext = "\n".join(diff)
+                if dtext.strip():
+                    lines.append(dtext)
+        lines.append(
+            "*** Run: python scripts/harness_recommendations.py --kit-root <kit> --target <target> --diff"
+        )
+        lines.append(
+            "*** Then apply via harness-adaptation / skill-authoring with approval gate."
+        )
     return "\n".join(lines) + ("\n" if lines else "")
 
 

@@ -227,8 +227,12 @@ def restore_routing(
             path.unlink()
         return
     temporary = path.parent / f".{path.name}.agent-guidance-kit-rollback"
-    if temporary.exists() and not temporary.is_symlink():
-        temporary.unlink()
+    if temporary.exists() or temporary.is_symlink():
+        # The rollback temp is always a path we created ourselves; a stale
+        # regular file OR a leftover symlink (including a dangling one) must
+        # be cleared so the exclusive create below does not fail and mask the
+        # original exception being rolled back for.
+        os.unlink(temporary)
     with temporary.open("xb") as handle:
         handle.write(before)
     os.replace(temporary, path)

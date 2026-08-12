@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Generate paste-ready recommendations for AGENTS.md and harness entrypoints.
+"""Generate deterministic, non-destructive diagnostics for AGENTS.md and harness entrypoints.
 
 Compares a target repository's AGENTS.md hierarchy and harness adapters
-(CLAUDE.md, GEMINI.md, .github/copilot-instructions.md, .cursor/rules, etc.)
-against the kit's canonical guidance, without overwriting local divergence.
+(CLAUDE.md, GEMINI.md, .github/copilot-instructions.md, etc.) against the kit's
+canonical guidance and the kit-assumed thin-adapter shape. This script is a
+*diagnostic detector*: it surfaces gaps and divergence, but it never authors
+policy for the target. In particular it never recommends undoing configuration
+the installer owns (the managed routing block) and it never offers the kit
+repository's own `.agents/AGENTS.md` / `.agents/OPERATING.md` body as paste-ready
+target content. Project-local guidance stays authoritative.
 
 Deterministic, standard-library only, network-free.
 """
@@ -16,25 +21,24 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-KIT_AGENTS = ROOT / ".agents/AGENTS.md"
-KIT_OPERATING = ROOT / ".agents/OPERATING.md"
-KIT_ROOT_AGENTS = ROOT / "AGENTS.md"
-KIT_CLAUDE = ROOT / "CLAUDE.md"
-KIT_GEMINI = ROOT / "GEMINI.md"
-KIT_COPILOT = ROOT / ".github/copilot-instructions.md"
+# harness_recommendations.py is run both as a standalone script (from the kit
+# root scripts/ directory) and as a kit module copied under the kit's
+# .agents/skills/bootstrap-project/scripts/. Make the install_skills package
+# importable regardless of how this file was launched.
+if not __package__:
+    here = Path(__file__).resolve().parent
+    for candidate in (
+        here,
+        here.parents[0] / ".agents" / "skills" / "bootstrap-project" / "scripts",
+    ):
+        if (candidate / "install_skills").is_dir():
+            sys.path.insert(0, str(candidate))
+            break
 
-HARNESS_FILES = [
-    "AGENTS.md",
-    "CLAUDE.md",
-    "GEMINI.md",
-    ".github/copilot-instructions.md",
-    ".cursor/rules",
-    ".cursorrules",
-    ".clinerules",
-    ".claude/settings.json",
-    ".claude/settings.local.json",
-]
+# Canonical marker for the installer-managed routing block. Presence of this
+# block in a root AGENTS.md (or a nested .agents/AGENTS.md) is a valid managed
+# integration state and must never be recommended for removal or replacement.
+from install_skills.constants import ROUTE_START
 
 
 def read_text_safe(path: Path) -> str | None:
@@ -48,7 +52,7 @@ def read_text_safe(path: Path) -> str | None:
 
 def is_thin_root_agents(text: str) -> bool:
     # Thin root AGENTS.md should reference .agents/AGENTS.md and be short
-    has_ref = ".agents/AGENTS.md" in text
+    has_ref = ROUTE_START in text or ".agents/AGENTS.md" in text
     # Thick file contains canonical invariants duplicated
     thick_markers = ["Product boundary", "Repository invariants", "Skill index"]
     thick_count = sum(1 for m in thick_markers if m in text)
@@ -58,40 +62,29 @@ def is_thin_root_agents(text: str) -> bool:
 
 
 def expected_root_agents() -> str:
-    try:
-        return KIT_ROOT_AGENTS.read_text(encoding="utf-8")
-    except OSError:
-        return "# Agent instructions\n\nThis file is the thin universal entrypoint.\n"
+    return (
+        "# Agent instructions\n\n"
+        "This file is the thin universal entrypoint. Canonical guidance lives under "
+        "`.agents/`.\n"
+    )
 
 
 def expected_claude() -> str:
-    try:
-        return KIT_CLAUDE.read_text(encoding="utf-8")
-    except OSError:
-        return "@AGENTS.md\n@.agents/AGENTS.md\n@.agents/OPERATING.md\n"
+    return "@AGENTS.md\n@.agents/AGENTS.md\n@.agents/OPERATING.md\n"
 
 
 def expected_gemini() -> str:
-    try:
-        return KIT_GEMINI.read_text(encoding="utf-8")
-    except OSError:
-        return "@./AGENTS.md\n@./.agents/AGENTS.md\n@./.agents/OPERATING.md\n"
+    return "@./AGENTS.md\n@./.agents/AGENTS.md\n@./.agents/OPERATING.md\n"
 
 
 def expected_copilot() -> str:
-    try:
-        return KIT_COPILOT.read_text(encoding="utf-8")
-    except OSError:
-        return "# GitHub Copilot instructions\n\nSee AGENTS.md\n"
+    return "# GitHub Copilot instructions\n\nSee AGENTS.md\n"
 
 
 def recommendation_for_file(
-    target_root: Path, kit_root: Path, relative: str
+    kit_root: Path, target_root: Path, relative: str
 ) -> dict | None:
     target_path = target_root / relative
-    kit_path = kit_root / relative if (kit_root / relative).exists() else None
-
-    # Only recommend if file exists in target or is expected as thin adapter
     text = read_text_safe(target_path)
 
     # Special handling per file
@@ -105,6 +98,11 @@ def recommendation_for_file(
                 "desired": expected_root_agents(),
                 "action": "Create thin pointer to .agents/AGENTS.md (keep canonical policy in .agents/AGENTS.md only)",
             }
+        # The installer may have written a root AGENTS.md that contains only the
+        # managed routing block. That is a valid managed integration state; do
+        # not recommend replacing it with the kit's thin template.
+        if ROUTE_START in text and ".agents/AGENTS.md" not in text:
+            return None
         if is_thin_root_agents(text):
             return None  # OK
         # Thick or missing reference
@@ -212,7 +210,8 @@ def recommendation_for_file(
         return None
 
     # Generic file: if exists in kit and differs, suggest review
-    if kit_path and kit_path.is_file() and text is not None:
+    kit_path = kit_root / relative
+    if kit_path.is_file() and text is not None:
         try:
             kit_text = kit_path.read_text(encoding="utf-8")
             if text.strip() != kit_text.strip():
@@ -223,7 +222,7 @@ def recommendation_for_file(
                         "status": "REVIEW",
                         "reason": f"{relative} differs from kit canonical",
                         "current": text,
-                        "desired": kit_text,
+                        "desired": None,
                         "action": "Review via skill-authoring; keep target-local invariants, merge upstream improvements if generic",
                     }
         except OSError:
@@ -232,6 +231,7 @@ def recommendation_for_file(
 
 
 def collect_harness_recommendations(kit_root: Path, target_root: Path) -> list[dict]:
+    kit_root = Path(kit_root)
     recs: list[dict] = []
     # Always check core files
     for rel in [
@@ -240,10 +240,12 @@ def collect_harness_recommendations(kit_root: Path, target_root: Path) -> list[d
         "GEMINI.md",
         ".github/copilot-instructions.md",
     ]:
-        r = recommendation_for_file(target_root, kit_root, rel)
+        r = recommendation_for_file(kit_root, target_root, rel)
         if r:
             recs.append(r)
-    # Check .agents hierarchy
+    # Check .agents hierarchy. These are project-local policy: never emit the
+    # kit's own canonical body as paste-ready target content. Missing canonical
+    # files are an advisory REVIEW, not a CREATE with kit policy.
     for rel in [".agents/AGENTS.md", ".agents/OPERATING.md"]:
         tp = target_root / rel
         kp = kit_root / rel
@@ -252,53 +254,55 @@ def collect_harness_recommendations(kit_root: Path, target_root: Path) -> list[d
                 t_text = tp.read_text(encoding="utf-8")
                 k_text = kp.read_text(encoding="utf-8")
                 if t_text.strip() != k_text.strip():
-                    # Do not auto-recommend overwrite; flag for ADAPT review
+                    # Do not auto-recommend overwrite; flag for ADAPT review.
                     recs.append(
                         {
                             "file": rel,
                             "status": "REVIEW",
                             "reason": f"{rel} local content differs from kit; may need ADAPT merge",
-                            "current": t_text[:2000],
-                            "desired": k_text[:2000],
+                            "current": t_text,
+                            "desired": None,
                             "action": "Compare via harness-adaptation + skill-authoring; preserve local invariants",
                         }
                     )
             except OSError:
                 pass
         elif not tp.exists() and kp.exists():
+            # Advisory only: a target that wants kit canonical content should
+            # create it through harness-adaptation / skill-authoring rather than
+            # copy the kit's repository policy verbatim.
             recs.append(
                 {
                     "file": rel,
-                    "status": "CREATE",
+                    "status": "REVIEW",
                     "reason": f"Missing canonical {rel}",
                     "current": "",
-                    "desired": kp.read_text(encoding="utf-8")[:2000]
-                    if kp.exists()
-                    else "",
-                    "action": "Adopt via bootstrap-project (approval-gated)",
+                    "desired": None,
+                    "action": "Create/adapt via harness-adaptation + skill-authoring with approval gate; "
+                    "preserve target-local invariants",
                 }
             )
     # Check optional harness dirs
     for rel in [".cursor/rules", ".cursorrules", ".clinerules"]:
-        r = recommendation_for_file(target_root, kit_root, rel)
+        r = recommendation_for_file(kit_root, target_root, rel)
         if r:
             recs.append(r)
     return recs
 
 
 def render_diff(current: str, desired: str, rel: str) -> str:
-    a = current.splitlines(keepends=True) if current else []
-    b = desired.splitlines(keepends=True) if desired else []
+    a = current.splitlines() if current else []
+    b = desired.splitlines() if desired else []
     diff = difflib.unified_diff(
         a, b, fromfile=f"a/{rel}", tofile=f"b/{rel}", lineterm=""
     )
-    return "".join(diff)
+    return "\n".join(diff)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--kit-root", default=str(ROOT), help="Kit root (defaults to repo root)"
+        "--kit-root", default=".", help="Kit root (defaults to repo root)"
     )
     parser.add_argument("--target", default=".", help="Target repository root")
     parser.add_argument(
@@ -316,7 +320,7 @@ def main() -> int:
     parser.add_argument(
         "--json", action="store_true", help="Shortcut for --format json"
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.json:
         args.format = "json"
@@ -371,7 +375,7 @@ def main() -> int:
                         out.append(f"### `{r['file']}` ({r['status']})")
                         out.append("")
                         out.append("```diff")
-                        out.append(diff.rstrip())
+                        out.append(diff)
                         out.append("```")
                         out.append("")
         else:

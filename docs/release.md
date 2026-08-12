@@ -33,8 +33,8 @@ make check
 python scripts/check.py
 ```
 
-`scripts/check.py` must end with `All checks passed!` and the unittest
-discovery must report `OK`. The gate validates:
+`scripts/check.py` must exit 0 and the unittest discovery must report
+`OK`. The gate validates:
 
 * Markdown lint (`markdownlint-cli2`) — 0 issues.
 * All skills validate (`agentskills validate .agents/skills/*`).
