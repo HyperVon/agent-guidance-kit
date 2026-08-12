@@ -1,0 +1,38 @@
+{
+  "skill_name": "quality-hardening",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "Our payment module has a flaky timeout test. Establish a baseline, add a regression test for the race condition, fix it, and verify.",
+      "expected_output": "The agent runs baseline checks, discovers the race condition boundary, adds a deterministic failing test first, makes the minimal fix, and re-runs focused and full gates with exact counts and artifacts.",
+      "assertions": [
+        "The response runs and records baseline checks before changes",
+        "The response adds a failing regression test before the fix",
+        "The response makes the smallest production fix",
+        "The response verifies with focused test then full gates with counts"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "neighboring",
+      "prompt": "Review this PR for architectural issues.",
+      "expected_output": "The agent routes the request to architecture-review or code-review rather than running a QA loop.",
+      "assertions": [
+        "The response identifies architecture-review or code-review as closer workflow",
+        "The response does not run a QA hardening loop for a review request"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "ambiguous",
+      "prompt": "Make our tests more robust.",
+      "expected_output": "The agent asks for the specific scope, risk boundary, and whether the user wants test-only coverage or production fixes with approval.",
+      "assertions": [
+        "The response requests the specific scope and risk boundary",
+        "The response clarifies S/M/high-risk approval gate",
+        "The response does not change production code without approval"
+      ]
+    }
+  ]
+}

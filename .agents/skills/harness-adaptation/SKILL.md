@@ -1,6 +1,12 @@
 ---
 name: harness-adaptation
-description: "Adapt a repository's canonical agent guidance to the capabilities of the active coding harness without creating a parallel source of truth. Use when adding, reviewing, or diagnosing support for a known or future harness; translating instructions or skills across harnesses; or deciding which project entrypoints the current harness needs. Inspect and propose by default; modify only after the exact adapter plan is approved."
+description: >-
+  Adapt a repository's canonical agent guidance to the capabilities of the
+  active coding harness without creating a parallel source of truth. Use when
+  adding, reviewing, or diagnosing support for a known or future harness;
+  translating instructions or skills across harnesses; or deciding which
+  project entrypoints the current harness needs. Inspect and propose by
+  default; modify only after the exact adapter plan is approved.
 ---
 
 # Adapt Guidance to an Agent Harness

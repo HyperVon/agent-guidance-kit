@@ -1,20 +1,18 @@
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / ".agents/skills/bootstrap-project/scripts/install_skills.py"
-SPEC = importlib.util.spec_from_file_location("install_skills", SCRIPT)
-assert SPEC and SPEC.loader
-install_skills = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(install_skills)
+# Import from the package
+sys.path.insert(0, str(ROOT / ".agents/skills/bootstrap-project/scripts"))
+import install_skills
 
 
 class InstallSkillsTest(unittest.TestCase):
@@ -197,21 +195,21 @@ class InstallSkillsTest(unittest.TestCase):
                 exclude_path.read_bytes() if exclude_path.exists() else None
             )
 
-            original_validate = install_skills.validate_installed
+            original_validate = install_skills.apply.validate_installed_impl
 
             def fail_after_configuration(*args: object, **kwargs: object) -> None:
                 raise install_skills.AdoptionError(
                     "injected post-configuration failure"
                 )
 
-            install_skills.validate_installed = fail_after_configuration
+            install_skills.apply.validate_installed_impl = fail_after_configuration
             try:
                 with self.assertRaisesRegex(
                     install_skills.AdoptionError, "post-configuration failure"
                 ):
                     install_skills.apply_plan(self.kit, self.target, plan)
             finally:
-                install_skills.validate_installed = original_validate
+                install_skills.apply.validate_installed_impl = original_validate
         finally:
             if environment_value is not None:
                 os.environ[install_skills.SOURCE_ENVIRONMENT] = environment_value
@@ -521,7 +519,7 @@ class InstallSkillsTest(unittest.TestCase):
         planned = subprocess.run(
             [
                 os.sys.executable,
-                str(SCRIPT),
+                str(install_skills.SCRIPT),
                 "plan",
                 "--kit-root",
                 str(ROOT),
@@ -547,7 +545,7 @@ class InstallSkillsTest(unittest.TestCase):
         denied = subprocess.run(
             [
                 os.sys.executable,
-                str(SCRIPT),
+                str(install_skills.SCRIPT),
                 "apply",
                 "--kit-root",
                 str(ROOT),
@@ -568,7 +566,7 @@ class InstallSkillsTest(unittest.TestCase):
         applied = subprocess.run(
             [
                 os.sys.executable,
-                str(SCRIPT),
+                str(install_skills.SCRIPT),
                 "apply",
                 "--kit-root",
                 str(ROOT),

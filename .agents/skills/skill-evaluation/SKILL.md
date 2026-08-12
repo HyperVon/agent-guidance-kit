@@ -107,6 +107,23 @@ graded. A public, sanitized summary may record the harness, model, baseline,
 case outcomes, evidence, limitations, and decision without committing raw model
 outputs or private fixtures.
 
+When a run is executed, record it in the repository so the validation matrix
+stays current:
+
+1. Write a result file under `docs/evaluations/results/` following the schema
+   in `docs/evaluations/results/README.md` — include `harness` (`muse code` +
+   version), `model` (`muse-spark-1.2-contributor` + provider + reasoning
+   effort), `baseline`, per-case `skill_pass`/`baseline_pass`/`better`, and
+   `decision`. Use `YYYY-MM-DD-<model>-<harness>.json` for multi-skill runs.
+2. Update `docs/evaluations/validation-matrix.md` to link the new result file
+   (`✓` when `better=true` and `skill_pass > baseline_pass`, `=` when both
+   passed without discrimination, `–` when not yet tested). Keep raw outputs
+   in the ignored workspace; only the sanitized summary and this JSON are
+   committed.
+3. Run `make check` — `scripts/validate_repository.py` validates the JSON
+   shape, that each `skill_name`/`id`/`kind` matches the committed
+   `evals/evals.json`, and that matrix links resolve.
+
 ## Report and stop condition
 
 Report the cases, baseline, execution status, assertion evidence, human-review

@@ -1,0 +1,38 @@
+{
+  "skill_name": "ai-slop-detector",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "Audit this repository for AI-generated code that looks plausible but has hidden defects. Report findings with evidence.",
+      "expected_output": "The agent establishes scope, runs proportionate local checks (lint, tests, link validation), tests claims against source of truth, and reports concrete findings with anchors and severity.",
+      "assertions": [
+        "The response sets scope before broad searching",
+        "The response runs or references existing repository checks",
+        "The response reports findings with path:line anchors and evidence",
+        "The response separates observations from inferences"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "neighboring",
+      "prompt": "Review this pull request for correctness and security issues.",
+      "expected_output": "The agent routes the request to code-review or security-review rather than performing a broad artifact-quality audit.",
+      "assertions": [
+        "The response identifies code-review or security-review as the closer workflow",
+        "The response does not audit unrelated artifacts beyond the PR scope"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "ambiguous",
+      "prompt": "This code feels messy, can you clean it up?",
+      "expected_output": "The agent asks for the specific artifact or scope, clarifies whether cleanup is explicitly authorized, and explains the evidence standard before proposing changes.",
+      "assertions": [
+        "The response requests the specific scope or artifact",
+        "The response clarifies audit-only vs. authorized cleanup",
+        "The response does not edit files without explicit authorization"
+      ]
+    }
+  ]
+}

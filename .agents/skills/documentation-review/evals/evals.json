@@ -1,0 +1,38 @@
+{
+  "skill_name": "documentation-review",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "Audit the README against the current codebase. The setup commands mention a deprecated flag. Verify and report.",
+      "expected_output": "The agent scopes the document, reads the implementation and build configuration, maps claims to evidence, classifies the stale flag as STALE or WRONG, and reports with the smallest correction and verification plan.",
+      "assertions": [
+        "The response reads implementation and build config as evidence",
+        "The response classifies findings using the defined taxonomy (WRONG/STALE/MISSING/ORPHAN/UNVERIFIED/BROKEN)",
+        "The response proposes the smallest correction and approval gate",
+        "The response includes verification commands and re-reads changed sections"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "neighboring",
+      "prompt": "Review this PR for code defects.",
+      "expected_output": "The agent routes the request to code-review rather than auditing documentation.",
+      "assertions": [
+        "The response identifies code-review as the closer workflow",
+        "The response does not audit docs for a code review request"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "ambiguous",
+      "prompt": "Update our docs to match the code.",
+      "expected_output": "The agent asks for the specific documents, scope, and whether the user wants an audit report or authorized edits.",
+      "assertions": [
+        "The response requests the specific documents and scope",
+        "The response clarifies audit vs. authorized edit scope",
+        "The response does not edit without approval gate"
+      ]
+    }
+  ]
+}

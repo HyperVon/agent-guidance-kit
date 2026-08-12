@@ -1,0 +1,38 @@
+{
+  "skill_name": "harness-adaptation",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "Our project uses Kilo and has AGENTS.md. Create a thin pointer so Kilo discovers our skills.",
+      "expected_output": "The agent identifies Kilo as the active harness, builds a capability profile, locates canonical owners, proposes the smallest compatible projection (thin pointer or native discovery), and presents an adapter plan with approval gate.",
+      "assertions": [
+        "The response identifies the harness from session evidence",
+        "The response builds a capability profile with discovery paths and skill format",
+        "The response maps rules to canonical owners",
+        "The response proposes the first applicable projection strategy"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "neighboring",
+      "prompt": "Add the security-review skill to our kit.",
+      "expected_output": "The agent routes the request to agent-guidance-maintenance for kit updates.",
+      "assertions": [
+        "The response identifies agent-guidance-maintenance as the closer workflow",
+        "The response does not create a harness adapter for a kit update"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "ambiguous",
+      "prompt": "Make our guidance work with VS Code Copilot.",
+      "expected_output": "The agent asks for the current harness evidence, repository guidance state, and intended support level before proposing an adapter plan.",
+      "assertions": [
+        "The response requests harness identification evidence",
+        "The response reads existing repository guidance before proposing",
+        "The response does not modify target before approval"
+      ]
+    }
+  ]
+}

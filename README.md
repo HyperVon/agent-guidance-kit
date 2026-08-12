@@ -167,6 +167,7 @@ same check on Windows, Ubuntu, and macOS with Python 3.11 and 3.14.
 - [Design and safety model](docs/design.md)
 - [Contributing](CONTRIBUTING.md)
 - [Source provenance](docs/provenance.md)
+- [Validation matrix](docs/evaluations/validation-matrix.md) — where evaluations have been tested and confirmed better than baseline
 - [Catalog expansion evaluation](docs/evaluations/2026-08-10-catalog-expansion.md)
 - [Systematic debugging fixture evaluation](docs/evaluations/2026-08-11-systematic-debugging-fixture.md)
 - [External skill intake evaluation](docs/evaluations/2026-08-10-external-skill-intake.md)

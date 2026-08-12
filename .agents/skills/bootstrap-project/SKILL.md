@@ -1,6 +1,13 @@
 ---
 name: bootstrap-project
-description: "Inspect an existing software repository, compare its local agent guidance with this reusable skill library, and propose the smallest useful approval-gated integration. Use when starting agent guidance in a project, adopting this kit, selecting reusable skills, reconciling AGENTS or harness instructions, or reviewing whether a project would benefit from additional project-local skills. Report and plan by default; modify the target only after explicit approval of the exact adoption plan."
+description: >-
+  Inspect an existing software repository, compare its local agent guidance with
+  this reusable skill library, and propose the smallest useful approval-gated
+  integration. Use when starting agent guidance in a project, adopting this
+  kit, selecting reusable skills, reconciling AGENTS or harness instructions,
+  or reviewing whether a project would benefit from additional project-local
+  skills. Report and plan by default; modify the target only after explicit
+  approval of the exact adoption plan.
 ---
 
 # Bootstrap a Project

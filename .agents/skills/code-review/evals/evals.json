@@ -1,0 +1,38 @@
+{
+  "skill_name": "code-review",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "Review this PR for concrete defects. The diff adds a new authentication middleware. Report findings with severity and anchors.",
+      "expected_output": "The agent establishes review truth from the diff, reads the contract (auth spec, tests), inspects boundary ownership and input validation, checks tests against defect classes, and reports ranked findings with path:line anchors and smallest safe corrections.",
+      "assertions": [
+        "The response identifies the complete changed surface from the diff",
+        "The response reads source-of-truth contracts before evaluating",
+        "The response reports findings with severity and precise anchors",
+        "The response does not claim merge readiness or approval"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "neighboring",
+      "prompt": "Should we rewrite this legacy module?",
+      "expected_output": "The agent routes the request to architecture-review rather than reviewing a specific diff.",
+      "assertions": [
+        "The response identifies architecture-review as the closer workflow",
+        "The response does not produce a diff-level review for a redesign question"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "ambiguous",
+      "prompt": "Look at this code and tell me what's wrong.",
+      "expected_output": "The agent asks for the review scope (diff, branch, subsystem), the review question, and relevant contracts before evaluating.",
+      "assertions": [
+        "The response requests the specific diff or scope",
+        "The response asks for the review question and contracts",
+        "The response does not evaluate without established review truth"
+      ]
+    }
+  ]
+}

@@ -1,6 +1,12 @@
 ---
 name: parallel-multi-agent
-description: "Partition a substantial task into bounded concurrent workers with disjoint ownership, explicit authority, sensitive-path restrictions, compact handoffs, and parent-owned integration. Use when the user asks to delegate, parallelize, fan out, use subagents, or when authorized work contains multiple genuinely independent implementation or review tracks. Do not use for tiny, coupled, same-file, or sequential work."
+description: >-
+  Partition a substantial task into bounded concurrent workers with disjoint
+  ownership, explicit authority, sensitive-path restrictions, compact handoffs,
+  and parent-owned integration. Use when the user asks to delegate, parallelize,
+  fan out, use subagents, or when authorized work contains multiple genuinely
+  independent implementation or review tracks. Do not use for tiny, coupled,
+  same-file, or sequential work.
 ---
 
 # Parallel Multi-Agent Work

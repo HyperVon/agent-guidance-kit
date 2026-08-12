@@ -1,0 +1,37 @@
+{
+  "skill_name": "parallel-multi-agent",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "We have three independent feature branches to review. Delegate each to a worker and integrate results.",
+      "expected_output": "The agent verifies delegation authorization, builds a track matrix with disjoint ownership, briefs each worker with exact allowed/forbidden paths, launches concurrently, and integrates with parent-owned final verification.",
+      "assertions": [
+        "The response verifies user authorization to delegate",
+        "The response creates a track matrix with disjoint write scopes",
+        "The response briefs each worker with concrete goal, allowed paths, and stop conditions",
+        "The response runs final gates serially from integrated state"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "neighboring",
+      "prompt": "Fix this single bug in the auth module.",
+      "expected_output": "The agent keeps the work in the parent rather than delegating, as it's too small and coupled.",
+      "assertions": [
+        "The response identifies the work as too small for delegation",
+        "The response does not create workers for a single-file change"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "ambiguous",
+      "prompt": "Use subagents to speed up our test suite.",
+      "expected_output": "The agent asks for the specific independent tracks, whether the harness supports parallel workers, and the integration verification plan before delegating.",
+      "assertions": [
+        "The response requests the independent tracks and harness capability",
+        "The response does not delegate without disjoint ownership and integration plan"
+      ]
+    }
+  ]
+}

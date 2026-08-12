@@ -1,0 +1,38 @@
+{
+  "skill_name": "rules-and-skills-audit",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "Audit our agent guidance for overlapping triggers and stale references. We have AGENTS.md, CLAUDE.md, and several skill files.",
+      "expected_output": "The agent discovers all guidance files, builds an inventory with scope/trigger/dependencies, compares for duplicates/conflicts/stale references, classifies findings, and recommends the smallest reversible change with canonical owner and migration map.",
+      "assertions": [
+        "The response discovers guidance with rg --files including nested files",
+        "The response builds inventory with path, purpose, scope, trigger, dependencies",
+        "The response classifies findings as duplicate/merge candidate/scope issue/stale/conflict/improvement",
+        "The response recommends smallest reversible change with canonical owner"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "neighboring",
+      "prompt": "This skill's instructions are missing domain content.",
+      "expected_output": "The agent routes the request to skill-reviewer rather than auditing structure.",
+      "assertions": [
+        "The response identifies skill-reviewer as the closer workflow",
+        "The response does not audit structure for content enrichment"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "ambiguous",
+      "prompt": "Optimize our agent guidance.",
+      "expected_output": "The agent asks for the specific repository scope, whether the focus is structural audit or content enrichment, and which files are in scope before auditing.",
+      "assertions": [
+        "The response requests the specific repository scope and focus",
+        "The response distinguishes structural audit from content enrichment",
+        "The response records files read and candidates skipped"
+      ]
+    }
+  ]
+}

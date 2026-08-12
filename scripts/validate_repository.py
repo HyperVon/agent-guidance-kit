@@ -457,6 +457,192 @@ def validate_skill_dependencies(skill_names: set[str], errors: list[str]) -> Non
             )
 
 
+def validate_evaluation_results(skill_names: set[str], errors: list[str]) -> None:
+    results_root = ROOT / "docs/evaluations/results"
+    if not results_root.exists():
+        return
+    if results_root.is_symlink() or not results_root.is_dir():
+        errors.append("docs/evaluations/results: must be a real directory")
+        return
+    # Build committed eval case index for cross-checking
+    eval_index: dict[str, dict[int, str]] = {}
+    for name in skill_names:
+        path = SKILLS_ROOT / name / "evals/evals.json"
+        if not path.is_file() or path.is_symlink():
+            continue
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+            cases = value.get("evals") if isinstance(value, dict) else None
+            if isinstance(cases, list):
+                eval_index[name] = {
+                    case["id"]: case["kind"]
+                    for case in cases
+                    if isinstance(case, dict)
+                    and isinstance(case.get("id"), int)
+                    and isinstance(case.get("kind"), str)
+                    and isinstance(case.get("assertions"), list)
+                }
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+            continue
+    allowed_decisions = {
+        "KEEP",
+        "KEEP_PROVISIONAL",
+        "REVISE",
+        "MERGE",
+        "DEFER",
+        "REJECT",
+    }
+    for path in sorted(results_root.glob("*.json")):
+        if path.is_symlink():
+            errors.append(f"{path.relative_to(ROOT)}: result must not be a symlink")
+            continue
+        label = str(path.relative_to(ROOT))
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError) as error:
+            errors.append(f"{label}: invalid JSON: {error}")
+            continue
+        if not isinstance(value, dict):
+            errors.append(f"{label}: result must be a JSON object")
+            continue
+        if value.get("schema_version") != 1:
+            errors.append(f"{label}: schema_version must be 1")
+        for key in ("run_id", "timestamp", "baseline"):
+            if not isinstance(value.get(key), str) or not value[key].strip():
+                errors.append(f"{label}: {key} must be a non-empty string")
+        harness = value.get("harness")
+        if (
+            not isinstance(harness, dict)
+            or not isinstance(harness.get("name"), str)
+            or not harness["name"].strip()
+        ):
+            errors.append(f"{label}: harness.name must be a non-empty string")
+        model = value.get("model")
+        if (
+            not isinstance(model, dict)
+            or not isinstance(model.get("name"), str)
+            or not model["name"].strip()
+        ):
+            errors.append(f"{label}: model.name must be a non-empty string")
+        skills = value.get("skills")
+        if not isinstance(skills, list) or not skills:
+            errors.append(f"{label}: skills must be a non-empty list")
+            continue
+        seen_skills: set[str] = set()
+        for idx, entry in enumerate(skills, start=1):
+            prefix = f"{label} skills[{idx}]"
+            if not isinstance(entry, dict):
+                errors.append(f"{prefix}: must be an object")
+                continue
+            skill_name = entry.get("skill_name")
+            if not isinstance(skill_name, str) or skill_name not in skill_names:
+                errors.append(f"{prefix}: skill_name must name a catalog skill")
+                continue
+            if skill_name in seen_skills:
+                errors.append(f"{prefix}: duplicate skill_name {skill_name!r}")
+            seen_skills.add(skill_name)
+            cases = entry.get("cases")
+            if not isinstance(cases, list) or not cases:
+                errors.append(f"{prefix}: cases must be a non-empty list")
+                continue
+            committed = eval_index.get(skill_name, {})
+            for cidx, case in enumerate(cases, start=1):
+                cprefix = f"{prefix} cases[{cidx}]"
+                if not isinstance(case, dict):
+                    errors.append(f"{cprefix}: must be an object")
+                    continue
+                cid = case.get("id")
+                kind = case.get("kind")
+                total = case.get("assertions_total")
+                spass = case.get("skill_pass")
+                bpass = case.get("baseline_pass")
+                better = case.get("better")
+                if not isinstance(cid, int) or cid not in committed:
+                    errors.append(f"{cprefix}: id must match committed eval case")
+                elif committed.get(cid) != kind:
+                    errors.append(
+                        f"{cprefix}: kind must match committed eval case "
+                        f"({committed.get(cid)!r} != {kind!r})"
+                    )
+                if not isinstance(total, int) or total <= 0:
+                    errors.append(f"{cprefix}: assertions_total must be a positive int")
+                for key, val in (
+                    ("skill_pass", spass),
+                    ("baseline_pass", bpass),
+                ):
+                    if not isinstance(val, int) or not (0 <= val <= (total or 0)):
+                        errors.append(
+                            f"{cprefix}: {key} must be in [0, assertions_total]"
+                        )
+                if not isinstance(better, bool):
+                    errors.append(f"{cprefix}: better must be a boolean")
+                elif isinstance(spass, int) and isinstance(bpass, int):
+                    expected_better = spass > bpass
+                    if better != expected_better:
+                        errors.append(
+                            f"{cprefix}: better must be (skill_pass > baseline_pass)"
+                        )
+                if isinstance(total, int) and isinstance(spass, int):
+                    committed_total = None
+                    try:
+                        eval_path = SKILLS_ROOT / skill_name / "evals/evals.json"
+                        eval_value = json.loads(eval_path.read_text(encoding="utf-8"))
+                        for ec in eval_value.get("evals", []):
+                            if ec.get("id") == cid:
+                                committed_total = len(ec.get("assertions", []))
+                                break
+                    except (OSError, json.JSONDecodeError):
+                        pass
+                    if committed_total is not None and total != committed_total:
+                        errors.append(
+                            f"{cprefix}: assertions_total {total} != committed "
+                            f"assertions length {committed_total}"
+                        )
+            decision = entry.get("decision")
+            if decision not in allowed_decisions:
+                errors.append(
+                    f"{prefix}: decision must be one of {', '.join(sorted(allowed_decisions))}"
+                )
+            overall = entry.get("overall_better")
+            if not isinstance(overall, bool):
+                errors.append(f"{prefix}: overall_better must be a boolean")
+            elif isinstance(cases, list):
+                any_better = any(
+                    isinstance(c.get("better"), bool) and c["better"]
+                    for c in cases
+                    if isinstance(c, dict)
+                )
+                if overall != any_better:
+                    errors.append(
+                        f"{prefix}: overall_better must be any(cases[].better)"
+                    )
+    # Validate matrix links resolve to existing result files
+    matrix = ROOT / "docs/evaluations/validation-matrix.md"
+    if matrix.is_file() and not matrix.is_symlink():
+        text = matrix.read_text(encoding="utf-8")
+        for raw in LINK_RE.findall(text):
+            target = raw.strip()
+            if target.startswith("<") and target.endswith(">"):
+                target = target[1:-1]
+            split = urlsplit(target)
+            if split.scheme or target.startswith("#") or not split.path:
+                continue
+            candidate = (matrix.parent / unquote(split.path)).resolve()
+            try:
+                candidate.relative_to(ROOT)
+            except ValueError:
+                continue
+            # Only check links that point inside results/
+            try:
+                candidate.relative_to((ROOT / "docs/evaluations/results").resolve())
+            except ValueError:
+                continue
+            if not candidate.is_file() or candidate.is_symlink():
+                errors.append(
+                    f"docs/evaluations/validation-matrix.md: broken results link: {target}"
+                )
+
+
 def validate_python(errors: list[str]) -> None:
     for path in sorted(ROOT.rglob("*.py")):
         if path.is_symlink() or not is_project_path(path):
@@ -477,17 +663,22 @@ def main() -> int:
     validate_skill_dependencies(skills, errors)
     validate_links(errors)
     validate_harness_imports(errors)
+    validate_evaluation_results(skills, errors)
     validate_python(errors)
     if errors:
         for error in errors:
             print(f"ERROR {error}", file=sys.stderr)
         print(f"Validation failed with {len(errors)} error(s).", file=sys.stderr)
         return 1
+    results_root = ROOT / "docs/evaluations/results"
+    results_count = (
+        len(list(results_root.glob("*.json"))) if results_root.is_dir() else 0
+    )
     print(
         f"Validated {len(skills)} skills, relative links, metadata, and Python syntax; "
         f"evaluation definitions: {len(eval_definitions)} present, "
-        f"{len(skills - eval_definitions)} absent; executed results are not "
-        "validated by this structural check."
+        f"{len(skills - eval_definitions)} absent; "
+        f"evaluation results: {results_count} file(s) validated."
     )
     return 0
 
