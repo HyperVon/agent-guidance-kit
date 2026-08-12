@@ -44,6 +44,7 @@ Both shapes are validated. Prefer one aggregated file per harness/model/timestam
 * `skills[]` non-empty; each `skill_name` must match an existing skill directory and its committed `evals/evals.json`.
 * Each `cases[]` entry: `id` matches the committed eval case `id`, `kind` matches, `assertions_total == skill_pass + failures` and equals the committed `assertions` length, `skill_pass`/`baseline_pass` in `[0, assertions_total]`, `better == (skill_pass > baseline_pass)` when `overall_better` is claimed only if at least one meaningful `better=true`.
 * `decision` in `KEEP`, `KEEP_PROVISIONAL`, `REVISE`, `MERGE`, `DEFER`, `REJECT`.
+* `skill_commit` records the core `SKILL.md` revision being evaluated; the exact `evals/evals.json` and `evals/files/` snapshot evaluated is the one captured in this result (see `timestamp`/`run_id` and the committed files at that time).
 * Linked file must exist when referenced from `validation-matrix.md`.
 
 ## Human-readable companion
