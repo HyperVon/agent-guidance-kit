@@ -4,7 +4,7 @@
     {
       "id": 1,
       "kind": "matching",
-      "prompt": "Run an adversarial review of this PR before we open it. Partition it into bounded read-only tracks by file ownership and risk, validate findings in the parent, and re-review only affected tracks.",
+      "prompt": "Run an adversarial review of this PR before we open it. Partition it into bounded read-only tracks by file ownership and risk, validate findings in the parent, and report ranked findings with concrete anchors.",
       "expected_output": "The agent establishes review truth from the complete diff and base, builds a small track matrix (2-6 tracks) with disjoint ownership, delegates bounded read-only reviewers, validates and de-duplicates findings in the parent, and reports ranked findings with severity and path:line anchors.",
       "assertions": [
         "The response builds a track matrix with disjoint file ownership and risk",

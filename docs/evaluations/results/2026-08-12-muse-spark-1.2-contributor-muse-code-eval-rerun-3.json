@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "run_id": "2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-3",
+  "timestamp": "2026-08-12T09:52:04Z",
+  "harness": {
+    "name": "muse code",
+    "version": "0.1.0"
+  },
+  "model": {
+    "provider": "meta",
+    "name": "muse-spark-1.2-contributor",
+    "reasoning_effort": "xhigh"
+  },
+  "baseline": "no-skill",
+  "method": "Each evals/evals.json case run twice in a dedicated empty directory containing only declared fixtures (isolated /tmp/agk-evals-2026-08-12-rerun3/<skill>-<id> workspaces) in clean context: WITH-SKILL applies the skill guidance, BASELINE is a no-skill general agent, same prompts/fixtures/workspace. Assertions graded with quoted evidence from actual outputs; human review for usefulness/unnecessary work; raw outputs in ignored workspaces. Fixtures: adversarial-pr-review/evals/files/synthetic-pr/{auth.py,payments.py,config.yaml} (de-spoiled), dependency-upgrade/evals/files/mini-node/{package.json,package-lock.json,advisory.json,Makefile,index.js,test.js} with executable Makefile check. Case 1 adversarial prompt cleaned to review-only wording (was 'and re-review only affected tracks' \u2192 now 'and report ranked findings with concrete anchors'), consistent with 3-assertion review-only scope and expected_output.",
+  "skills": [
+    {
+      "skill_name": "adversarial-pr-review",
+      "skill_commit": "6cbafc3",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 3,
+          "skill_pass": 3,
+          "baseline_pass": 0,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 0,
+          "better": true
+        },
+        {
+          "id": 3,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 0,
+          "better": true
+        },
+        {
+          "id": 4,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 3,
+          "baseline_pass": 0,
+          "better": true
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP"
+    },
+    {
+      "skill_name": "dependency-upgrade",
+      "skill_commit": "6cbafc3",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 3,
+          "skill_pass": 3,
+          "baseline_pass": 0,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 0,
+          "better": true
+        },
+        {
+          "id": 3,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 0,
+          "better": true
+        },
+        {
+          "id": 4,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 3,
+          "baseline_pass": 0,
+          "better": true
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP"
+    }
+  ]
+}
