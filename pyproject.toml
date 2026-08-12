@@ -1,6 +1,6 @@
 [project]
 name = "agent-guidance-kit"
-version = "1.0.0"
+version = "1.1.0"
 description = "Portable library of project-local agent skills and bootstrap workflow"
 readme = "README.md"
 license = { text = "Apache-2.0" }

@@ -11,7 +11,7 @@ skills, and waits for approval. A deterministic installer then adds the kit's
 maintenance entrypoint, closes required dependencies, updates managed routing,
 and installs the approved skills without overwriting local divergence.
 
-> Status: v1.0.0 initial release. The catalog and integration workflow may evolve
+> Status: v1.1.0 (2026-08-12) — 20/20 skills evaluated, harness VERIFIED (muse). The catalog and integration workflow may evolve
 > in backward-compatible releases.
 
 ## Why use it
