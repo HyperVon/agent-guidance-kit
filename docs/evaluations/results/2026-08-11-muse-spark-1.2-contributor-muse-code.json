@@ -9,7 +9,7 @@
   "model": {
     "provider": "meta",
     "name": "muse-spark-1.2-contributor",
-    "reasoning_effort": "low"
+    "reasoning_effort": "xhigh"
   },
   "baseline": "no-skill",
   "method": "Each case run twice in a dedicated empty directory containing only evals/files/* (isolated /tmp workspaces per skill), same prompts/tools/network/model; assertions graded with quoted evidence; human review for usefulness/unnecessary work; raw outputs in ignored workspaces (/tmp/eval-batch-1, /tmp/eval-batch-2, /tmp/skill-evals-batch3, /tmp/agk-evals-batch4).",

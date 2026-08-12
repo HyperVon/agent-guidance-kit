@@ -3,7 +3,7 @@
 Read this reference only when a target repository uses multiple agent harnesses
 or asks for harness-specific entrypoints. Use `harness-adaptation` for the full
 capability-profile workflow. The current dated evidence snapshot is in
-[harness compatibility](../../../../docs/harness-compatibility.md).
+`docs/harness-compatibility.md` in the kit root (not linked portably — copy or read directly when needed).
 
 ## Discovery
 

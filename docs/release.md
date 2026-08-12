@@ -74,6 +74,25 @@ bypass the gate.
    Repository visibility and public-release timing are user-owned decisions
    per `.agents/AGENTS.md`.
 
+## Upgrade path for existing adopters
+
+Targets that installed an earlier kit (e.g., `new-kraken-rebalancer` at
+`4f3cd82`, receipts `schema_version 2`) upgrade via `agent-guidance-maintenance`:
+
+```text
+python .agents/skills/agent-guidance-maintenance/scripts/resolve_source.py resolve --target .
+# If you explicitly want the latest kit, first refresh the source checkout (clean main only):
+#   git -C /path/to/agent-guidance-kit fetch origin main && git -C /path/to/agent-guidance-kit pull --ff-only origin main
+python -c "import sys; sys.path.insert(0, '.agents/skills/bootstrap-project/scripts'); import install_skills, pathlib; print(install_skills.build_plan(pathlib.Path('/path/to/agent-guidance-kit'), pathlib.Path('.'), ['agent-guidance-maintenance','security-review','systematic-debugging']))"
+# Or use the maintenance skill workflow: it inspects receipts, detects UPDATE vs UNCHANGED,
+# and presents the exact plan with approval gate. Apply only the unchanged plan with --approve.
+```
+
+* `UPDATE` is expected for `agent-guidance-maintenance` after `52bd05b` (wrapper + `install_skills/` package, `resolve_source.py` canonical validator) — the installer detects `source_digest != target_digest` and refreshes atomically. `security-review`/`systematic-debugging` remain `UNCHANGED` if their digests match.
+* Local project skills (e.g., Kraken's `code-review`, `ai-slop-detector`) are not receipt-owned — the installer leaves them untouched and reports `CONFLICT` if you request a kit skill that collides with a local same-named skill; resolve by `KEEP_LOCAL` or rename.
+* `evals/` and `docs/` are `SOURCE_ONLY`/`TRANSIENT` — never copied to targets, so new `validation-matrix.md` or `docs/release.md` changes do not create drift.
+* The kit now validates `docs/evaluations/results/*.json` and `validation-matrix.md` links — run `make check` after the upgrade to confirm `1 file(s) validated` and no broken links. If `harness-compatibility` or other docs links were outside the portable catalog (fixed in `bootstrap-project/references/harness-integration.md`), the previous kit would have failed `validate_declared_links` for `bootstrap-project`; the fix makes that skill installable again.
+
 ## After a release
 
 * Verify the tag is reachable (`git show vX.Y.Z`).

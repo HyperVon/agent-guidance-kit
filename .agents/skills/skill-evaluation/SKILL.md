@@ -110,19 +110,17 @@ outputs or private fixtures.
 When a run is executed, record it in the repository so the validation matrix
 stays current:
 
-1. Write a result file under `docs/evaluations/results/` following the schema
-   in `docs/evaluations/results/README.md` — include `harness` (`muse code` +
-   version), `model` (`muse-spark-1.2-contributor` + provider + reasoning
-   effort), `baseline`, per-case `skill_pass`/`baseline_pass`/`better`, and
-   `decision`. Use `YYYY-MM-DD-<model>-<harness>.json` for multi-skill runs
-   **and** its `*.md` human-readable companion (summary table + per-skill detail;
-   copy `2026-08-11-muse-spark-1.2-contributor-muse-code.md`).
-2. Update `docs/evaluations/validation-matrix.md` to link both the `*.json`
+1. Determine `harness` (`muse code` + version), `model` (`muse-spark-1.2-contributor` + provider), and `reasoning_effort` (`xhigh` currently used). Use runtime metadata when available. **If you cannot definitively determine the harness, model, or effort level yourself, ask the user explicitly** (e.g., “Which harness/model/effort should I record for this run? Currently using `muse code` / `muse-spark-1.2-contributor` / `xhigh` — confirm or provide the correct values”) and do not guess. Effort can dramatically change results, so always record the actual `reasoning_effort`.
+2. Write a result file under `docs/evaluations/results/` following the schema
+   in `docs/evaluations/results/README.md` — include the confirmed `harness`,
+   `model`, `reasoning_effort`, `baseline`, per-case `skill_pass`/`baseline_pass`/`better`, and `decision`. Use `YYYY-MM-DD-<model>-<harness>.json` for multi-skill runs **and** its `*.md` human-readable companion (summary table + per-skill detail; copy `2026-08-11-muse-spark-1.2-contributor-muse-code.md`).
+3. Update `docs/evaluations/validation-matrix.md` to link both the `*.json`
    and the `*.md` (`✓` when `better=true` and `skill_pass > baseline_pass`, `=`
-   when both passed without discrimination, `–` when not yet tested). Keep raw
+   when both passed without discrimination, `–` when not yet tested) and record
+   the `reasoning_effort` in the column header (e.g., `muse-spark-1.2-contributor` / `muse code` (`xhigh`)). Keep raw
    outputs in the ignored workspace; only the sanitized summary, `*.md`, and
    `*.json` are committed.
-3. Run `make check` — `scripts/validate_repository.py` validates the JSON
+4. Run `make check` — `scripts/validate_repository.py` validates the JSON
    shape, that each `skill_name`/`id`/`kind` matches the committed
    `evals/evals.json`, and that matrix links resolve.
 

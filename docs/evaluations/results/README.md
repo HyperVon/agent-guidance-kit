@@ -20,7 +20,7 @@ Both shapes are validated. Prefer one aggregated file per harness/model/timestam
   "run_id": "2026-08-11-muse-spark-1.2-contributor-muse-code",
   "timestamp": "2026-08-11T23:50:00Z",
   "harness": {"name": "muse code", "version": "0.1.0"},
-  "model": {"provider": "meta", "name": "muse-spark-1.2-contributor", "reasoning_effort": "low"},
+  "model": {"provider": "meta", "name": "muse-spark-1.2-contributor", "reasoning_effort": "xhigh"},
   "baseline": "no-skill",
   "skills": [
     {
@@ -52,7 +52,7 @@ Every `*.json` has a `*.md` sibling with the same basename — e.g., `2026-08-11
 
 ## How to add a run
 
-1. Run each `evals/evals.json` case twice in a **dedicated empty directory** containing only `evals/files/*` (per `skill-evaluation`), once with the skill and once with the baseline, same prompts/tools/network/model. Harness is `muse code`, model is `muse-spark-1.2-contributor` (record provider + reasoning effort).
+1. Determine `harness` (`muse code` + version), `model` (`muse-spark-1.2-contributor` + provider), and `reasoning_effort` (`xhigh` currently used; can dramatically change results). Use runtime metadata when available. **If you cannot definitively determine the harness, model, or effort level yourself, ask the user explicitly** (e.g., “Which harness/model/effort should I record? Currently using `muse code` / `muse-spark-1.2-contributor` / `xhigh` — confirm or provide the correct values”) and do not guess. Then run each `evals/evals.json` case twice in a **dedicated empty directory** containing only `evals/files/*` (per `skill-evaluation`), once with the confirmed skill and once with the baseline, same prompts/tools/network/model.
 2. Grade every `assertions` entry with quoted evidence from the output; keep the raw outputs in the ephemeral workspace (not here).
 3. Write the JSON above **and** its `*.md` human-readable companion (copy the shape from `2026-08-11-muse-spark-1.2-contributor-muse-code.md`).
 4. Update `docs/evaluations/validation-matrix.md` to link both `json` and `human` files.

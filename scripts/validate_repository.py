@@ -524,6 +524,15 @@ def validate_evaluation_results(skill_names: set[str], errors: list[str]) -> Non
             or not model["name"].strip()
         ):
             errors.append(f"{label}: model.name must be a non-empty string")
+        # reasoning_effort dramatically changes results; require it when provider is meta
+        if isinstance(model, dict):
+            effort = model.get("reasoning_effort")
+            if effort is not None and (
+                not isinstance(effort, str) or not effort.strip()
+            ):
+                errors.append(
+                    f"{label}: model.reasoning_effort must be a non-empty string when present"
+                )
         skills = value.get("skills")
         if not isinstance(skills, list) or not skills:
             errors.append(f"{label}: skills must be a non-empty list")

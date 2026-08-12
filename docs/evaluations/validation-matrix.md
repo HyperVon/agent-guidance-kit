@@ -7,7 +7,7 @@ This matrix tracks where skill evaluations have been executed in isolated clean-
 * `–` — not yet tested on that model/harness.
 * Links point to the sanitized report (`results/*.md` — human-readable) and the machine-readable result file (`results/*.json` — validated by `scripts/validate_repository.py`).
 
-| Skill | `gpt-5.6-luna` / Codex (`low`) | `gpt-5.6-sol` / Codex (`xhigh`) | `muse-spark-1.2-contributor` / `muse-code` (`0.1.0`) |
+| Skill | `gpt-5.6-luna` / Codex (`low`) | `gpt-5.6-sol` / Codex (`xhigh`) | `muse-spark-1.2-contributor` / `muse code` (`xhigh`, `0.1.0`) |
 | :--- | :--- | :--- | :--- |
 | `agent-guidance-maintenance` | [✓](2026-08-10-catalog-expansion.md) | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
 | `ai-slop-detector` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
@@ -45,5 +45,5 @@ This matrix tracks where skill evaluations have been executed in isolated clean-
 ## Current coverage
 
 * `17` skills have `evals/evals.json` definitions (structural check: `Validated 17 skills ... evaluation definitions: 17 present`).
-* Historical runs: `2026-08-10` (`gpt-5.6-luna` low, 4 skills), `2026-08-10` external intake (`gpt-5.6-luna` low, `skill-reviewer`), `2026-08-11` fixture (`gpt-5.6-luna` low + `gpt-5.6-sol` xhigh, `systematic-debugging`), `2026-08-11` (`muse-spark-1.2-contributor` / `muse-code` 0.1.0, all 17).
-* Latest full run `2026-08-11-muse-spark-1.2-contributor-muse-code.json` confirms all 17 outperformed baseline on the committed assertion sets in isolated workspaces (`/tmp/eval-batch-1`, `/tmp/eval-batch-2`, `/tmp/skill-evals-batch3`, `/tmp/agk-evals-batch4`). One run per condition per model — not a statistical benchmark.
+* Historical runs: `2026-08-10` (`gpt-5.6-luna` low, 4 skills), `2026-08-10` external intake (`gpt-5.6-luna` low, `skill-reviewer`), `2026-08-11` fixture (`gpt-5.6-luna` low + `gpt-5.6-sol` xhigh, `systematic-debugging`), `2026-08-11` (`muse-spark-1.2-contributor` `xhigh` / `muse code` 0.1.0, all 17).
+* Latest full run `2026-08-11-muse-spark-1.2-contributor-muse-code.json` (`xhigh`) confirms all 17 outperformed baseline on the committed assertion sets in isolated workspaces (`/tmp/eval-batch-1`, `/tmp/eval-batch-2`, `/tmp/skill-evals-batch3`, `/tmp/agk-evals-batch4`). One run per condition per model — not a statistical benchmark; effort level (`low` vs `xhigh`) can change results dramatically, so it is recorded per result file.
