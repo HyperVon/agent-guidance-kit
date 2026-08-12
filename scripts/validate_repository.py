@@ -141,9 +141,9 @@ def validate_harness_imports(errors: list[str]) -> None:
         if not path.is_file() or path.is_symlink():
             errors.append(f"{relative_path}: missing real harness entrypoint")
             continue
-        imports = IMPORT_RE.findall(
-            without_fenced_code(path.read_text(encoding="utf-8"))
-        )
+        raw = path.read_text(encoding="utf-8")
+        text = without_fenced_code(raw)
+        imports = IMPORT_RE.findall(text)
         if not imports:
             errors.append(
                 f"{relative_path}: expected at least one canonical-file import"
@@ -166,6 +166,11 @@ def validate_harness_imports(errors: list[str]) -> None:
                 continue
             if not resolved.is_file() or resolved.is_symlink():
                 errors.append(f"{relative_path}: broken or unsafe import: {raw_target}")
+        # Thin-adapter check: harness file should not duplicate canonical policy
+        if "Product boundary" in raw or "Repository invariants" in raw:
+            errors.append(
+                f"{relative_path}: should be thin adapter, not duplicate canonical policy"
+            )
 
     copilot = ROOT / ".github/copilot-instructions.md"
     if not copilot.is_file() or copilot.is_symlink():
@@ -173,7 +178,8 @@ def validate_harness_imports(errors: list[str]) -> None:
             ".github/copilot-instructions.md: missing real harness entrypoint"
         )
     else:
-        text = without_fenced_code(copilot.read_text(encoding="utf-8"))
+        raw = copilot.read_text(encoding="utf-8")
+        text = without_fenced_code(raw)
         has_canonical = any(
             canonical in text
             for canonical in ("AGENTS.md", ".agents/AGENTS.md", ".agents/OPERATING.md")
@@ -181,6 +187,21 @@ def validate_harness_imports(errors: list[str]) -> None:
         if not has_canonical:
             errors.append(
                 ".github/copilot-instructions.md: expected at least one canonical-file reference"
+            )
+        if "Product boundary" in raw:
+            errors.append(
+                ".github/copilot-instructions.md: should be thin, not duplicate canonical policy"
+            )
+
+    # Root AGENTS.md thin-pointer check
+    root_agents = ROOT / "AGENTS.md"
+    if root_agents.is_file() and not root_agents.is_symlink():
+        raw = root_agents.read_text(encoding="utf-8")
+        if ".agents/AGENTS.md" not in raw:
+            errors.append("AGENTS.md: should reference canonical .agents/AGENTS.md")
+        if "Product boundary" in raw or "Skill index" in raw:
+            errors.append(
+                "AGENTS.md: root should be thin pointer, not duplicate canonical policy"
             )
 
 
