@@ -4,28 +4,34 @@ description: >-
   Parent-orchestrated adaptive adversarial PR review — partitions a PR diff
   into bounded read-only reviewer tracks by file ownership and risk, validates
   findings in the parent, and re-reviews only affected tracks until
-  convergence. Use when opening a PR, updating a branch with an open PR, or
-  when the user explicitly requests an adversarial or multi-agent review.
+  convergence. Use when the user explicitly requests an adversarial or
+  multi-agent review, or when the target repository policy explicitly requires
+  adversarial review before publication.
 ---
 
 # Adversarial PR Review
 
-Run inside the current agent session before finishing any PR creation or
-update that will be visible on GitHub. A bare `git push` does not run it
-unless the branch already has an open PR.
+A routeable, opt-in review workflow. The portable kit does not automatically
+require a multi-agent review for every PR — use this skill only when the
+request or the adopting repository's own policy says to do so. Adopting
+projects may make it mandatory locally by documenting that policy and invoking
+this skill from their `git-github-workflow` or `AGENTS.md`.
 
-## When this skill is mandatory
+## When to use this skill
 
-Read and follow this skill before finishing:
+Use this skill when one of these is true:
 
-1. **Open PR** — after quality gates, before `gh pr create` (see
-   `git-github-workflow`).
-2. **Update open PR** — when the next push will update a branch that already
-   has an open PR.
-3. **Explicit ask** — when the user requests adversarial, multi-agent, or
+1. **Explicit request** — the user asks for an adversarial, multi-agent, or
    multi-model review of a PR or branch diff.
+2. **Repository policy** — the target repository's local policy (for example
+   its `AGENTS.md`, `CONTRIBUTING.md`, or `git-github-workflow` guidance)
+   explicitly requires an adversarial review before publication. That local
+   policy is the authority — not the mere presence of this skill in the
+   portable catalog.
 
-If the branch has no open PR and the user is only committing WIP without
+For ordinary PR creation or updates without either trigger, continue through
+`git-github-workflow` without automatically requiring multi-agent review.
+When the branch has no open PR and the user is only committing WIP without
 opening one, skip unless explicitly requested.
 
 ## Core operating model
@@ -38,6 +44,7 @@ opening one, skip unless explicitly requested.
   the parent validates, de-duplicates, ranks, and integrates.
 - **No external publication.** Workers do not push, merge, approve, or post
   external comments.
+- **Approval and delegation consistent with `parallel-multi-agent` and `.agents/OPERATING.md`.** Delegation requires user or repository-policy authorization to use workers, disjoint ownership, and parent-owned integration and final verification. Do not invent an additional approval gate for routine PRs merely because this skill exists in the catalog.
 
 ## Track matrix
 
@@ -52,7 +59,10 @@ when files must be reasoned about together.
 
 For review work, also record iteration cap and stop condition per track.
 Document the matrix and obtain approval before the first parallel worker
-launch unless the user explicitly requested this workflow.
+launch unless the user explicitly requested this workflow. Approval of the
+track matrix is proposal-first per `.agents/OPERATING.md` — a routine PR does
+not implicitly require this extra approval unless the repository has adopted
+the policy above.
 
 ## Workflow
 
@@ -82,16 +92,22 @@ launch unless the user explicitly requested this workflow.
 - Stop and report when evidence is insufficient, when a proposed fix would
   change architecture or behavior beyond the review request, or when the next
   step needs credentials or external access.
+- Do not treat the catalog presence of this skill as an implicit requirement
+  for every PR. Ordinary PRs without an explicit request or local policy
+  remain on `git-github-workflow`.
 
 ## Relationship to neighboring skills
 
 | Skill | Owns |
 | :---- | :---- |
-| **adversarial-pr-review** (this) | Bounded concurrent review before PR creation or update |
+| **adversarial-pr-review** (this) | Bounded concurrent adversarial review when explicitly requested or required by local policy |
 | `code-review` | Focused single-reviewer review of a diff or subsystem |
-| `git-github-workflow` | Branch, commit, PR creation, and push hygiene |
+| `git-github-workflow` | Branch, commit, PR creation, and push hygiene (adopting projects may invoke this skill from there when they want it mandatory) |
+| `parallel-multi-agent` | Generic bounded parallel implementation or review work when the harness and repository policy authorize delegation |
 | `ai-slop-detector` | Broad artifact-quality and test-independence audit |
 | `security-review` | Security boundary, secret, and authority deep review |
 
 Use one owner skill when it fully covers the request. Combine only when the
-PR materially touches a neighboring concern.
+PR materially touches a neighboring concern. Routine PRs without an explicit
+adversarial-review trigger should not incur an extra approval or delegation
+step.

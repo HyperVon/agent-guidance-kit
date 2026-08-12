@@ -1,0 +1,48 @@
+{
+  "skill_name": "adversarial-pr-review",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "Run an adversarial review of this PR before we open it. Partition it into bounded read-only tracks by file ownership and risk, validate findings in the parent, and re-review only affected tracks.",
+      "expected_output": "The agent establishes review truth from the complete diff and base, builds a small track matrix (2-6 tracks) with disjoint ownership, delegates bounded read-only reviewers, validates and de-duplicates findings in the parent, and reports ranked findings with anchors and convergent re-review of affected tracks only.",
+      "assertions": [
+        "The response builds a track matrix with disjoint file ownership and risk",
+        "The response delegates bounded read-only workers with no edit or publish side effects",
+        "The response validates findings in the parent and de-duplicates ungrounded claims",
+        "The response re-reviews only affected tracks until convergence or iteration cap"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "neighboring",
+      "prompt": "Please review this PR diff for concrete correctness and security defects. The diff adds a new endpoint and a migration. Report findings with severity and path:line anchors.",
+      "expected_output": "The agent routes the request to code-review (or security-review for the security portion) rather than creating an adversarial multi-track review, and performs a focused single-reviewer review.",
+      "assertions": [
+        "The response routes the ordinary diff review to code-review as the closer workflow",
+        "The response does not create a multi-agent track matrix for an ordinary review"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "prompt": "We have three independent features to implement in parallel: auth, billing, and notifications. Delegate each to a worker and integrate results.",
+      "expected_output": "The agent routes the request to parallel-multi-agent rather than adversarial-pr-review, verifying independent implementation tracks and disjoint write scopes.",
+      "assertions": [
+        "The response identifies parallel-multi-agent as the closer workflow for independent implementation",
+        "The response does not treat generic parallel implementation as an adversarial PR review"
+      ]
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "prompt": "This is a large PR touching multiple services. Use subagents to review it in parallel before publication.",
+      "expected_output": "The agent asks whether the user wants the adversarial PR-review workflow (bounded read-only tracks with parent validation) or a generic parallel review, and checks whether the target repository policy requires adversarial review or the user explicitly requested it before launching workers. It does not automatically assume every large PR requires adversarial review.",
+      "assertions": [
+        "The response requests clarification on whether adversarial review is explicitly requested or required by repository policy",
+        "The response distinguishes adversarial-pr-review from code-review and parallel-multi-agent ownership",
+        "The response does not automatically launch bounded adversarial tracks without authorization or a confirmed track matrix"
+      ]
+    }
+  ]
+}

@@ -61,3 +61,13 @@ Disposition: `NEW_SKILL` for `agent-guidance-maintenance`;
 closure, managed AGENTS routing, ignored source location, and target-side link
 and index validation. Optional neighboring skills remain unlinked; only declared
 required dependencies create installation closure.
+
+## 2026-08-12 upstream contribution from rg-helloworld (PR #16)
+
+Adapted from [HyperVon/rg-helloworld](https://github.com/HyperVon/rg-helloworld) at commit `265f780` (retrieved and generalized 2026-08-12, source license Apache-2.0).
+
+- **New portable skills (generalized and rewritten for the kit, not copied verbatim):** `adversarial-pr-review` — parent-orchestrated adaptive adversarial PR review with bounded read-only tracks; `dependency-upgrade` — pinned dependency and lockfile upgrade with security-first triage and risk-grouped verification.
+- **Small improvements adopted:** `ai-slop-detector` clarification that emoji, verbosity, formatting, and provider signals are investigation prompts, not evidence of defect or authorship; `code-review` establishment of review truth includes `git status`, complete diff, merge base, and target base; `documentation-review` incremental sync table for post-change documentation updates.
+- **Intentionally excluded:** `rg-helloworld`-specific integrity rules, language ownership, milestone sequencing, artifact pipeline (vector glyphs → geometry → SVG → raster → OCR), Kafka/Redis/MinIO/k3d assumptions, and review-surface scripts.
+
+Provenance is recorded here for durability; full triage and disposition (including `PROJECT_SPECIFIC` and `DEFER` for UI, autonomy, and overhaul skills) remains in the PR description.

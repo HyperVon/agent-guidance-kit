@@ -21,13 +21,20 @@ distinct tests.
 
 ## Step 1 — Security alerts first
 
+Triage **all** open security alerts, then prioritize. Where GitHub Dependabot
+alerts are available, use them as the authoritative source; otherwise use the
+target repository or ecosystem's authoritative vulnerability or advisory source
+(for example the package registry's advisory database or the language's
+security tooling). A useful GitHub example:
+
 ```bash
 gh api repos/{owner}/{repo}/dependabot/alerts --jq \
   '.[] | select(.state == "open") | [.number, .security_advisory.severity, .dependency.package.name, .dependency.manifest_path, (.security_vulnerability.vulnerable_version_range // "?")] | @tsv'
 ```
 
-- Fix `critical` and `high` alerts promptly; track unfixable ones with the
-  blocker and owner.
+- Triage all open alerts; prioritize `critical` and `high` severity and
+  document blockers or unfixable alerts with owner and next step rather than
+  ignoring medium or low findings without triage.
 - An alert identifies a vulnerable range, not the fixed version — confirm the
   patched version exists and matches the manifest before bumping.
 - Never delete a security pin to make the build pass.
@@ -44,7 +51,9 @@ minor, and the owning manifest.
 
 Order work by risk and reviewability:
 
-1. **Security** — vulnerable direct dependencies (patch or minor that fixes the alert).
+1. **Security** — vulnerable direct or transitive dependencies where the
+   package manager or advisory identifies the exposure (patch or minor that
+   fixes the alert).
 2. **Patch** — backwards-compatible fixes in direct dependencies.
 3. **Minor** — new backwards-compatible features; check changelog and tests.
 4. **Major or toolchain** — breaking changes, language or action major bumps;
