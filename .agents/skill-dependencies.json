@@ -191,7 +191,7 @@
         "parallel-multi-agent"
       ],
       "requires": [],
-      "route": "Parent-orchestrated adaptive adversarial PR review with bounded read-only tracks"
+      "route": "Run bounded adversarial PR review when explicitly requested or required by repository policy"
     },
     "dependency-upgrade": {
       "related": [

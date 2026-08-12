@@ -11,6 +11,11 @@
         "The response delegates bounded read-only workers with no edit or publish side effects",
         "The response validates findings in the parent and de-duplicates ungrounded claims",
         "The response re-reviews only affected tracks until convergence or iteration cap"
+      ],
+      "files": [
+        "evals/files/synthetic-pr/auth.py",
+        "evals/files/synthetic-pr/payments.py",
+        "evals/files/synthetic-pr/config.yaml"
       ]
     },
     {
@@ -36,11 +41,11 @@
     {
       "id": 4,
       "kind": "ambiguous",
-      "prompt": "This is a large PR touching multiple services. Use subagents to review it in parallel before publication.",
-      "expected_output": "The agent asks whether the user wants the adversarial PR-review workflow (bounded read-only tracks with parent validation) or a generic parallel review, and checks whether the target repository policy requires adversarial review or the user explicitly requested it before launching workers. It does not automatically assume every large PR requires adversarial review.",
+      "prompt": "This is a large PR touching multiple services. Review it before publication and parallelize where useful.",
+      "expected_output": "The agent distinguishes among code-review, parallel-multi-agent, and adversarial-pr-review, checks whether the user explicitly requested adversarial review or the repository policy requires it, and does not automatically assume the large PR requires the adversarial workflow. It clarifies intent and scope before delegating, and selects the minimal appropriate workflow.",
       "assertions": [
-        "The response requests clarification on whether adversarial review is explicitly requested or required by repository policy",
-        "The response distinguishes adversarial-pr-review from code-review and parallel-multi-agent ownership",
+        "The response requests clarification on whether adversarial review is explicitly requested or required by repository policy before choosing adversarial-pr-review",
+        "The response distinguishes adversarial-pr-review from code-review and parallel-multi-agent ownership and does not conflate generic parallelization with adversarial review",
         "The response does not automatically launch bounded adversarial tracks without authorization or a confirmed track matrix"
       ]
     }

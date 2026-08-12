@@ -10,6 +10,11 @@
         "The response inventories dependency manifests, lockfiles, and pinned container or action versions",
         "The response groups bumps by risk (security, patch, minor, major) and keeps groups small and reviewable",
         "The response verifies after each group with the repository's full gate and lockfile regeneration"
+      ],
+      "files": [
+        "evals/files/mini-node/package.json",
+        "evals/files/mini-node/package-lock.json",
+        "evals/files/mini-node/advisory.json"
       ]
     },
     {

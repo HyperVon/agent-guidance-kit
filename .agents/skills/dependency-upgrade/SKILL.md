@@ -35,8 +35,7 @@ gh api repos/{owner}/{repo}/dependabot/alerts --jq \
 - Triage all open alerts; prioritize `critical` and `high` severity and
   document blockers or unfixable alerts with owner and next step rather than
   ignoring medium or low findings without triage.
-- An alert identifies a vulnerable range, not the fixed version — confirm the
-  patched version exists and matches the manifest before bumping.
+- An alert identifies a vulnerable range, not the fixed version — confirm a supported remediation version or dependency path exists and can be expressed through the owning manifest or lockfile before changing dependency state.
 - Never delete a security pin to make the build pass.
 
 ## Step 2 — Inventory
