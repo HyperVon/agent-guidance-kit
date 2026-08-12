@@ -126,12 +126,20 @@ class HarnessRecommendationsTest(unittest.TestCase):
     def test_render_diff_keeps_headers_on_separate_lines(self) -> None:
         module = load()
         diff = module.render_diff("# Old\nline\n", "# New\nline\n", "AGENTS.md")
-        self.assertIn("\n", diff)
-        self.assertIn("--- a/AGENTS.md", diff)
-        self.assertIn("+++ b/AGENTS.md", diff)
-        # Headers must not be mashed onto one line.
-        self.assertNotIn("--- a/AGENTS.md+++ b/AGENTS.md", diff)
-        self.assertNotIn("@@", diff.split("@@")[0].replace("\n", ""))
+        self.assertEqual(
+            [
+                "--- a/AGENTS.md",
+                "+++ b/AGENTS.md",
+                "@@ -1,2 +1,2 @@",
+                "-# Old",
+                "+# New",
+                " line",
+            ],
+            diff.splitlines(),
+        )
+        # Diff body lines already represent complete logical lines; joining
+        # them must not insert artificial blank lines.
+        self.assertNotIn("\n\n", diff)
 
     def test_command_runs_without_error(self) -> None:
         module = load()

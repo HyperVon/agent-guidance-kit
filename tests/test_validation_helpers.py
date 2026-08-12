@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
+from unittest.mock import call, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -299,40 +300,44 @@ class ValidationHelpersTest(unittest.TestCase):
     def test_node_toolchain_warns_for_versions_above_26(self) -> None:
         # CI matrix validates Node 22 and 26. Versions strictly above 26
         # should receive a warning (Finding D: was > 30).
-        bin_dir = Path(tempfile.mkdtemp())
-        fake_node = bin_dir / "node"
-        fake_node.write_text("#!/bin/sh\necho 'v28.0.0'\n", encoding="utf-8")
-        fake_node.chmod(0o755)
-        original_path = os.environ.get("PATH", "")
-        os.environ["PATH"] = f"{bin_dir}:{original_path}"
-        original_which = setup_dev.shutil.which
-        try:
+        completed = subprocess.CompletedProcess(
+            ["node", "--version"], 0, stdout="v28.0.0\n", stderr=""
+        )
+        with (
+            patch.object(
+                setup_dev.shutil,
+                "which",
+                side_effect=lambda name: {"node": "node", "npm": "npm"}[name],
+            ) as which,
+            patch.object(setup_dev.subprocess, "run", return_value=completed) as run,
+        ):
             buf = io.StringIO()
             with redirect_stderr(buf):
                 result = setup_dev.node_toolchain()
-            self.assertIsNotNone(result)
-            self.assertIn("newer than CI-validated 26", buf.getvalue())
-        finally:
-            os.environ["PATH"] = original_path
-            setup_dev.shutil.which = original_which
+        self.assertEqual(("node", "npm"), result)
+        self.assertEqual([call("node"), call("npm")], which.call_args_list)
+        run.assert_called_once_with(
+            ["node", "--version"], check=False, capture_output=True, text=True
+        )
+        self.assertIn("newer than CI-validated 26", buf.getvalue())
 
     def test_node_toolchain_no_warning_for_ci_validated_versions(self) -> None:
-        bin_dir = Path(tempfile.mkdtemp())
-        fake_node = bin_dir / "node"
-        fake_node.write_text("#!/bin/sh\necho 'v26.0.0'\n", encoding="utf-8")
-        fake_node.chmod(0o755)
-        original_path = os.environ.get("PATH", "")
-        os.environ["PATH"] = f"{bin_dir}:{original_path}"
-        original_which = setup_dev.shutil.which
-        try:
+        completed = subprocess.CompletedProcess(
+            ["node", "--version"], 0, stdout="v26.0.0\n", stderr=""
+        )
+        with (
+            patch.object(
+                setup_dev.shutil,
+                "which",
+                side_effect=lambda name: {"node": "node", "npm": "npm"}[name],
+            ),
+            patch.object(setup_dev.subprocess, "run", return_value=completed),
+        ):
             buf = io.StringIO()
             with redirect_stderr(buf):
                 result = setup_dev.node_toolchain()
-            self.assertIsNotNone(result)
-            self.assertEqual("", buf.getvalue())
-        finally:
-            os.environ["PATH"] = original_path
-            setup_dev.shutil.which = original_which
+        self.assertEqual(("node", "npm"), result)
+        self.assertEqual("", buf.getvalue())
 
     def test_guidance_inventory_output_refuses_to_overwrite(self) -> None:
         # --output must use exclusive creation; an existing file must not be
@@ -377,12 +382,12 @@ class ValidationHelpersTest(unittest.TestCase):
 
                 public_hygiene.subprocess.run = raise_git_failure
                 files = public_hygiene.candidate_files(root)
-                rel_paths = {str(f.relative_to(root)) for f in files}
-                self.assertIn("src/app.py", rel_paths)
-                self.assertFalse(any(".venv" in p for p in rel_paths))
-                self.assertFalse(any("node_modules" in p for p in rel_paths))
-                self.assertFalse(any("dist" in p for p in rel_paths))
-                self.assertFalse(any("build" in p for p in rel_paths))
+                rel_paths = {f.relative_to(root) for f in files}
+                self.assertIn(Path("src") / "app.py", rel_paths)
+                self.assertFalse(any(".venv" in p.parts for p in rel_paths))
+                self.assertFalse(any("node_modules" in p.parts for p in rel_paths))
+                self.assertFalse(any("dist" in p.parts for p in rel_paths))
+                self.assertFalse(any("build" in p.parts for p in rel_paths))
             finally:
                 public_hygiene.subprocess.run = original_git
 

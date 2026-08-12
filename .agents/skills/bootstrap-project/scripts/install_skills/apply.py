@@ -356,8 +356,8 @@ def generate_diff(plan: dict[str, Any], kit_root: Path, target_root: Path) -> st
                     )
                     continue
                 try:
-                    src_text = src.read_text(encoding="utf-8").splitlines(keepends=True)
-                    dst_text = dst.read_text(encoding="utf-8").splitlines(keepends=True)
+                    src_text = src.read_text(encoding="utf-8").splitlines()
+                    dst_text = dst.read_text(encoding="utf-8").splitlines()
                 except OSError:
                     continue
                 if src_text == dst_text:
@@ -391,8 +391,8 @@ def generate_diff(plan: dict[str, Any], kit_root: Path, target_root: Path) -> st
             if current != desired:
                 lines.append(f"--- ROUTING {rel} ({rstatus})")
                 diff = difflib.unified_diff(
-                    current.splitlines(keepends=True),
-                    desired.splitlines(keepends=True),
+                    current.splitlines(),
+                    desired.splitlines(),
                     fromfile=f"a/{rel}",
                     tofile=f"b/{rel}",
                     lineterm="",
@@ -447,8 +447,8 @@ def generate_diff(plan: dict[str, Any], kit_root: Path, target_root: Path) -> st
             lines.append(f"    -> {rec['action']}")
             if rec.get("current") is not None and rec.get("desired") is not None:
                 diff = difflib.unified_diff(
-                    rec["current"].splitlines(keepends=True),
-                    rec["desired"].splitlines(keepends=True),
+                    rec["current"].splitlines(),
+                    rec["desired"].splitlines(),
                     fromfile=f"a/{rec['file']}",
                     tofile=f"b/{rec['file']}",
                     lineterm="",

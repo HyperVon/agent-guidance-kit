@@ -660,6 +660,9 @@ class InstallSkillsTest(unittest.TestCase):
         self.assertIn("+++ b/", diff)
         # A mashed header would look like "--- a/x.md+++ b/x.md".
         self.assertNotRegex(diff, r"--- a/.*\+\+\+ b/")
+        self.assertIn("-# Skill", diff)
+        self.assertIn("+# Alpha", diff)
+        self.assertNotIn("\n\n", diff)
 
     def test_python_minus_m_entrypoint_plan_succeeds(self) -> None:
         # The package must have exactly one canonical CLI; `python -m

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,6 +21,36 @@ def load():
 
 
 class VerifyHarnessTest(unittest.TestCase):
+    @staticmethod
+    def complete_evidence(harness: str) -> dict[str, str]:
+        return {
+            "harness": harness,
+            "date": "2026-08-12",
+            "task": "Run the code-review skill",
+            "observed_instruction_discovery": "read AGENTS.md",
+            "observed_skill_routing": "loaded skill",
+            "supporting_output": "transcript",
+            "result": "VERIFIED",
+        }
+
+    @staticmethod
+    def write_doc(path: Path, names: list[str]) -> str:
+        text = (
+            "# Harness compatibility\n\n"
+            "| Harness | Repository instructions | Skills | Kit route | Status |\n"
+            "| :--- | :--- | :--- | :--- | :--- |\n"
+        )
+        text += "".join(
+            f"| {name} | `AGENTS.md` hierarchy | Native | canonical | DOCUMENTED |\n"
+            for name in names
+        )
+        path.write_text(text, encoding="utf-8")
+        return text
+
+    @staticmethod
+    def write_evidence(path: Path, evidence: dict[str, str]) -> None:
+        path.write_text(json.dumps(evidence), encoding="utf-8")
+
     def test_structural_only_never_reports_verified(self) -> None:
         module = load()
         # No evidence supplied: structural validity, not harness verification.
@@ -61,6 +93,14 @@ class VerifyHarnessTest(unittest.TestCase):
         )
         self.assertNotEqual([], errors)
 
+    def test_validate_evidence_rejects_non_string_observation(self) -> None:
+        module = load()
+        evidence = self.complete_evidence("Muse Code")
+        evidence["supporting_output"] = {"transcript": "not a string"}  # type: ignore[assignment]
+        normalized, errors = module.validate_evidence(evidence)
+        self.assertNotEqual([], errors)
+        self.assertEqual("", normalized["result"])
+
     def test_made_up_harness_with_evidence_claiming_verified_is_rejected(self) -> None:
         # Even a complete evidence blob for an unknown harness must still be
         # gated by structural validity; here structural checks pass (kit files
@@ -80,30 +120,199 @@ class VerifyHarnessTest(unittest.TestCase):
         module = load()
         with tempfile.TemporaryDirectory() as tmp:
             doc = Path(tmp) / "harness-compatibility.md"
-            doc.write_text(
-                "# Harness compatibility\n\n"
-                "| Harness | Repository instructions | Skills | Kit route | Status |\n"
-                "| :--- | :--- | :--- | :--- | :--- |\n"
-                "| Muse Code | `AGENTS.md` hierarchy | Native | canonical | DOCUMENTED |\n",
-                encoding="utf-8",
-            )
-            evidence = {
-                "harness": "Muse Code",
-                "date": "2026-08-12",
-                "task": "Run the code-review skill",
-                "observed_instruction_discovery": "read AGENTS.md",
-                "observed_skill_routing": "loaded skill",
-                "supporting_output": "transcript",
-                "result": "VERIFIED",
-            }
+            self.write_doc(doc, ["Muse Code"])
+            evidence = self.complete_evidence("Muse Code")
             path = Path(tmp) / "ev.json"
-            path.write_text(json.dumps(evidence), encoding="utf-8")
+            self.write_evidence(path, evidence)
             rc = module.main(["--evidence", str(path), "--update", "--doc", str(doc)])
             self.assertEqual(0, rc)
             text = doc.read_text()
             self.assertIn("VERIFIED", text)
             # Only the targeted Muse row's status cell changed.
             self.assertNotIn("DOCUMENTED", text)
+
+    def test_json_update_reports_success_and_change(self) -> None:
+        module = load()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = root / "harness-compatibility.md"
+            self.write_doc(doc, ["Muse Code"])
+            evidence_path = root / "evidence.json"
+            self.write_evidence(evidence_path, self.complete_evidence("muse code"))
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                rc = module.main(
+                    [
+                        "--json",
+                        "--evidence",
+                        str(evidence_path),
+                        "--update",
+                        "--doc",
+                        str(doc),
+                    ]
+                )
+
+            payload = json.loads(output.getvalue())
+            self.assertEqual(0, rc)
+            self.assertTrue(payload["structurally_valid"])
+            self.assertTrue(payload["evidence_valid"])
+            self.assertEqual("VERIFIED", payload["evidence_result"])
+            self.assertTrue(payload["update_attempted"])
+            self.assertTrue(payload["compatibility_document_changed"])
+            self.assertTrue(payload["update_succeeded"])
+            self.assertTrue(payload["command_succeeded"])
+            self.assertIsNone(payload["update_error"])
+
+    def test_json_invalid_evidence_keeps_structural_result_independent(self) -> None:
+        module = load()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = root / "harness-compatibility.md"
+            before = self.write_doc(doc, ["Muse Code"])
+            evidence_path = root / "evidence.json"
+            self.write_evidence(
+                evidence_path,
+                {"harness": "Muse Code", "date": "2026-08-12", "result": "VERIFIED"},
+            )
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                rc = module.main(
+                    [
+                        "--json",
+                        "--evidence",
+                        str(evidence_path),
+                        "--update",
+                        "--doc",
+                        str(doc),
+                    ]
+                )
+
+            payload = json.loads(output.getvalue())
+            self.assertEqual(1, rc)
+            self.assertTrue(payload["structurally_valid"])
+            self.assertFalse(payload["evidence_valid"])
+            self.assertFalse(payload["compatibility_document_changed"])
+            self.assertFalse(payload["update_succeeded"])
+            self.assertFalse(payload["command_succeeded"])
+            self.assertIn("requires valid --evidence", payload["update_error"])
+            self.assertEqual(before, doc.read_text(encoding="utf-8"))
+
+    def test_json_update_failure_is_machine_readable_and_nonzero(self) -> None:
+        module = load()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = root / "harness-compatibility.md"
+            before = self.write_doc(doc, ["Muse Code"])
+            evidence_path = root / "evidence.json"
+            self.write_evidence(
+                evidence_path, self.complete_evidence("Unknown Harness")
+            )
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                rc = module.main(
+                    [
+                        "--json",
+                        "--evidence",
+                        str(evidence_path),
+                        "--update",
+                        "--doc",
+                        str(doc),
+                    ]
+                )
+
+            payload = json.loads(output.getvalue())
+            self.assertEqual(1, rc)
+            self.assertTrue(payload["structurally_valid"])
+            self.assertTrue(payload["evidence_valid"])
+            self.assertFalse(payload["compatibility_document_changed"])
+            self.assertFalse(payload["update_succeeded"])
+            self.assertIn("no exact harness row", payload["update_error"])
+            self.assertEqual(before, doc.read_text(encoding="utf-8"))
+
+    def test_json_update_encoding_failure_is_machine_readable(self) -> None:
+        module = load()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = root / "harness-compatibility.md"
+            doc.write_bytes(b"\xff\n")
+            evidence_path = root / "evidence.json"
+            self.write_evidence(evidence_path, self.complete_evidence("Muse Code"))
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                rc = module.main(
+                    [
+                        "--json",
+                        "--evidence",
+                        str(evidence_path),
+                        "--update",
+                        "--doc",
+                        str(doc),
+                    ]
+                )
+
+            payload = json.loads(output.getvalue())
+            self.assertEqual(1, rc)
+            self.assertFalse(payload["update_succeeded"])
+            self.assertIn("updating compatibility doc failed", payload["update_error"])
+
+    def test_exact_harness_matching_is_case_insensitive_and_not_substring_based(
+        self,
+    ) -> None:
+        module = load()
+        with tempfile.TemporaryDirectory() as tmp:
+            doc = Path(tmp) / "harness-compatibility.md"
+            before = self.write_doc(
+                doc, ["Muse Code", "OpenCode", "Claude Code", "OpenAI Codex"]
+            )
+            changed, message = module.apply_evidence_to_compatibility(
+                {"harness": "muse code", "result": "VERIFIED"}, doc
+            )
+            self.assertTrue(changed)
+            self.assertIn("exact", message)
+            updated = doc.read_text(encoding="utf-8")
+            self.assertIn(
+                "| Muse Code | `AGENTS.md` hierarchy | Native | canonical | VERIFIED |",
+                updated,
+            )
+            for name in ("OpenCode", "Claude Code", "OpenAI Codex"):
+                self.assertIn(
+                    f"| {name} | `AGENTS.md` hierarchy | Native | canonical | DOCUMENTED |",
+                    updated,
+                )
+            self.assertNotEqual(before, updated)
+
+            doc.write_text(before, encoding="utf-8")
+            with self.assertRaises(module.CompatibilityUpdateError):
+                module.apply_evidence_to_compatibility(
+                    {"harness": "Code", "result": "VERIFIED"}, doc
+                )
+            self.assertEqual(before, doc.read_text(encoding="utf-8"))
+
+    def test_unknown_harness_does_not_modify_compatibility_document(self) -> None:
+        module = load()
+        with tempfile.TemporaryDirectory() as tmp:
+            doc = Path(tmp) / "harness-compatibility.md"
+            before = self.write_doc(doc, ["Muse Code"])
+            with self.assertRaises(module.CompatibilityUpdateError):
+                module.apply_evidence_to_compatibility(
+                    {"harness": "Unknown Harness", "result": "VERIFIED"}, doc
+                )
+            self.assertEqual(before, doc.read_text(encoding="utf-8"))
+
+    def test_duplicate_exact_harness_rows_fail_closed(self) -> None:
+        module = load()
+        with tempfile.TemporaryDirectory() as tmp:
+            doc = Path(tmp) / "harness-compatibility.md"
+            before = self.write_doc(doc, ["Muse Code", "Muse Code"])
+            with self.assertRaisesRegex(module.CompatibilityUpdateError, "ambiguous"):
+                module.apply_evidence_to_compatibility(
+                    {"harness": "Muse Code", "result": "VERIFIED"}, doc
+                )
+            self.assertEqual(before, doc.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

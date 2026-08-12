@@ -291,8 +291,8 @@ def collect_harness_recommendations(kit_root: Path, target_root: Path) -> list[d
 
 
 def render_diff(current: str, desired: str, rel: str) -> str:
-    a = current.splitlines(keepends=True) if current else []
-    b = desired.splitlines(keepends=True) if desired else []
+    a = current.splitlines() if current else []
+    b = desired.splitlines() if desired else []
     diff = difflib.unified_diff(
         a, b, fromfile=f"a/{rel}", tofile=f"b/{rel}", lineterm=""
     )
