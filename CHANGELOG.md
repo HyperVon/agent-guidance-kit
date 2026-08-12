@@ -4,6 +4,17 @@ Notable changes to Agent Guidance Kit are recorded here.
 
 ## Unreleased
 
+### Fixed
+
+- Documentation review corrections: `README.md` skill-count badges and status line
+  now read `22/22` (were `20/20`), matching `docs/evaluations/SUMMARY.md` and
+  `validation-matrix.md` after the `adversarial-pr-review` and `dependency-upgrade`
+  evaluations; the "Included skills" list now covers all 22 catalog skills
+  (added `catalog-discovery`, `adversarial-pr-review`, `git-github-workflow`,
+  `dependency-upgrade`, `upstream-contribution`) and no longer claims it is the
+  "initial" catalog; the validation-matrix link wording no longer calls a
+  `2026-08-11` result the "latest" run.
+
 ## 1.1.0 - 2026-08-12
 
 ### Added

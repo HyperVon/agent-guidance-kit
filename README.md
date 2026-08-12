@@ -1,7 +1,7 @@
 # Agent Guidance Kit
 
 [![Check](https://github.com/HyperVon/agent-guidance-kit/actions/workflows/check.yml/badge.svg)](https://github.com/HyperVon/agent-guidance-kit/actions/workflows/check.yml)
-[![Validated skills: 20](https://img.shields.io/badge/Validated%20skills-20-brightgreen)](.agents/AGENTS.md) [![Evaluated: 20/20](https://img.shields.io/badge/Evaluated-20%2F20-blue)](docs/evaluations/validation-matrix.md) [![Harness: VERIFIED (muse)](https://img.shields.io/badge/Harness-VERIFIED%20(muse)-brightgreen)](docs/harness-compatibility.md)
+[![Validated skills: 22](https://img.shields.io/badge/Validated%20skills-22-brightgreen)](.agents/AGENTS.md) [![Evaluated: 22/22](https://img.shields.io/badge/Evaluated-22%2F22-blue)](docs/evaluations/validation-matrix.md) [![Harness: VERIFIED (muse)](https://img.shields.io/badge/Harness-VERIFIED%20(muse)-brightgreen)](docs/harness-compatibility.md)
 
 Agent Guidance Kit helps a coding agent add curated, project-local guidance to
 an existing software repository without replacing that repository's own rules.
@@ -11,7 +11,7 @@ skills, and waits for approval. A deterministic installer then adds the kit's
 maintenance entrypoint, closes required dependencies, updates managed routing,
 and installs the approved skills without overwriting local divergence.
 
-> Status: v1.1.0 (2026-08-12) — 20/20 skills evaluated, harness VERIFIED (muse). The catalog and integration workflow may evolve
+> Status: v1.1.0 (2026-08-12) — 22/22 skills evaluated, harness VERIFIED (muse). The catalog and integration workflow may evolve
 > in backward-compatible releases.
 
 ## Why use it
@@ -105,16 +105,17 @@ copied into consuming repositories.
 
 ## Included skills
 
-The initial catalog covers:
+The catalog covers:
 
 - Adoption and compatibility: `agent-guidance-maintenance`, `bootstrap-project`,
-  `harness-adaptation`
+  `harness-adaptation`, `catalog-discovery`
 - Review and quality: `ai-slop-detector`, `architecture-review`, `code-review`,
   `documentation-review`, `quality-hardening`, `security-review`,
-  `systematic-debugging`
+  `systematic-debugging`, `adversarial-pr-review`
 - Project and skill maintenance: `parallel-multi-agent`, `reduce-code-size`,
   `rules-and-skills-audit`, `skill-authoring`, `skill-evaluation`,
-  `skill-optimizer`, `skill-reviewer`
+  `skill-optimizer`, `skill-reviewer`, `git-github-workflow`,
+  `dependency-upgrade`, `upstream-contribution`
 
 Technology, product, and domain-specific guidance remains in the consuming
 repository.
@@ -170,7 +171,7 @@ same check on Windows, Ubuntu, and macOS with Python 3.11 and 3.14.
 - [Design and safety model](docs/design.md)
 - [Contributing](CONTRIBUTING.md)
 - [Source provenance](docs/provenance.md)
-- [Validation matrix](docs/evaluations/validation-matrix.md) — where evaluations have been tested and confirmed better than baseline ([human-readable latest run](docs/evaluations/results/2026-08-11-muse-spark-1.2-contributor-muse-code.md), [machine-readable JSON](docs/evaluations/results/2026-08-11-muse-spark-1.2-contributor-muse-code.json))
+- [Validation matrix](docs/evaluations/validation-matrix.md) — where evaluations have been tested and confirmed better than baseline ([human-readable muse-spark run](docs/evaluations/results/2026-08-11-muse-spark-1.2-contributor-muse-code.md), [machine-readable JSON](docs/evaluations/results/2026-08-11-muse-spark-1.2-contributor-muse-code.json))
 - [Catalog expansion evaluation](docs/evaluations/2026-08-10-catalog-expansion.md)
 - [Systematic debugging fixture evaluation](docs/evaluations/2026-08-11-systematic-debugging-fixture.md)
 - [External skill intake evaluation](docs/evaluations/2026-08-10-external-skill-intake.md)
