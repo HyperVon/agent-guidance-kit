@@ -13,7 +13,8 @@ description: >-
 ## Authority and scope
 
 Treat slop as an observable artifact-level deficit, never as evidence about
-authorship, intent, or tool use. Default to audit-and-report: do not edit
+authorship, intent, or tool use. Emoji, verbosity, unusual formatting, or provider
+signals are investigation prompts, not evidence of defect or authorship. Default to audit-and-report: do not edit
 anything unless the user explicitly asks to clean up, fix, or remove findings.
 When cleanup is authorized, make only the smallest safe corrections in scope.
 

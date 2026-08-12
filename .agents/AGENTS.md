@@ -81,6 +81,8 @@ plan.
 | Branch, commit, PR, and release hygiene for Git and GitHub | [git-github-workflow](skills/git-github-workflow/SKILL.md) |
 | Search and triage catalog expansion candidates from public sources | [catalog-discovery](skills/catalog-discovery/SKILL.md) |
 | Propose local skill improvements upstream via fork and PR | [upstream-contribution](skills/upstream-contribution/SKILL.md) |
+| Run adaptive adversarial review before PR creation or update | [adversarial-pr-review](skills/adversarial-pr-review/SKILL.md) |
+| Upgrade pinned dependencies with security-first grouping | [dependency-upgrade](skills/dependency-upgrade/SKILL.md) |
 
 ## Verification
 

@@ -150,17 +150,28 @@
       "route": "Review skill content or external candidates for useful improvements"
     },
     "catalog-discovery": {
-      "related": ["skill-reviewer", "skill-authoring", "upstream-contribution"],
+      "related": [
+        "skill-reviewer",
+        "skill-authoring",
+        "upstream-contribution"
+      ],
       "requires": [],
       "route": "Search and triage catalog expansion candidates from public sources"
     },
     "git-github-workflow": {
-      "related": ["bootstrap-project", "agent-guidance-maintenance"],
+      "related": [
+        "bootstrap-project",
+        "agent-guidance-maintenance"
+      ],
       "requires": [],
       "route": "Branch, commit, PR, and release hygiene for Git and GitHub"
     },
     "upstream-contribution": {
-      "related": ["catalog-discovery", "skill-reviewer", "git-github-workflow"],
+      "related": [
+        "catalog-discovery",
+        "skill-reviewer",
+        "git-github-workflow"
+      ],
       "requires": [],
       "route": "Propose local skill improvements upstream via fork and PR"
     },
@@ -171,6 +182,25 @@
       ],
       "requires": [],
       "route": "Diagnose an observed failure and find its root cause before fixing it"
+    },
+    "adversarial-pr-review": {
+      "related": [
+        "code-review",
+        "git-github-workflow",
+        "security-review",
+        "parallel-multi-agent"
+      ],
+      "requires": [],
+      "route": "Parent-orchestrated adaptive adversarial PR review with bounded read-only tracks"
+    },
+    "dependency-upgrade": {
+      "related": [
+        "security-review",
+        "quality-hardening",
+        "git-github-workflow"
+      ],
+      "requires": [],
+      "route": "Upgrade pinned dependencies with security-first risk grouping and full-gate verification"
     }
   }
 }

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dependency Upgrade"
+  short_description: "Pinned dependency and lockfile upgrade workflow"
+  default_prompt: "Use $dependency-upgrade to safely upgrade pinned dependencies with security-first grouping."
