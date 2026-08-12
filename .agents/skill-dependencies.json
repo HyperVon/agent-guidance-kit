@@ -93,6 +93,15 @@
       "requires": [],
       "route": "Reduce code size while preserving behavior and contracts"
     },
+    "runtime-router-bridge": {
+      "related": [
+        "agent-guidance-maintenance",
+        "bootstrap-project",
+        "harness-adaptation"
+      ],
+      "requires": [],
+      "route": "Coordinate optional Agent Runtime Router adoption without duplicating guidance or policy"
+    },
     "rules-and-skills-audit": {
       "related": [
         "skill-authoring",

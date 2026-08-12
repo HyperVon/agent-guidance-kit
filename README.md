@@ -1,7 +1,7 @@
 # Agent Guidance Kit
 
 [![Check](https://github.com/HyperVon/agent-guidance-kit/actions/workflows/check.yml/badge.svg)](https://github.com/HyperVon/agent-guidance-kit/actions/workflows/check.yml)
-[![Validated skills: 20](https://img.shields.io/badge/Validated%20skills-20-brightgreen)](.agents/AGENTS.md) [![Evaluated: 20/20](https://img.shields.io/badge/Evaluated-20%2F20-blue)](docs/evaluations/validation-matrix.md) [![Harness: VERIFIED (muse)](https://img.shields.io/badge/Harness-VERIFIED%20(muse)-brightgreen)](docs/harness-compatibility.md)
+[![Validated skills: 21](https://img.shields.io/badge/Validated%20skills-21-brightgreen)](.agents/AGENTS.md) [![Evaluated: 20/21](https://img.shields.io/badge/Evaluated-20%2F21-blue)](docs/evaluations/validation-matrix.md) [![Harness: VERIFIED (muse)](https://img.shields.io/badge/Harness-VERIFIED%20(muse)-brightgreen)](docs/harness-compatibility.md)
 
 Agent Guidance Kit helps a coding agent add curated, project-local guidance to
 an existing software repository without replacing that repository's own rules.
@@ -11,7 +11,7 @@ skills, and waits for approval. A deterministic installer then adds the kit's
 maintenance entrypoint, closes required dependencies, updates managed routing,
 and installs the approved skills without overwriting local divergence.
 
-> Status: v1.1.0 (2026-08-12) — 20/20 skills evaluated, harness VERIFIED (muse). The catalog and integration workflow may evolve
+> Status: v1.1.0 (2026-08-12) — 20/21 skills evaluated, harness VERIFIED (muse). The catalog and integration workflow may evolve
 > in backward-compatible releases.
 
 ## Why use it
@@ -21,6 +21,9 @@ and installs the approved skills without overwriting local divergence.
 - Keep one canonical set of project rules while adapting to the coding harness
   currently in use.
 - Review every proposed addition before changing the target repository.
+- Add optional Agent Runtime Router adoption to a project that already uses the
+  kit while keeping guidance, routing policy, provider catalogs, and adapters
+  owned by their respective projects.
 
 ## Quick start
 
@@ -47,6 +50,12 @@ Do not modify anything until I approve the exact plan.
 
 The [adoption prompt](docs/adoption-prompt.md) provides a longer copy-paste
 request that also profiles the current harness.
+
+If the project also wants Agent Runtime Router, use the optional
+[`runtime-router-bridge`](.agents/skills/runtime-router-bridge/SKILL.md) skill
+and its [paired adoption prompt](docs/adoption-prompt.md#coordinate-agent-runtime-router).
+It coordinates separate read-only plans and approval gates; it does not copy
+router code, provider policy, catalogs, or credentials into this kit.
 
 ### Update an existing adoption
 
@@ -108,7 +117,7 @@ copied into consuming repositories.
 The initial catalog covers:
 
 - Adoption and compatibility: `agent-guidance-maintenance`, `bootstrap-project`,
-  `harness-adaptation`
+  `harness-adaptation`, `runtime-router-bridge`
 - Review and quality: `ai-slop-detector`, `architecture-review`, `code-review`,
   `documentation-review`, `quality-hardening`, `security-review`,
   `systematic-debugging`

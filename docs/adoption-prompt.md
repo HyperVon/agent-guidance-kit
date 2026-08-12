@@ -38,6 +38,42 @@ locator when the plan calls for it, verify source rediscovery, run the adopted
 target validator, make only separately approved integration edits, and report
 the receipt and verification evidence.
 
+## Coordinate Agent Runtime Router
+
+Use this paired prompt only after the target already adopts Agent Guidance Kit
+and you have an explicit Agent Runtime Router checkout. Replace the three paths
+and keep the two projects' plans and approvals separate:
+
+```text
+The target already uses Agent Guidance Kit at /path/to/agent-guidance-kit.
+Add the optional Agent Runtime Router from /path/to/agent-runtime-router to
+/path/to/project.
+
+Use runtime-router-bridge, bootstrap-project, harness-adaptation, and
+agent-guidance-maintenance from the kit. Also read bootstrap-runtime-router and
+agent-runtime-router-maintenance from the explicit ARR checkout. Treat the
+target's existing guidance and any existing router as authoritative. First do a
+read-only inventory: identify the active harness and its observed capabilities,
+inspect the target's current routing/policy/blacklist/cache owners, and produce
+separate Guidance Kit and ARR mechanical/integration plans. Include exact
+owners, files, source revisions, adapter/profile evidence, unknowns, conflicts,
+approval gates, and verification commands.
+
+Do not fetch a router, read credentials, run provider probes, refresh a catalog,
+edit files, or invent a provider/model/launch command. Do not create a second
+router. Wait for approval of the Guidance Kit plan, the ARR mechanical plan,
+the target-local semantic adapter/policy plan, and any native worker execution
+separately. A fresh target may remain INCOMPLETE until its harness adapter and
+profile evidence exist; report that honestly.
+```
+
+After the approvals, apply only the unchanged plans through their own
+receipt-aware gates. Keep provider/model policy, blacklist, free/paid rules,
+cache refresh, and native launch syntax target-owned. Verify both maintenance
+validators plus ARR profile, dry-run adapter verification, audit, and a harmless
+synthetic route. A synthetic route proves installation safety, not real provider
+compatibility; report any real-provider validation as a separate result.
+
 ## Updating an existing adoption
 
 After the target has `agent-guidance-maintenance`, use this prompt:

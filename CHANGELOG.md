@@ -4,6 +4,13 @@ Notable changes to Agent Guidance Kit are recorded here.
 
 ## Unreleased
 
+### Added
+
+- Optional `runtime-router-bridge` skill and paired adoption prompt for projects
+  that use Agent Guidance Kit and Agent Runtime Router together, with separate
+  ownership, plans, approvals, and verification. The kit does not copy ARR
+  runtime code, provider policy, catalogs, or credentials.
+
 ## 1.1.0 - 2026-08-12
 
 ### Added

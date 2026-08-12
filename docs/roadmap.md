@@ -97,6 +97,11 @@ update it in the same PR that implements each item and keep `make check` green.
   generalization), then — only after explicit approval — fork/branch/push and
   open a PR via `gh` for maintainer review through `skill-reviewer` intake.
   Never auto-push; keep `public_hygiene_check` and `docs/provenance.md` gates.
+- [x] **3D** `runtime-router-bridge` (optional) — coordinate Agent Runtime
+  Router adoption for an existing kit user through separate mechanical and
+  semantic plans, preserving target-owned routing policy, catalogs, blacklists,
+  caches, and harness adapters. Bridge eval cases are designed but not yet
+  executed.
 
 ### Tranche 4 — Docs and process
 

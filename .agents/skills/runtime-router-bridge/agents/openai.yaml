@@ -1,0 +1,4 @@
+interface:
+  display_name: "Runtime Router Bridge"
+  short_description: "Coordinate Guidance Kit and ARR adoption"
+  default_prompt: "Use $runtime-router-bridge to plan optional Agent Runtime Router adoption without duplicating guidance or policy."
