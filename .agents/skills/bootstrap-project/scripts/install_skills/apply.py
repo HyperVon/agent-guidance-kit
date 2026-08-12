@@ -407,6 +407,8 @@ def generate_diff(plan: dict[str, Any], kit_root: Path, target_root: Path) -> st
             f"--- ROUTING CONFLICT {routing.get('path')}: {routing.get('conflict', {}).get('reason', 'unknown')}"
         )
     # Harness & AGENTS.md recommendations (read-only, via harness_recommendations.py)
+    # HEAD's elaborate loader handles both present and absent harness_recommendations.py
+    # (origin/main deleted the script, so this gracefully falls back to simple notes)
     try:
         import importlib.util
         import sys as _sys
@@ -470,7 +472,7 @@ def generate_diff(plan: dict[str, Any], kit_root: Path, target_root: Path) -> st
         else:
             raise FileNotFoundError
     except Exception:
-        # Fallback to legacy simple notes
+        # Fallback to legacy simple notes (matches origin/main behavior)
         harness_notes: list[str] = []
         for harness_file in (
             "AGENTS.md",

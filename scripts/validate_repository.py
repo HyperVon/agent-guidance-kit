@@ -204,6 +204,22 @@ def validate_harness_imports(errors: list[str]) -> None:
                 "AGENTS.md: root should be thin pointer, not duplicate canonical policy"
             )
 
+    copilot = ROOT / ".github/copilot-instructions.md"
+    if not copilot.is_file() or copilot.is_symlink():
+        errors.append(
+            ".github/copilot-instructions.md: missing real harness entrypoint"
+        )
+    else:
+        text = without_fenced_code(copilot.read_text(encoding="utf-8"))
+        has_canonical = any(
+            canonical in text
+            for canonical in ("AGENTS.md", ".agents/AGENTS.md", ".agents/OPERATING.md")
+        )
+        if not has_canonical:
+            errors.append(
+                ".github/copilot-instructions.md: expected at least one canonical-file reference"
+            )
+
 
 def validate_skills(errors: list[str]) -> tuple[set[str], set[str]]:
     names: set[str] = set()
