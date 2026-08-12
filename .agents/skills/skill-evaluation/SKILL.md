@@ -114,12 +114,14 @@ stays current:
    in `docs/evaluations/results/README.md` — include `harness` (`muse code` +
    version), `model` (`muse-spark-1.2-contributor` + provider + reasoning
    effort), `baseline`, per-case `skill_pass`/`baseline_pass`/`better`, and
-   `decision`. Use `YYYY-MM-DD-<model>-<harness>.json` for multi-skill runs.
-2. Update `docs/evaluations/validation-matrix.md` to link the new result file
-   (`✓` when `better=true` and `skill_pass > baseline_pass`, `=` when both
-   passed without discrimination, `–` when not yet tested). Keep raw outputs
-   in the ignored workspace; only the sanitized summary and this JSON are
-   committed.
+   `decision`. Use `YYYY-MM-DD-<model>-<harness>.json` for multi-skill runs
+   **and** its `*.md` human-readable companion (summary table + per-skill detail;
+   copy `2026-08-11-muse-spark-1.2-contributor-muse-code.md`).
+2. Update `docs/evaluations/validation-matrix.md` to link both the `*.json`
+   and the `*.md` (`✓` when `better=true` and `skill_pass > baseline_pass`, `=`
+   when both passed without discrimination, `–` when not yet tested). Keep raw
+   outputs in the ignored workspace; only the sanitized summary, `*.md`, and
+   `*.json` are committed.
 3. Run `make check` — `scripts/validate_repository.py` validates the JSON
    shape, that each `skill_name`/`id`/`kind` matches the committed
    `evals/evals.json`, and that matrix links resolve.

@@ -46,12 +46,16 @@ Both shapes are validated. Prefer one aggregated file per harness/model/timestam
 * `decision` in `KEEP`, `KEEP_PROVISIONAL`, `REVISE`, `MERGE`, `DEFER`, `REJECT`.
 * Linked file must exist when referenced from `validation-matrix.md`.
 
+## Human-readable companion
+
+Every `*.json` has a `*.md` sibling with the same basename — e.g., `2026-08-11-muse-spark-1.2-contributor-muse-code.md` — containing the summary table, per-skill `skill_pass`/`baseline_pass`/`better`, and decision. Keep them in sync; the markdown is for humans, the JSON is for validation. The matrix links to both (`json` · `human`).
+
 ## How to add a run
 
-1. Run each `evals/evals.json` case twice in a **dedicated empty directory** containing only `evals/files/*` (per `skill-evaluation`), once with the skill and once with the baseline, same prompts/tools/network/model.
+1. Run each `evals/evals.json` case twice in a **dedicated empty directory** containing only `evals/files/*` (per `skill-evaluation`), once with the skill and once with the baseline, same prompts/tools/network/model. Harness is `muse code`, model is `muse-spark-1.2-contributor` (record provider + reasoning effort).
 2. Grade every `assertions` entry with quoted evidence from the output; keep the raw outputs in the ephemeral workspace (not here).
-3. Write the JSON above and a sanitized markdown report (no raw outputs, no private fixtures).
-4. Update `docs/evaluations/validation-matrix.md` to link the new result file.
+3. Write the JSON above **and** its `*.md` human-readable companion (copy the shape from `2026-08-11-muse-spark-1.2-contributor-muse-code.md`).
+4. Update `docs/evaluations/validation-matrix.md` to link both `json` and `human` files.
 5. Run `make check` — the validator will check the JSON and the matrix links.
 
 ## Current harness/model identifiers

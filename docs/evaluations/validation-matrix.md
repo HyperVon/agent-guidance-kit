@@ -5,27 +5,27 @@ This matrix tracks where skill evaluations have been executed in isolated clean-
 * `✓` — skill condition passed all `matching`/`neighboring`/`ambiguous` assertions and outperformed baseline (`skill_pass == total`, `baseline_pass < total`, `better=true`, decision `KEEP`/`KEEP_PROVISIONAL`).
 * `=` — both conditions passed (no discriminating advantage, `KEEP_PROVISIONAL`).
 * `–` — not yet tested on that model/harness.
-* Links point to the sanitized report and the machine-readable result file.
+* Links point to the sanitized report (`results/*.md` — human-readable) and the machine-readable result file (`results/*.json` — validated by `scripts/validate_repository.py`).
 
 | Skill | `gpt-5.6-luna` / Codex (`low`) | `gpt-5.6-sol` / Codex (`xhigh`) | `muse-spark-1.2-contributor` / `muse-code` (`0.1.0`) |
 | :--- | :--- | :--- | :--- |
-| `agent-guidance-maintenance` | [✓](2026-08-10-catalog-expansion.md) | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) |
-| `ai-slop-detector` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) |
-| `architecture-review` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) |
-| `bootstrap-project` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) |
-| `code-review` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) |
-| `documentation-review` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) |
-| `harness-adaptation` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) |
-| `parallel-multi-agent` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) |
-| `quality-hardening` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) |
-| `reduce-code-size` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) |
-| `rules-and-skills-audit` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) |
-| `security-review` | [✓](2026-08-10-catalog-expansion.md) | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) |
-| `skill-authoring` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) |
-| `skill-evaluation` | [✓](2026-08-10-catalog-expansion.md) | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) |
-| `skill-optimizer` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) |
-| `skill-reviewer` | [✓](2026-08-10-external-skill-intake.md) (`fab98c2`) | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) |
-| `systematic-debugging` | [=](2026-08-10-catalog-expansion.md) / [✓](2026-08-11-systematic-debugging-fixture.md)† | [=](2026-08-11-systematic-debugging-fixture.md)† | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) |
+| `agent-guidance-maintenance` | [✓](2026-08-10-catalog-expansion.md) | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
+| `ai-slop-detector` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
+| `architecture-review` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
+| `bootstrap-project` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
+| `code-review` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
+| `documentation-review` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
+| `harness-adaptation` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
+| `parallel-multi-agent` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
+| `quality-hardening` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
+| `reduce-code-size` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
+| `rules-and-skills-audit` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
+| `security-review` | [✓](2026-08-10-catalog-expansion.md) | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
+| `skill-authoring` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
+| `skill-evaluation` | [✓](2026-08-10-catalog-expansion.md) | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
+| `skill-optimizer` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
+| `skill-reviewer` | [✓](2026-08-10-external-skill-intake.md) (`fab98c2`) | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
+| `systematic-debugging` | [=](2026-08-10-catalog-expansion.md) / [✓](2026-08-11-systematic-debugging-fixture.md)† | [=](2026-08-11-systematic-debugging-fixture.md)† | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
 
 † `systematic-debugging` fixture evaluation (order-recovery) passed 4/4 in both conditions for `luna` and `sol` on Codex — no discriminating advantage, decision `KEEP_PROVISIONAL`. See [2026-08-11-systematic-debugging-fixture.md](2026-08-11-systematic-debugging-fixture.md).
 
