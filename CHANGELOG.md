@@ -1,15 +1,19 @@
-# Agent Guidance Kit v1.0.0
+# Changelog
 
-## Release Notes
-- Initial release of Agent Guidance Kit
-- Core documentation and skill catalog established
-- Compatibility with major harnesses documented
+Notable changes to Agent Guidance Kit are recorded here.
 
-## Key Improvements
-- Added comprehensive documentation for harness compatibility
-- Fixed broken links in AGENTS.md
-- Added CHANGELOG for version tracking
+## Unreleased
 
-## Future Plans
-- Expand skill catalog
-- Improve cross-harness integration
+### Added
+
+- GitHub issue forms, a pull request template, community guidance, and
+  Dependabot configuration.
+- Repository metadata and security defaults for public collaboration.
+
+## 1.0.0 - 2026-08-10
+
+### Added
+
+- The initial project-local guidance catalog and approval-gated adoption flow.
+- Compatibility guidance for supported and capability-compatible agent harnesses.
+- Deterministic validation, installation, inventory, and source-resolution tools.

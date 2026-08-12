@@ -1,0 +1,43 @@
+name: Improvement proposal
+description: Propose a focused improvement to the kit or its adoption workflow.
+title: "[Proposal]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What concrete user or maintainer problem needs to be solved?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe observable success without prescribing unnecessary design.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Existing alternatives
+      description: What current workflow or simpler alternative did you consider?
+    validations:
+      required: true
+  - type: textarea
+    id: portability
+    attributes:
+      label: Portability and safety
+      description: >-
+        Explain how the proposal remains project-local, approval-aware, and safe
+        across supported harnesses.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      description: How can the outcome be tested or evaluated?
+    validations:
+      required: true
