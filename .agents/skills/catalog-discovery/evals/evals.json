@@ -1,0 +1,36 @@
+{
+  "skill_name": "catalog-discovery",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "Search GitHub and harness docs for candidate workflows that could improve the catalog and map them to dispositions.",
+      "expected_output": "The agent defines a bounded scope, captures provenance per source, compares behavior to the current catalog, and produces an evidence table with IMPROVE_EXISTING/NEW_SKILL dispositions.",
+      "assertions": [
+        "The response records source URL, revision, date, and license",
+        "The response does not execute or install external content",
+        "The response produces a disposition table handoff to skill-reviewer"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "neighboring",
+      "prompt": "Adopt the kit into this target repository with the smallest useful skills.",
+      "expected_output": "The agent routes to bootstrap-project rather than treating adoption as a catalog discovery search.",
+      "assertions": [
+        "The response does not treat target adoption as a catalog search",
+        "The response routes to bootstrap-project or agent-guidance-maintenance"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "ambiguous",
+      "prompt": "Find new skills for the project.",
+      "expected_output": "The agent asks whether this is catalog expansion research (this repo) versus target adoption improvement, and asks for scope and sources before searching.",
+      "assertions": [
+        "The response asks for scope and clarifies catalog vs target",
+        "The response does not bulk-copy external content from the vague request"
+      ]
+    }
+  ]
+}

@@ -46,6 +46,11 @@ def node_toolchain() -> tuple[str, str] | None:
         return None
     if result.returncode != 0 or major < 22:
         return None
+    if major > 30:
+        print(
+            f"WARNING Node.js {major} is newer than CI-validated 26; proceeding.",
+            file=sys.stderr,
+        )
     return node, npm
 
 

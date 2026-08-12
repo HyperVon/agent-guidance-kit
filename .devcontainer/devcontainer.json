@@ -1,0 +1,16 @@
+{
+  "name": "agent-guidance-kit",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22",
+      "installYarnUsingApt": false
+    }
+  },
+  "postCreateCommand": "python scripts/setup_dev.py",
+  "customizations": {
+    "vscode": {
+      "extensions": ["charliermarsh.ruff", "davidanson.vscode-markdownlint"]
+    }
+  }
+}

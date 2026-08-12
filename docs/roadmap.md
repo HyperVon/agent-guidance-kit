@@ -46,45 +46,57 @@ update it in the same PR that implements each item and keep `make check` green.
 
 ### Tranche 1 — Fixes (evidence-backed, low risk)
 
-- [ ] **F1** Resolve `pyproject.toml` absence vs `docs/release.md` version field
+- [x] **F1** Resolve `pyproject.toml` absence vs `docs/release.md` version field
   — add `pyproject.toml` as canonical version/config owner or update docs.
-- [ ] **F2** Extend `scripts/validate_repository.py` harness validation to
+- [x] **F2** Extend `scripts/validate_repository.py` harness validation to
   `.github/copilot-instructions.md`.
-- [ ] **F3** Add `.kilo`, `.idea`, `.cursor`, `.vscode`, `.clinerules` to
+- [x] **F3** Add `.kilo`, `.idea`, `.cursor`, `.vscode`, `.clinerules` to
   `EXCLUDED_DIRECTORIES` in `scripts/validate_repository.py` and hygiene/markdown ignores.
-- [ ] **F4** Clarify Node support: `scripts/setup_dev.py >=22` vs CI `26.6.0` —
+- [x] **F4** Clarify Node support: `scripts/setup_dev.py >=22` vs CI `26.6.0` —
   document range and add `22` to CI matrix.
 - [ ] **F5** Harden `requirements-dev.txt` — add hashes or `pip --require-hashes`
   path and update `scripts/setup_dev.py`.
-- [ ] **F6** Expand `scripts/public_hygiene_check.py` patterns (Anthropic, npm,
+- [x] **F6** Expand `scripts/public_hygiene_check.py` patterns (Anthropic, npm,
   generic tokens) + tests.
-- [ ] **F7** Document `inventory_project.py` truncation default and surface
+- [x] **F7** Document `inventory_project.py` truncation default and surface
   `truncated` in markdown summary.
 
 ### Tranche 2 — Enhancements to existing features
 
-- [ ] **2A** Centralize Python config in `pyproject.toml` (`[tool.ruff]`,
+- [x] **2A** Centralize Python config in `pyproject.toml` (`[tool.ruff]`,
   `[project]` version).
-- [ ] **2B** `scripts/check.py --quick` / `--fix` hints (keep full gate for CI).
+- [x] **2B** `scripts/check.py --quick` / `--fix` hints (keep full gate for CI).
 - [ ] **2C** `install_skills` UX: `plan --diff` and `plan --check` (conflict-only).
 - [ ] **2D** `scripts/validate_repository.py --json` and `related`-link checks.
 - [ ] **2E** Harness verification probe `scripts/verify_harness.py` to move
   `muse code` from `BEST_EFFORT` → `VERIFIED` (`docs/harness-compatibility.md`).
 - [ ] **2F** `pre-commit` config + `.devcontainer` for uniform setup.
+- [x] **2G** Catalog-driven existing-prompt improvement (`ADAPT` enhancement) —
+  inventory local `AGENTS.md`/`CLAUDE.md`/`.cursor/rules` bodies, compare against
+  catalog skill triggers/decisions/stop-conditions, propose paste-ready
+  text-level improvements for `KEEP_LOCAL`/`ADAPT` with approval gate via
+  `skill-authoring`; re-read as future agent and verify with `make check`.
 
 ### Tranche 3 — New skills
 
-- [ ] **3A** `git-github-workflow` (distributed) — branching, atomic commits
+- [x] **3A** `git-github-workflow` (distributed) — branching, atomic commits
   (conventional, no personal email leak), push approval, PR/issue hygiene
   (`pull_request_template.md`, issue forms, `CODEOWNERS`), branch protection,
   release tagging, hygiene `make check`. Requires `skill-authoring` +
   `skill-evaluation` (`matching`/`neighboring`/`ambiguous`) before admission.
-- [ ] **3B** `catalog-discovery` (**SOURCE_ONLY**, not shipped to targets) —
+- [x] **3B** `catalog-discovery` (**SOURCE_ONLY**, not shipped to targets) —
   proactive GitHub/harness-docs search for candidate workflows, provenance-tracked
   evidence table → `IMPROVE_EXISTING`/`NEW_SKILL`/`PROJECT_SPECIFIC`/`DEFER`/`REJECT`
   handoff to `skill-reviewer` (`references/external-skill-intake.md`). Enforces
   `docs/roadmap.md:14` 8-step gate, no execution of fetched content, no network
   in deterministic helpers.
+- [x] **3C** `upstream-contribution` (distributed proposer + maintainer intake) —
+  let a kit adopter scan its local `.agents/skills/` and diverged receipts,
+  identify generic `IMPROVE_EXISTING`/`NEW_SKILL` candidates, build a
+  provenance-tracked evidence table (source, license, revision, redacted
+  generalization), then — only after explicit approval — fork/branch/push and
+  open a PR via `gh` for maintainer review through `skill-reviewer` intake.
+  Never auto-push; keep `public_hygiene_check` and `docs/provenance.md` gates.
 
 ### Tranche 4 — Docs and process
 
@@ -95,5 +107,5 @@ update it in the same PR that implements each item and keep `make check` green.
 
 Progress is tracked here and in the PR description. Each tranche lands as one
 or more focused commits with `make check` evidence. Distribution impact: 3A
-ships to targets; 3B remains repository-only and is excluded from
-`install_skills` manifests.
+and 3C proposer ship to targets; 3B remains repository-only and is excluded
+from `install_skills` manifests.

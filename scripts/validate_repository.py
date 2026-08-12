@@ -34,6 +34,11 @@ EXCLUDED_DIRECTORIES = frozenset(
         "coverage",
         "dist",
         "node_modules",
+        ".kilo",
+        ".idea",
+        ".cursor",
+        ".vscode",
+        ".clinerules",
     }
 )
 
@@ -161,6 +166,22 @@ def validate_harness_imports(errors: list[str]) -> None:
                 continue
             if not resolved.is_file() or resolved.is_symlink():
                 errors.append(f"{relative_path}: broken or unsafe import: {raw_target}")
+
+    copilot = ROOT / ".github/copilot-instructions.md"
+    if not copilot.is_file() or copilot.is_symlink():
+        errors.append(
+            ".github/copilot-instructions.md: missing real harness entrypoint"
+        )
+    else:
+        text = without_fenced_code(copilot.read_text(encoding="utf-8"))
+        has_canonical = any(
+            canonical in text
+            for canonical in ("AGENTS.md", ".agents/AGENTS.md", ".agents/OPERATING.md")
+        )
+        if not has_canonical:
+            errors.append(
+                ".github/copilot-instructions.md: expected at least one canonical-file reference"
+            )
 
 
 def validate_skills(errors: list[str]) -> tuple[set[str], set[str]]:

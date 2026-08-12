@@ -140,12 +140,29 @@
     },
     "skill-reviewer": {
       "related": [
+        "catalog-discovery",
         "documentation-review",
         "rules-and-skills-audit",
-        "skill-authoring"
+        "skill-authoring",
+        "upstream-contribution"
       ],
       "requires": [],
       "route": "Review skill content or external candidates for useful improvements"
+    },
+    "catalog-discovery": {
+      "related": ["skill-reviewer", "skill-authoring", "upstream-contribution"],
+      "requires": [],
+      "route": "Search and triage catalog expansion candidates from public sources"
+    },
+    "git-github-workflow": {
+      "related": ["bootstrap-project", "agent-guidance-maintenance"],
+      "requires": [],
+      "route": "Branch, commit, PR, and release hygiene for Git and GitHub"
+    },
+    "upstream-contribution": {
+      "related": ["catalog-discovery", "skill-reviewer", "git-github-workflow"],
+      "requires": [],
+      "route": "Propose local skill improvements upstream via fork and PR"
     },
     "systematic-debugging": {
       "related": [

@@ -39,3 +39,9 @@ virtual environment's Python and inspect the complete diff. `make setup` and
 required Markdown lint plus Python lint and formatting checks; fix every
 finding before committing or pushing. Do not publish, push, or open a pull
 request unless the repository owner explicitly asks.
+
+For faster inner loop, use `python scripts/check.py --quick` (skips
+markdownlint and `agentskills` validate). Prefer the full `make check` before
+push. If you use pre-commit, `pre-commit install` mirrors the same gates
+locally (`ruff`, `validate_repository.py`, `public_hygiene_check.py`,
+`markdownlint`).
