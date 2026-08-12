@@ -135,9 +135,13 @@ def validate_links(errors: list[str]) -> None:
                 )
 
 
-def validate_harness_imports(errors: list[str]) -> None:
+def validate_harness_imports(
+    root: Path = ROOT, errors: list[str] | None = None
+) -> None:
+    if errors is None:
+        errors = []
     for relative_path in (Path("CLAUDE.md"), Path("GEMINI.md")):
-        path = ROOT / relative_path
+        path = root / relative_path
         if not path.is_file() or path.is_symlink():
             errors.append(f"{relative_path}: missing real harness entrypoint")
             continue
@@ -158,7 +162,7 @@ def validate_harness_imports(errors: list[str]) -> None:
                 continue
             resolved = (path.parent / target).resolve()
             try:
-                resolved.relative_to(ROOT)
+                resolved.relative_to(root)
             except ValueError:
                 errors.append(
                     f"{relative_path}: import escapes repository: {raw_target}"
@@ -172,7 +176,7 @@ def validate_harness_imports(errors: list[str]) -> None:
                 f"{relative_path}: should be thin adapter, not duplicate canonical policy"
             )
 
-    copilot = ROOT / ".github/copilot-instructions.md"
+    copilot = root / ".github/copilot-instructions.md"
     if not copilot.is_file() or copilot.is_symlink():
         errors.append(
             ".github/copilot-instructions.md: missing real harness entrypoint"
@@ -194,7 +198,7 @@ def validate_harness_imports(errors: list[str]) -> None:
             )
 
     # Root AGENTS.md thin-pointer check
-    root_agents = ROOT / "AGENTS.md"
+    root_agents = root / "AGENTS.md"
     if root_agents.is_file() and not root_agents.is_symlink():
         raw = root_agents.read_text(encoding="utf-8")
         if ".agents/AGENTS.md" not in raw:
@@ -202,22 +206,6 @@ def validate_harness_imports(errors: list[str]) -> None:
         if "Product boundary" in raw or "Skill index" in raw:
             errors.append(
                 "AGENTS.md: root should be thin pointer, not duplicate canonical policy"
-            )
-
-    copilot = ROOT / ".github/copilot-instructions.md"
-    if not copilot.is_file() or copilot.is_symlink():
-        errors.append(
-            ".github/copilot-instructions.md: missing real harness entrypoint"
-        )
-    else:
-        text = without_fenced_code(copilot.read_text(encoding="utf-8"))
-        has_canonical = any(
-            canonical in text
-            for canonical in ("AGENTS.md", ".agents/AGENTS.md", ".agents/OPERATING.md")
-        )
-        if not has_canonical:
-            errors.append(
-                ".github/copilot-instructions.md: expected at least one canonical-file reference"
             )
 
 
@@ -860,7 +848,7 @@ def main() -> int:
     validate_skill_dependencies(skills, errors)
     validate_related_links(skills, errors)
     validate_links(errors)
-    validate_harness_imports(errors)
+    validate_harness_imports(ROOT, errors)
     validate_evaluation_results(skills, errors)
     validate_evaluation_summary(errors)
     validate_python(errors)

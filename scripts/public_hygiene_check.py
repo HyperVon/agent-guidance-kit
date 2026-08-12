@@ -39,7 +39,7 @@ FORBIDDEN_NAMES = {".env", "id_rsa", "id_ed25519", "kubeconfig"}
 FORBIDDEN_SUFFIXES = {".key", ".p12", ".pfx", ".pem"}
 
 
-def candidate_files() -> list[Path]:
+def candidate_files(root: Path = ROOT) -> list[Path]:
     try:
         result = subprocess.run(
             [
@@ -62,8 +62,26 @@ def candidate_files() -> list[Path]:
         subprocess.TimeoutExpired,
     ):
         paths = []
-        for directory, dirnames, filenames in os.walk(ROOT):
-            dirnames[:] = sorted(name for name in dirnames if name != ".git")
+        fallback_excluded = frozenset(
+            {
+                ".git",
+                ".venv",
+                "venv",
+                "node_modules",
+                "dist",
+                "build",
+                "__pycache__",
+                ".local",
+                ".cache",
+                ".pytest_cache",
+                ".mypy_cache",
+                ".ruff_cache",
+            }
+        )
+        for directory, dirnames, filenames in os.walk(root):
+            dirnames[:] = sorted(
+                name for name in dirnames if name not in fallback_excluded
+            )
             paths.extend(Path(directory) / name for name in sorted(filenames))
         return paths
     return [

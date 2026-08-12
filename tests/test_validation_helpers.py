@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import os
+import subprocess
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,6 +26,10 @@ validate_repository = load(
 public_hygiene = load("public_hygiene_check", ROOT / "scripts/public_hygiene_check.py")
 check = load("check", ROOT / "scripts/check.py")
 setup_dev = load("setup_dev", ROOT / "scripts/setup_dev.py")
+guidance_inventory = load(
+    "guidance_inventory",
+    ROOT / ".agents/skills/skill-optimizer/scripts/guidance_inventory.py",
+)
 
 
 class ValidationHelpersTest(unittest.TestCase):
@@ -269,6 +276,115 @@ class ValidationHelpersTest(unittest.TestCase):
         self.assertIsNotNone(
             checks["private key block"].search("BEGIN " + "PRIVATE KEY")
         )
+
+    def test_validate_harness_imports_does_not_duplicate_copilot_errors(
+        self,
+    ) -> None:
+        # When .github/copilot-instructions.md is missing, the error must appear
+        # exactly once (Finding A: previously duplicated).
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".agents").mkdir()
+            (root / ".agents/AGENTS.md").write_text(
+                "# Canonical\n\nProduct boundary\n", encoding="utf-8"
+            )
+            (root / "AGENTS.md").write_text(
+                "# Pointer to .agents/AGENTS.md\n", encoding="utf-8"
+            )
+            errors: list[str] = []
+            validate_repository.validate_harness_imports(root, errors)
+            copilot_errors = [e for e in errors if "copilot-instructions.md" in e]
+            self.assertEqual(1, len(copilot_errors))
+
+    def test_node_toolchain_warns_for_versions_above_26(self) -> None:
+        # CI matrix validates Node 22 and 26. Versions strictly above 26
+        # should receive a warning (Finding D: was > 30).
+        bin_dir = Path(tempfile.mkdtemp())
+        fake_node = bin_dir / "node"
+        fake_node.write_text("#!/bin/sh\necho 'v28.0.0'\n", encoding="utf-8")
+        fake_node.chmod(0o755)
+        original_path = os.environ.get("PATH", "")
+        os.environ["PATH"] = f"{bin_dir}:{original_path}"
+        original_which = setup_dev.shutil.which
+        try:
+            buf = io.StringIO()
+            with redirect_stderr(buf):
+                result = setup_dev.node_toolchain()
+            self.assertIsNotNone(result)
+            self.assertIn("newer than CI-validated 26", buf.getvalue())
+        finally:
+            os.environ["PATH"] = original_path
+            setup_dev.shutil.which = original_which
+
+    def test_node_toolchain_no_warning_for_ci_validated_versions(self) -> None:
+        bin_dir = Path(tempfile.mkdtemp())
+        fake_node = bin_dir / "node"
+        fake_node.write_text("#!/bin/sh\necho 'v26.0.0'\n", encoding="utf-8")
+        fake_node.chmod(0o755)
+        original_path = os.environ.get("PATH", "")
+        os.environ["PATH"] = f"{bin_dir}:{original_path}"
+        original_which = setup_dev.shutil.which
+        try:
+            buf = io.StringIO()
+            with redirect_stderr(buf):
+                result = setup_dev.node_toolchain()
+            self.assertIsNotNone(result)
+            self.assertEqual("", buf.getvalue())
+        finally:
+            os.environ["PATH"] = original_path
+            setup_dev.shutil.which = original_which
+
+    def test_guidance_inventory_output_refuses_to_overwrite(self) -> None:
+        # --output must use exclusive creation; an existing file must not be
+        # silently overwritten (Finding B).
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            root.mkdir()
+            (root / "AGENTS.md").write_text("# Agent\n", encoding="utf-8")
+            output = root / "inventory.md"
+            output.write_text("stale\n", encoding="utf-8")
+            rc = guidance_inventory.main(["--root", str(root), "--output", str(output)])
+            self.assertEqual(2, rc)
+            self.assertEqual("stale\n", output.read_text(encoding="utf-8"))
+
+    def test_guidance_inventory_output_creates_new_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            root.mkdir()
+            (root / "AGENTS.md").write_text("# Agent\n", encoding="utf-8")
+            output = root / "inventory.md"
+            rc = guidance_inventory.main(["--root", str(root), "--output", str(output)])
+            self.assertEqual(0, rc)
+            self.assertTrue(output.is_file())
+            self.assertIn("Guidance inventory", output.read_text(encoding="utf-8"))
+
+    def test_public_hygiene_fallback_excludes_dependency_directories(self) -> None:
+        # When git is unavailable, the fallback walk must skip .venv,
+        # node_modules, dist, build, etc. (Finding H).
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            (root / "src").mkdir(parents=True)
+            (root / "src/app.py").write_text("print('hello')\n", encoding="utf-8")
+            for dep_dir in (".venv", "node_modules", "dist", "build"):
+                file_path = root / dep_dir / "secret.txt"
+                file_path.parent.mkdir(parents=True)
+                file_path.write_text("AKIA" + "IOSFODNN7EXAMPLE\n", encoding="utf-8")
+            original_git = public_hygiene.subprocess.run
+            try:
+
+                def raise_git_failure(*args, **kwargs):
+                    raise subprocess.CalledProcessError(128, "git")
+
+                public_hygiene.subprocess.run = raise_git_failure
+                files = public_hygiene.candidate_files(root)
+                rel_paths = {str(f.relative_to(root)) for f in files}
+                self.assertIn("src/app.py", rel_paths)
+                self.assertFalse(any(".venv" in p for p in rel_paths))
+                self.assertFalse(any("node_modules" in p for p in rel_paths))
+                self.assertFalse(any("dist" in p for p in rel_paths))
+                self.assertFalse(any("build" in p for p in rel_paths))
+            finally:
+                public_hygiene.subprocess.run = original_git
 
 
 if __name__ == "__main__":

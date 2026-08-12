@@ -376,6 +376,24 @@ class InstallSkillsTest(unittest.TestCase):
             [item["name"] for item in plan["skills"]],
         )
 
+    def test_explicitly_requested_dependency_is_not_auto_added(self) -> None:
+        # When a dependency is also explicitly requested, it must not appear in
+        # automatically_added even if another requested skill also requires it.
+        self.add_skill("alpha")
+        self.add_skill("gamma")
+        self.add_skill(
+            "beta",
+            "# Skill\n",
+            requires=["alpha"],
+        )
+
+        plan = install_skills.build_plan(self.kit, self.target, ["beta", "alpha"])
+
+        auto = plan["selection"]["automatically_added"]
+        self.assertNotIn("alpha", auto)
+        self.assertNotIn("beta", auto)
+        self.assertIn("agent-guidance-maintenance", auto)
+
     def test_existing_agents_content_is_preserved_around_managed_routes(self) -> None:
         self.add_skill("alpha")
         agents = self.target / "AGENTS.md"
@@ -626,6 +644,135 @@ class InstallSkillsTest(unittest.TestCase):
         )
         self.assertEqual(1, missing.returncode)
         self.assertIn("receipt-owned skill is missing", missing.stderr)
+
+    def test_generate_diff_update_renders_headers_on_separate_lines(self) -> None:
+        # Force an UPDATE so generate_diff emits a unified diff, then assert the
+        # --- / +++ / @@ headers are on distinct lines (no mashed rendering).
+        source = self.add_skill("alpha")
+        plan = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        install_skills.apply_plan(self.kit, self.target, plan)
+        (source / "SKILL.md").write_text(
+            "# Alpha\n\nUpdated body for diff.\n", encoding="utf-8"
+        )
+        update_plan = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        diff = install_skills.generate_diff(update_plan, self.kit, self.target)
+        self.assertIn("--- a/", diff)
+        self.assertIn("+++ b/", diff)
+        # A mashed header would look like "--- a/x.md+++ b/x.md".
+        self.assertNotRegex(diff, r"--- a/.*\+\+\+ b/")
+
+    def test_python_minus_m_entrypoint_plan_succeeds(self) -> None:
+        # The package must have exactly one canonical CLI; `python -m
+        # install_skills` is a real shipped entrypoint (it is copied into
+        # adopting repositories) and must not crash on a valid plan.
+        plan_path = Path(self.temp.name) / "module-plan.json"
+        environment = dict(os.environ)
+        environment.pop(install_skills.SOURCE_ENVIRONMENT, None)
+        planned = subprocess.run(
+            [
+                os.sys.executable,
+                "-m",
+                "install_skills",
+                "plan",
+                "--kit-root",
+                str(ROOT),
+                "--target",
+                str(self.target),
+                "--skill",
+                "ai-slop-detector",
+                "--output",
+                str(plan_path),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+            cwd=str(ROOT / ".agents/skills/bootstrap-project/scripts"),
+        )
+        self.assertEqual(0, planned.returncode, planned.stderr)
+        self.assertTrue(plan_path.is_file(), planned.stderr)
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            {"agent-guidance-maintenance", "ai-slop-detector"},
+            {item["name"] for item in plan["skills"]},
+        )
+
+    def test_fenced_code_link_does_not_block_adoption(self) -> None:
+        # A relative link to a sibling skill inside a fenced code block is an
+        # example, not a real dependency declaration. It must not be treated as
+        # an undeclared link during adoption (Finding G: consistency with
+        # repository validation which strips fenced code).
+        self.add_skill("alpha")
+        self.add_skill(
+            "beta",
+            "# Skill\n\nExample:\n\n```markdown\n[alpha](../alpha/SKILL.md)\n```\n",
+            related=["alpha"],
+        )
+
+        plan = install_skills.build_plan(self.kit, self.target, ["beta"])
+        self.assertEqual("CREATE", plan["skills"][1]["status"])
+        install_skills.apply_plan(self.kit, self.target, plan)
+        self.assertTrue((self.target / ".agents/skills/beta/SKILL.md").is_file())
+
+    def test_real_relative_link_to_undeclared_skill_still_rejected(self) -> None:
+        # A real (non-fenced) relative link to a non-required skill must still
+        # be rejected. Stripping fenced code must not over-permit real links
+        # (Finding G: negative counterpart to the fenced-code test).
+        self.add_skill("alpha")
+        self.add_skill(
+            "beta",
+            "# Skill\n\nSee [alpha](../alpha/SKILL.md) for background.\n",
+            related=["alpha"],
+        )
+
+        with self.assertRaisesRegex(
+            install_skills.AdoptionError, "relative links to non-required"
+        ):
+            install_skills.build_plan(self.kit, self.target, ["beta"])
+
+    def test_restore_routing_survives_symlinked_rollback_temp(self) -> None:
+        # If a previous crash left a symlinked rollback temp, restore_routing
+        # must clear it (removing only the link, not the target) and not mask
+        # the original installation exception (Finding I).
+        import os
+
+        self.add_skill("alpha")
+        plan = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        route_path = self.target / plan["routing"]["path"]
+
+        # Install once to create the route file as a real file
+        install_skills.apply_plan(self.kit, self.target, plan)
+        self.assertTrue(route_path.exists())
+        self.assertFalse(route_path.is_symlink())
+
+        # Simulate a stale rollback temp symlink pointing elsewhere
+        target_elsewhere = self.target / "elsewhere.txt"
+        target_elsewhere.write_text("outside\n", encoding="utf-8")
+        rollback_temp = (
+            route_path.parent / f".{route_path.name}.agent-guidance-kit-rollback"
+        )
+        if rollback_temp.exists() or rollback_temp.is_symlink():
+            rollback_temp.unlink(missing_ok=True)
+        try:
+            os.symlink(target_elsewhere, rollback_temp)
+        except (AttributeError, NotImplementedError, OSError) as error:
+            self.skipTest(f"symlink creation is unavailable: {error}")
+
+        self.assertTrue(rollback_temp.is_symlink())
+
+        # restore_routing should clear the symlinked temp without error
+        from install_skills.routing import restore_routing
+
+        restore_routing(
+            self.target,
+            {"path": str(plan["routing"]["path"])},
+            b"restored content\n",
+        )
+        self.assertFalse(rollback_temp.is_symlink())
+        self.assertFalse(rollback_temp.exists())
+        self.assertEqual("restored content\n", route_path.read_text(encoding="utf-8"))
+        # The symlink target must not have been overwritten
+        self.assertEqual("outside\n", target_elsewhere.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

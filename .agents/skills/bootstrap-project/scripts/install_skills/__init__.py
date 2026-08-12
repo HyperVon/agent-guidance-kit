@@ -7,7 +7,9 @@ from pathlib import Path
 from .apply import (
     apply_plan,
     build_plan,
+    generate_diff,
     main,
+    print_diff,
     print_summary,
     validate_installed,
     validate_installed_impl,
@@ -93,6 +95,8 @@ __all__ = [
     "apply_plan",
     "build_plan",
     "configure_source_locator",
+    "generate_diff",
+    "print_diff",
     "dependency_closure",
     "ensure_safe_ancestors",
     "get_mandatory_skill",

@@ -8,9 +8,8 @@ from typing import Any
 from urllib.parse import unquote, urlsplit
 
 from .constants import DEPENDENCIES, MARKDOWN_LINK, SOURCE_SKILLS
+from .utils import without_fenced_code
 from .validation import AdoptionError
-
-_MANDATORY_SKILL_CACHE: str | None = None
 
 
 def get_mandatory_skill(kit_root: Path) -> str:
@@ -19,22 +18,23 @@ def get_mandatory_skill(kit_root: Path) -> str:
     The mandatory skill is the one with no dependencies (requires: [])
     that provides the resolve_source.py script for source resolution.
     """
-    global _MANDATORY_SKILL_CACHE
-    if _MANDATORY_SKILL_CACHE is not None:
-        return _MANDATORY_SKILL_CACHE
-
     dependencies = load_dependencies(kit_root)
-    candidates = [
+    providers = [
         name
         for name, entry in dependencies.items()
         if not entry.get("requires")  # empty requires list
+        and (kit_root / SOURCE_SKILLS / name / "scripts/resolve_source.py").is_file()
+        and not (
+            kit_root / SOURCE_SKILLS / name / "scripts/resolve_source.py"
+        ).is_symlink()
     ]
-
-    for name in candidates:
-        resolver = kit_root / SOURCE_SKILLS / name / "scripts/resolve_source.py"
-        if resolver.is_file() and not resolver.is_symlink():
-            _MANDATORY_SKILL_CACHE = name
-            return name
+    if len(providers) > 1:
+        raise AdoptionError(
+            "ambiguous mandatory skill: multiple skills without dependencies "
+            f"provide resolve_source.py: {', '.join(sorted(providers))}"
+        )
+    if len(providers) == 1:
+        return providers[0]
 
     raise AdoptionError(
         "no skill provides resolve_source.py; cannot determine mandatory skill"
@@ -121,6 +121,7 @@ def dependency_closure(
     if missing:
         raise AdoptionError(f"unknown selected skills: {', '.join(missing)}")
     selected = set(requested)
+    requested_set = set(requested)
     automatically_added: dict[str, list[str]] = {}
     if mandatory_skill not in selected:
         selected.add(mandatory_skill)
@@ -129,7 +130,10 @@ def dependency_closure(
     while pending:
         name = pending.pop(0)
         for required in dependencies[name]["requires"]:
-            automatically_added.setdefault(required, []).append(f"required by {name}")
+            if required not in requested_set:
+                automatically_added.setdefault(required, []).append(
+                    f"required by {name}"
+                )
             if required not in selected:
                 selected.add(required)
                 pending.append(required)
@@ -148,7 +152,8 @@ def validate_declared_links(
     for path in sorted(source_dir.rglob("*.md")):
         if path.is_symlink():
             raise AdoptionError(f"symlinked Markdown is not allowed: {path}")
-        for raw_target in MARKDOWN_LINK.findall(path.read_text(encoding="utf-8")):
+        text = path.read_text(encoding="utf-8")
+        for raw_target in MARKDOWN_LINK.findall(without_fenced_code(text)):
             target = raw_target.strip()
             if target.startswith("<") and target.endswith(">"):
                 target = target[1:-1]

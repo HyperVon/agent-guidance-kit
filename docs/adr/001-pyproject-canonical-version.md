@@ -16,7 +16,7 @@ and `docs/release.md` was inaccurate.
 
 Add `pyproject.toml` with:
 
-- `[project]` `name = "agent-guidance-kit"`, `version = "1.0.0"` (matches `package.json`)
+- `[project]` `name = "agent-guidance-kit"`, `version = "1.1.0"` (mirrored in `package.json`)
 - `[tool.ruff]` `line-length = 88`, `target-version = py311`, `select = ["E","F"]`
 - `[tool.ruff.lint.mccabe]` `max-complexity = 50`
 - `[build-system]` `setuptools`

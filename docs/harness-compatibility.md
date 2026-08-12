@@ -20,7 +20,7 @@ until a fresh harness task demonstrates it.
 | OpenCode | `AGENTS.md`; `CLAUDE.md` fallback | Native | canonical files directly | DOCUMENTED |
 | Kilo Code | `AGENTS.md` and configured instructions | Native | canonical files directly | DOCUMENTED |
 | Pi | `AGENTS.md` and `CLAUDE.md` context | Native | canonical files directly | DOCUMENTED |
-| Muse Code | `AGENTS.md` hierarchy | Native (`.agents/skills/`) | canonical files directly | VERIFIED |
+| Muse Code | `AGENTS.md` hierarchy | Native (`.agents/skills/`) | canonical files directly | DOCUMENTED |
 
 Primary evidence:
 
