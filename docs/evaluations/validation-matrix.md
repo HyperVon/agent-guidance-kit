@@ -24,8 +24,11 @@ This matrix tracks where skill evaluations have been executed in isolated clean-
 | `skill-authoring` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
 | `skill-evaluation` | [✓](2026-08-10-catalog-expansion.md) | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
 | `skill-optimizer` | – | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
+| `catalog-discovery` | – | – | [✓](results/2026-08-12-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-12-muse-spark-1.2-contributor-muse-code.md) |
+| `git-github-workflow` | – | – | [✓](results/2026-08-12-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-12-muse-spark-1.2-contributor-muse-code.md) |
 | `skill-reviewer` | [✓](2026-08-10-external-skill-intake.md) (`fab98c2`) | – | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
 | `systematic-debugging` | [=](2026-08-10-catalog-expansion.md) / [✓](2026-08-11-systematic-debugging-fixture.md)† | [=](2026-08-11-systematic-debugging-fixture.md)† | [✓](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
+| `upstream-contribution` | – | – | [✓](results/2026-08-12-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-12-muse-spark-1.2-contributor-muse-code.md) |
 
 † `systematic-debugging` fixture evaluation (order-recovery) passed 4/4 in both conditions for `luna` and `sol` on Codex — no discriminating advantage, decision `KEEP_PROVISIONAL`. See [2026-08-11-systematic-debugging-fixture.md](2026-08-11-systematic-debugging-fixture.md).
 
@@ -36,14 +39,17 @@ This matrix tracks where skill evaluations have been executed in isolated clean-
 
 ## How to add a run
 
-1. Follow `skill-evaluation` to run each `evals/evals.json` case twice (`with-skill` vs `baseline`) in a dedicated empty directory containing only `evals/files/*`.
-2. Grade each `assertions` entry with quoted evidence, perform human review, and record timing/tokens if available.
-3. Add a result file `docs/evaluations/results/YYYY-MM-DD-<model>-<harness>.json` (or `<skill>-<model>-<harness>.json` for single-skill runs) conforming to the schema in `docs/evaluations/results/README.md`.
-4. Update this matrix: change `–` to `✓`/`=` and link to the new result file and any sanitized report.
-5. Run `make check` — the evaluation-result validator will verify the JSON shape, `skill_name` matches an existing skill, `model`/`harness` are recorded, and linked files exist.
+The human interface is conversation only — ask the agent to follow `skill-evaluation`; the agent executes all steps and the human does not need to run scripts manually.
+
+1. Agent follows `skill-evaluation` to run each `evals/evals.json` case twice (`with-skill` vs `baseline`) in a dedicated empty directory containing only `evals/files/*`.
+2. Agent grades each `assertions` entry with quoted evidence, performs human review, and records timing/tokens if available.
+3. Agent adds a result file `docs/evaluations/results/YYYY-MM-DD-<model>-<harness>.json` (or `<skill>-<model>-<harness>.json` for single-skill runs) conforming to the schema in `docs/evaluations/results/README.md`.
+4. Agent updates this matrix: change `–` to `✓`/`=` and link to the new result file and any sanitized report.
+5. Agent regenerates `SUMMARY.md` with `python3 scripts/generate_evaluation_summary.py --write`.
+6. Agent runs `make check` — the evaluation-result validator verifies the JSON shape, `skill_name` matches an existing skill, `model`/`harness` are recorded, linked files exist, and `SUMMARY.md` is fresh.
 
 ## Current coverage
 
-* `17` skills have `evals/evals.json` definitions (structural check: `Validated 17 skills ... evaluation definitions: 17 present`).
-* Historical runs: `2026-08-10` (`gpt-5.6-luna` low, 4 skills), `2026-08-10` external intake (`gpt-5.6-luna` low, `skill-reviewer`), `2026-08-11` fixture (`gpt-5.6-luna` low + `gpt-5.6-sol` xhigh, `systematic-debugging`), `2026-08-11` (`muse-spark-1.2-contributor` `xhigh` / `muse code` 0.1.0, all 17).
-* Latest full run `2026-08-11-muse-spark-1.2-contributor-muse-code.json` (`xhigh`) confirms all 17 outperformed baseline on the committed assertion sets in isolated workspaces (`/tmp/eval-batch-1`, `/tmp/eval-batch-2`, `/tmp/skill-evals-batch3`, `/tmp/agk-evals-batch4`). One run per condition per model — not a statistical benchmark; effort level (`low` vs `xhigh`) can change results dramatically, so it is recorded per result file.
+* `20` skills have `evals/evals.json` definitions (structural check: `Validated 20 skills ... evaluation definitions: 20 present`).
+* Historical runs: `2026-08-10` (`gpt-5.6-luna` low, 4 skills), `2026-08-10` external intake (`gpt-5.6-luna` low, `skill-reviewer`), `2026-08-11` fixture (`gpt-5.6-luna` low + `gpt-5.6-sol` xhigh, `systematic-debugging`), `2026-08-11` (`muse-spark-1.2-contributor` `xhigh` / `muse code` 0.1.0, 17 skills), `2026-08-12` (`muse-spark-1.2-contributor` `xhigh` / `muse code` 0.1.0, 3 skills).
+* Latest runs `2026-08-11-muse-spark-1.2-contributor-muse-code.json` (17 skills) and `2026-08-12-muse-spark-1.2-contributor-muse-code.json` (3 skills) together confirm all 20 outperformed baseline on the committed assertion sets in isolated workspaces (`/tmp/eval-batch-1`, `/tmp/eval-batch-2`, `/tmp/skill-evals-batch3`, `/tmp/agk-evals-batch4`, `/tmp/agk-evals-2026-08-12-*`). One run per condition per model — not a statistical benchmark; effort level (`low` vs `xhigh`) can change results dramatically, so it is recorded per result file.

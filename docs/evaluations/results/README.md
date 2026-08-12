@@ -52,11 +52,14 @@ Every `*.json` has a `*.md` sibling with the same basename — e.g., `2026-08-11
 
 ## How to add a run
 
-1. Determine `harness` (`muse code` + version), `model` (`muse-spark-1.2-contributor` + provider), and `reasoning_effort` (`xhigh` currently used; can dramatically change results). Use runtime metadata when available. **If you cannot definitively determine the harness, model, or effort level yourself, ask the user explicitly** (e.g., “Which harness/model/effort should I record? Currently using `muse code` / `muse-spark-1.2-contributor` / `xhigh` — confirm or provide the correct values”) and do not guess. Then run each `evals/evals.json` case twice in a **dedicated empty directory** containing only `evals/files/*` (per `skill-evaluation`), once with the confirmed skill and once with the baseline, same prompts/tools/network/model.
-2. Grade every `assertions` entry with quoted evidence from the output; keep the raw outputs in the ephemeral workspace (not here).
-3. Write the JSON above **and** its `*.md` human-readable companion (copy the shape from `2026-08-11-muse-spark-1.2-contributor-muse-code.md`).
-4. Update `docs/evaluations/validation-matrix.md` to link both `json` and `human` files.
-5. Run `make check` — the validator will check the JSON and the matrix links.
+The human interface is conversation only — ask the agent to “run evals” or “record an eval run”; the agent executes all steps below and the human does not need to run scripts manually.
+
+1. Agent determines `harness` (`muse code` + version), `model` (`muse-spark-1.2-contributor` + provider), and `reasoning_effort` (`xhigh` currently used; can dramatically change results). Use runtime metadata when available. **If the agent cannot definitively determine the harness, model, or effort level, it asks the user explicitly** (e.g., “Which harness/model/effort should I record for this run? Currently using `muse code` / `muse-spark-1.2-contributor` / `xhigh` — confirm or provide the correct values”) and does not guess. Then the agent runs each `evals/evals.json` case twice in a **dedicated empty directory** containing only `evals/files/*` (per `skill-evaluation`), once with the confirmed skill and once with the baseline, same prompts/tools/network/model.
+2. Agent grades every `assertions` entry with quoted evidence from the output; raw outputs stay in the ephemeral workspace (not here).
+3. Agent writes the JSON above **and** its `*.md` human-readable companion (copy the shape from `2026-08-11-muse-spark-1.2-contributor-muse-code.md`).
+4. Agent updates `docs/evaluations/validation-matrix.md` to link both `json` and `human` files.
+5. Agent regenerates the aggregate with `python3 scripts/generate_evaluation_summary.py --write` — this keeps [`docs/evaluations/SUMMARY.md`](../SUMMARY.md) (latest per skill × harness × model) in sync.
+6. Agent runs `make check` — the validator checks the JSON, the matrix links, and that `SUMMARY.md` is fresh.
 
 ## Current harness/model identifiers
 

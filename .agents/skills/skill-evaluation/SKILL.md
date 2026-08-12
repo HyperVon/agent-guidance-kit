@@ -107,8 +107,10 @@ graded. A public, sanitized summary may record the harness, model, baseline,
 case outcomes, evidence, limitations, and decision without committing raw model
 outputs or private fixtures.
 
-When a run is executed, record it in the repository so the validation matrix
-stays current:
+When a run is executed, the agent records it in the repository so the validation matrix
+stays current — the human interface is conversation only (e.g., “run evals,”
+“evaluate a skill,” or “update the eval summary”); the agent runs all
+commands and the human does not need to run scripts manually:
 
 1. Determine `harness` (`muse code` + version), `model` (`muse-spark-1.2-contributor` + provider), and `reasoning_effort` (`xhigh` currently used). Use runtime metadata when available. **If you cannot definitively determine the harness, model, or effort level yourself, ask the user explicitly** (e.g., “Which harness/model/effort should I record for this run? Currently using `muse code` / `muse-spark-1.2-contributor` / `xhigh` — confirm or provide the correct values”) and do not guess. Effort can dramatically change results, so always record the actual `reasoning_effort`.
 2. Write a result file under `docs/evaluations/results/` following the schema
@@ -120,9 +122,10 @@ stays current:
    the `reasoning_effort` in the column header (e.g., `muse-spark-1.2-contributor` / `muse code` (`xhigh`)). Keep raw
    outputs in the ignored workspace; only the sanitized summary, `*.md`, and
    `*.json` are committed.
-4. Run `make check` — `scripts/validate_repository.py` validates the JSON
+4. Agent regenerates `docs/evaluations/SUMMARY.md` with `python3 scripts/generate_evaluation_summary.py --write` so the latest-per-skill aggregate stays in sync.
+5. Agent runs `make check` — `scripts/validate_repository.py` validates the JSON
    shape, that each `skill_name`/`id`/`kind` matches the committed
-   `evals/evals.json`, and that matrix links resolve.
+   `evals/evals.json`, that matrix links resolve, and that `SUMMARY.md` is fresh. Do not ask the human to run scripts; the agent verifies freshness via `python3 scripts/generate_evaluation_summary.py --check`.
 
 ## Report and stop condition
 

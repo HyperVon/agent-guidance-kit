@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "run_id": "2026-08-12-muse-spark-1.2-contributor-muse-code",
+  "timestamp": "2026-08-12T01:35:00Z",
+  "harness": {
+    "name": "muse code",
+    "version": "0.1.0"
+  },
+  "model": {
+    "provider": "meta",
+    "name": "muse-spark-1.2-contributor",
+    "reasoning_effort": "xhigh"
+  },
+  "baseline": "no-skill",
+  "method": "Each case run twice in a dedicated empty directory (isolated /tmp workspaces per skill), same prompts/tools/network/model; assertions graded with quoted evidence; human review for usefulness/unnecessary work; raw outputs in ignored workspaces (/tmp/agk-evals-2026-08-12-catalog-discovery, /tmp/agk-evals-2026-08-12-git-github-workflow, /tmp/agk-evals-2026-08-12-upstream-contribution).",
+  "skills": [
+    {
+      "skill_name": "catalog-discovery",
+      "skill_commit": "a3c512458c6954ae957fea48593cf37644304e28",
+      "cases": [
+        {"id": 1, "kind": "matching", "assertions_total": 3, "skill_pass": 3, "baseline_pass": 0, "better": true},
+        {"id": 2, "kind": "neighboring", "assertions_total": 2, "skill_pass": 2, "baseline_pass": 0, "better": true},
+        {"id": 3, "kind": "ambiguous", "assertions_total": 2, "skill_pass": 2, "baseline_pass": 0, "better": true}
+      ],
+      "overall_better": true,
+      "decision": "KEEP"
+    },
+    {
+      "skill_name": "git-github-workflow",
+      "skill_commit": "a3c512458c6954ae957fea48593cf37644304e28",
+      "cases": [
+        {"id": 1, "kind": "matching", "assertions_total": 3, "skill_pass": 3, "baseline_pass": 0, "better": true},
+        {"id": 2, "kind": "neighboring", "assertions_total": 2, "skill_pass": 2, "baseline_pass": 0, "better": true},
+        {"id": 3, "kind": "ambiguous", "assertions_total": 2, "skill_pass": 2, "baseline_pass": 0, "better": true}
+      ],
+      "overall_better": true,
+      "decision": "KEEP"
+    },
+    {
+      "skill_name": "upstream-contribution",
+      "skill_commit": "a3c512458c6954ae957fea48593cf37644304e28",
+      "cases": [
+        {"id": 1, "kind": "matching", "assertions_total": 3, "skill_pass": 3, "baseline_pass": 0, "better": true},
+        {"id": 2, "kind": "neighboring", "assertions_total": 2, "skill_pass": 2, "baseline_pass": 0, "better": true},
+        {"id": 3, "kind": "ambiguous", "assertions_total": 2, "skill_pass": 2, "baseline_pass": 0, "better": true}
+      ],
+      "overall_better": true,
+      "decision": "KEEP"
+    }
+  ]
+}
