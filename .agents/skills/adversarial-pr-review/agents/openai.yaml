@@ -1,0 +1,4 @@
+interface:
+  display_name: "Adversarial PR Review"
+  short_description: "Bounded concurrent adversarial review before PR creation"
+  default_prompt: "Use $adversarial-pr-review to run an adaptive adversarial review of the current PR diff."

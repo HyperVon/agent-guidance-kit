@@ -1,0 +1,5 @@
+service:
+  name: payments
+  timeout: 30
+secrets:
+  api_key: "[REDACTED]"

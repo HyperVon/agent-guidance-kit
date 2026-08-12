@@ -60,6 +60,25 @@ or defer it. Never broaden a guarantee beyond what the evidence supports.
    visual asset is a separate finding; changing its caption is not visual
    verification.
 
+## Incremental sync after a change set
+
+When the user has just shipped a feature, refactor, or dependency bump and
+asks to touch the relevant docs (not a full audit), use this incremental
+path instead of the full workflow above:
+
+| Change | Update |
+| :----- | :----- |
+| Feature, stack, command, or layout | `README.md` (setup, usage, package tree) |
+| Architecture, protocol, or milestone order | Architecture doc and `docs/adr/` when the change is architectural |
+| Operation or troubleshooting command | Runbook or troubleshooting guide |
+| User-facing CLI, UI, or operator workflow | User guide and linked runbook sections |
+| Dependency or container version | Documentation that references the version or pin; use manifests and lockfiles as source-of-truth evidence |
+
+Keep the change minimal: update the one or two owned documents, link to the
+canonical source instead of duplicating it, and preserve tone and audience.
+For a whole-repository factual audit (missing, wrong, stale), use the full
+workflow above.
+
 ## Approval gate
 
 Use the repository's size labels when they exist; otherwise use these defaults:

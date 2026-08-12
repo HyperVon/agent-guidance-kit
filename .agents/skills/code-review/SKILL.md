@@ -40,9 +40,10 @@ itself.
 
 ## Review workflow
 
-1. **Establish review truth.** Inspect status and the complete scoped diff;
-   identify generated files, contract boundaries, public interfaces, security
-   surfaces, persistence, concurrency, and user-visible changes.
+1. **Establish review truth.** Inspect `git status`, the complete scoped diff,
+   merge base, and target base; identify generated files, contract boundaries,
+   public interfaces, security surfaces, persistence, concurrency, and
+   user-visible changes.
 2. **Read the contract.** Read applicable local guidance, source-of-truth
    code/configuration, relevant tests, and documentation before evaluating
    behavior. Source and executable checks outrank stale prose.

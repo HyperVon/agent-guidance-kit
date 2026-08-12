@@ -1,0 +1,55 @@
+{
+  "skill_name": "dependency-upgrade",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "Update our pinned dependencies and refresh lockfiles. Inventory all manifests, group bumps by risk (security, patch, minor, major), and verify with full gates after each group.",
+      "expected_output": "The agent inventories manifests, lockfiles, and container/action pins, triages open vulnerability alerts, groups bumps by risk and reviewability, and verifies each group with the repository's full gates and lockfile regeneration.",
+      "assertions": [
+        "The response inventories dependency manifests, lockfiles, and pinned container or action versions",
+        "The response groups bumps by risk (security, patch, minor, major) and keeps groups small and reviewable",
+        "The response verifies after each group with the repository's full gate and lockfile regeneration"
+      ],
+      "files": [
+        "evals/files/mini-node/package.json",
+        "evals/files/mini-node/package-lock.json",
+        "evals/files/mini-node/advisory.json",
+        "evals/files/mini-node/Makefile",
+        "evals/files/mini-node/index.js",
+        "evals/files/mini-node/test.js"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "neighboring",
+      "prompt": "We have an open Dependabot alert for a vulnerable transitive dependency. Investigate the exposure, affected paths, and whether the vulnerable code is reachable, without yet authorizing an upgrade.",
+      "expected_output": "The agent treats the request as an investigation under security-review (or code-review for the affected code), assesses trust boundaries and reachability, and does not perform version bumps or lockfile changes without explicit authorization.",
+      "assertions": [
+        "The response does not bump versions or regenerate lockfiles from an investigate-only request",
+        "The response routes the investigation to security-review as the closer workflow"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "prompt": "Harden the payment module's correctness: add regression tests for the timeout race condition and fix it with the smallest production change.",
+      "expected_output": "The agent routes the request to quality-hardening (or systematic-debugging if a failure must first be diagnosed) rather than treating it as a dependency upgrade.",
+      "assertions": [
+        "The response identifies quality-hardening as the closer workflow for correctness hardening",
+        "The response does not treat general correctness work as a dependency version bump"
+      ]
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "prompt": "We have critical security alerts for a direct dependency and also want to bump several minor dev dependencies. Some alerts are for transitive dependencies flagged by the advisory source. How should we proceed?",
+      "expected_output": "The agent triages all open alerts, prioritizes critical and high severity, covers both direct and transitive vulnerabilities where the package manager or advisory identifies them, groups critical fixes separately from unrelated minor bumps, documents blockers for unfixable alerts, and verifies each group with full gates. It does not ignore medium or low findings without triage.",
+      "assertions": [
+        "The response triages all open alerts and prioritizes critical and high severity while documenting blockers",
+        "The response covers vulnerable direct and transitive dependencies where the advisory or package manager identifies them",
+        "The response groups security fixes separately from unrelated minor bumps and verifies each group"
+      ]
+    }
+  ]
+}

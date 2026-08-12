@@ -3,16 +3,16 @@
 
 Auto-generated aggregate of the **latest** evaluation result per `(skill, harness, model)` — older runs remain in `docs/evaluations/results/` and `docs/evaluations/*.md` for history, but this file shows only the current head per key so it is easy to scan overall health.
 
-_Generated from 3 result file(s) in `docs/evaluations/results/`; 40 skill-records considered, 40 latest entries retained (dedup key: skill × harness × model × reasoning_effort)._
+_Generated from 5 result file(s) in `docs/evaluations/results/`; 44 skill-records considered, 42 latest entries retained (dedup key: skill × harness × model × reasoning_effort)._
 
 Human interface: ask the agent to “run evals” or “update the eval summary” — the agent runs `python3 scripts/generate_evaluation_summary.py --write` and `make check` (or `--check`). You do not need to run scripts manually; the agent keeps this file fresh and validated.
 
 ## Current coverage
 
-* Validated skills: `20` (`20/20` with at least one executed result in the latest set).
-* Result files: `3` JSON + companions in `docs/evaluations/results/`.
-* Files: `2026-08-11-muse-spark-1.2-contributor-muse-code.json`, `2026-08-12-muse-spark-1.2-contributor-muse-code.json`, `2026-08-12-tencent-hy3-free-kilo.json`
-* Latest window: `2026-08-11T23:50:00+00:00` → `2026-08-12T06:11:00+00:00`.
+* Validated skills: `22` (`22/22` with at least one executed result in the latest set).
+* Result files: `5` JSON + companions in `docs/evaluations/results/`.
+* Files: `2026-08-11-muse-spark-1.2-contributor-muse-code.json`, `2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-2.json`, `2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-3.json`, `2026-08-12-muse-spark-1.2-contributor-muse-code.json`, `2026-08-12-tencent-hy3-free-kilo.json`
+* Latest window: `2026-08-11T23:50:00+00:00` → `2026-08-12T09:52:04+00:00`.
 * Deduplication: latest per `(skill, harness, model, reasoning_effort)` by ISO timestamp, then `run_id`.
 
 ## Latest per skill × harness × model
@@ -21,6 +21,7 @@ Human interface: ask the agent to “run evals” or “update the eval summary�
 
 | Skill | Harness | Model | Run ID | Date | Cases | Skill pass | Baseline pass | Better | Decision | Source |
 | :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | :---: | :--- | :--- |
+| `adversarial-pr-review` | muse code 0.1.0 | muse-spark-1.2-contributor (xhigh) | `2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-3` | 2026-08-12 | 4 | 10/10 | 0/10 | ✓ | `KEEP` | [2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-3.json](results/2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-3.json) · [human](results/2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-3.md) |
 | `agent-guidance-maintenance` | Kilo 0.1.0 | tencent/hy3:free (default) | `2026-08-12-tencent-hy3-free-kilo` | 2026-08-12 | 3 | 7/7 | 4/7 | ✓ | `KEEP` | [2026-08-12-tencent-hy3-free-kilo.json](results/2026-08-12-tencent-hy3-free-kilo.json) · [human](results/2026-08-12-tencent-hy3-free-kilo.md) |
 | `agent-guidance-maintenance` | muse code 0.1.0 | muse-spark-1.2-contributor (xhigh) | `2026-08-11-muse-spark-1.2-contributor-muse-code` | 2026-08-11 | 3 | 7/7 | 0/7 | ✓ | `KEEP` | [2026-08-11-muse-spark-1.2-contributor-muse-code.json](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
 | `ai-slop-detector` | Kilo 0.1.0 | tencent/hy3:free (default) | `2026-08-12-tencent-hy3-free-kilo` | 2026-08-12 | 3 | 9/9 | 3/9 | ✓ | `KEEP` | [2026-08-12-tencent-hy3-free-kilo.json](results/2026-08-12-tencent-hy3-free-kilo.json) · [human](results/2026-08-12-tencent-hy3-free-kilo.md) |
@@ -33,6 +34,7 @@ Human interface: ask the agent to “run evals” or “update the eval summary�
 | `catalog-discovery` | muse code 0.1.0 | muse-spark-1.2-contributor (xhigh) | `2026-08-12-muse-spark-1.2-contributor-muse-code` | 2026-08-12 | 3 | 7/7 | 0/7 | ✓ | `KEEP` | [2026-08-12-muse-spark-1.2-contributor-muse-code.json](results/2026-08-12-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-12-muse-spark-1.2-contributor-muse-code.md) |
 | `code-review` | Kilo 0.1.0 | tencent/hy3:free (default) | `2026-08-12-tencent-hy3-free-kilo` | 2026-08-12 | 3 | 9/9 | 3/9 | ✓ | `KEEP` | [2026-08-12-tencent-hy3-free-kilo.json](results/2026-08-12-tencent-hy3-free-kilo.json) · [human](results/2026-08-12-tencent-hy3-free-kilo.md) |
 | `code-review` | muse code 0.1.0 | muse-spark-1.2-contributor (xhigh) | `2026-08-11-muse-spark-1.2-contributor-muse-code` | 2026-08-11 | 3 | 9/9 | 0/9 | ✓ | `KEEP` | [2026-08-11-muse-spark-1.2-contributor-muse-code.json](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
+| `dependency-upgrade` | muse code 0.1.0 | muse-spark-1.2-contributor (xhigh) | `2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-3` | 2026-08-12 | 4 | 10/10 | 0/10 | ✓ | `KEEP` | [2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-3.json](results/2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-3.json) · [human](results/2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-3.md) |
 | `documentation-review` | Kilo 0.1.0 | tencent/hy3:free (default) | `2026-08-12-tencent-hy3-free-kilo` | 2026-08-12 | 3 | 9/9 | 3/9 | ✓ | `KEEP` | [2026-08-12-tencent-hy3-free-kilo.json](results/2026-08-12-tencent-hy3-free-kilo.json) · [human](results/2026-08-12-tencent-hy3-free-kilo.md) |
 | `documentation-review` | muse code 0.1.0 | muse-spark-1.2-contributor (xhigh) | `2026-08-11-muse-spark-1.2-contributor-muse-code` | 2026-08-11 | 3 | 9/9 | 0/9 | ✓ | `KEEP` | [2026-08-11-muse-spark-1.2-contributor-muse-code.json](results/2026-08-11-muse-spark-1.2-contributor-muse-code.json) · [human](results/2026-08-11-muse-spark-1.2-contributor-muse-code.md) |
 | `git-github-workflow` | Kilo 0.1.0 | tencent/hy3:free (default) | `2026-08-12-tencent-hy3-free-kilo` | 2026-08-12 | 3 | 7/7 | 3/7 | ✓ | `KEEP` | [2026-08-12-tencent-hy3-free-kilo.json](results/2026-08-12-tencent-hy3-free-kilo.json) · [human](results/2026-08-12-tencent-hy3-free-kilo.md) |
@@ -64,15 +66,17 @@ Human interface: ask the agent to “run evals” or “update the eval summary�
 
 ## Totals (latest set)
 
-* Entries: `40`
-* Cases: `124` — assertions `349/350` skill pass, `64/350` baseline pass.
-* Better: `40/40` entries where `overall_better=true` (skill outperformed baseline).
+* Entries: `42`
+* Cases: `132` — assertions `369/370` skill pass, `64/370` baseline pass.
+* Better: `42/42` entries where `overall_better=true` (skill outperformed baseline).
 
 ## All result files (history)
 
 | File | Run ID | Timestamp | Harness | Model | Baseline | Skills |
 | :--- | :--- | :--- | :--- | :--- | :--- | ---: |
 | `2026-08-11-muse-spark-1.2-contributor-muse-code.json` | `2026-08-11-muse-spark-1.2-contributor-muse-code` | 2026-08-11T23:50:00Z | muse code 0.1.0 | muse-spark-1.2-contributor (xhigh) | no-skill | 17 |
+| `2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-2.json` | `2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-2` | 2026-08-12T09:35:29Z | muse code 0.1.0 | muse-spark-1.2-contributor (xhigh) | no-skill | 2 |
+| `2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-3.json` | `2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-3` | 2026-08-12T09:52:04Z | muse code 0.1.0 | muse-spark-1.2-contributor (xhigh) | no-skill | 2 |
 | `2026-08-12-muse-spark-1.2-contributor-muse-code.json` | `2026-08-12-muse-spark-1.2-contributor-muse-code` | 2026-08-12T01:35:00Z | muse code 0.1.0 | muse-spark-1.2-contributor (xhigh) | no-skill | 3 |
 | `2026-08-12-tencent-hy3-free-kilo.json` | `2026-08-12-tencent-hy3-free-kilo` | 2026-08-12T06:11:00Z | Kilo 0.1.0 | tencent/hy3:free (default) | no-skill | 20 |
 
