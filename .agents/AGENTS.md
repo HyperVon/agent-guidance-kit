@@ -78,6 +78,9 @@ plan.
 | Review skill content or external candidates for useful improvements | [skill-reviewer](skills/skill-reviewer/SKILL.md) |
 | Audit guidance structure, overlap, conflicts, and routing | [rules-and-skills-audit](skills/rules-and-skills-audit/SKILL.md) |
 | Reduce guidance context cost without weakening behavior | [skill-optimizer](skills/skill-optimizer/SKILL.md) |
+| Branch, commit, PR, and release hygiene for Git and GitHub | [git-github-workflow](skills/git-github-workflow/SKILL.md) |
+| Search and triage catalog expansion candidates from public sources | [catalog-discovery](skills/catalog-discovery/SKILL.md) |
+| Propose local skill improvements upstream via fork and PR | [upstream-contribution](skills/upstream-contribution/SKILL.md) |
 
 ## Verification
 

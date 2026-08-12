@@ -53,30 +53,45 @@ def agent_skills_commands(
 
 
 def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run repository checks")
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Skip markdownlint and agentskills for faster inner loop",
+    )
+    args = parser.parse_args()
     markdownlint = markdownlint_command()
-    if markdownlint is None:
+    if markdownlint is None and not args.quick:
         print(
             "ERROR Markdown lint is required; run python scripts/setup_dev.py first.",
             file=sys.stderr,
         )
         return 2
     agent_skills = agent_skills_commands()
-    if agent_skills is None:
+    if agent_skills is None and not args.quick:
         print(
             "ERROR Agent Skills reference validation is required; "
             "run python scripts/setup_dev.py first.",
             file=sys.stderr,
         )
         return 2
-    commands = [
-        markdownlint,
-        *agent_skills,
-        [sys.executable, "-m", "ruff", "check", "."],
-        [sys.executable, "-m", "ruff", "format", "--check", "."],
-        [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
-        [sys.executable, "scripts/validate_repository.py"],
-        [sys.executable, "scripts/public_hygiene_check.py"],
-    ]
+    commands: list[list[str]] = []
+    if not args.quick:
+        if markdownlint is not None:
+            commands.append(markdownlint)
+        if agent_skills is not None:
+            commands.extend(agent_skills)
+    commands.extend(
+        [
+            [sys.executable, "-m", "ruff", "check", "."],
+            [sys.executable, "-m", "ruff", "format", "--check", "."],
+            [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
+            [sys.executable, "scripts/validate_repository.py"],
+            [sys.executable, "scripts/public_hygiene_check.py"],
+        ]
+    )
     for command in commands:
         result = subprocess.run(command, cwd=ROOT, check=False)
         if result.returncode != 0:

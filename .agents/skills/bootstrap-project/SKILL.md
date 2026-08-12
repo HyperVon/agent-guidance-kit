@@ -162,7 +162,25 @@ python3 <kit-root>/.agents/skills/bootstrap-project/scripts/install_skills.py \
   --skill <approved-skill> --output <plan.json>
 ```
 
-Review the plan's source digest, requested and automatically added skills,
+For a preview without writing a file, use `--diff` and/or `--check`:
+
+```text
+python3 <kit-root>/.agents/skills/bootstrap-project/scripts/install_skills.py \
+  plan --kit-root <kit-root> --target <target-root> \
+  --skill <approved-skill> --diff          # unified diff of skill + routing changes
+python3 <kit-root>/.agents/skills/bootstrap-project/scripts/install_skills.py \
+  plan --kit-root <kit-root> --target <target-root> \
+  --skill <approved-skill> --check         # conflict-only; exit 1 if CONFLICT/ASK
+python3 <kit-root>/.agents/skills/bootstrap-project/scripts/install_skills.py \
+  plan --kit-root <kit-root> --target <target-root> \
+  --skill <approved-skill> --diff --check  # diff plus conflict-only check
+```
+
+`--diff` also surfaces harness entrypoint recommendations (AGENTS.md,
+CLAUDE.md, GEMINI.md, `.github/copilot-instructions.md`) when they exist
+without referencing the canonical `.agents/AGENTS.md` — these are
+informational and require `harness-adaptation` for paste-ready thin-pointer
+updates. Review the plan's source digest, requested and automatically added skills,
 required versus related dependencies, create/update/unchanged statuses,
 destinations, managed AGENTS route, and conflicts. `CONFLICT` is a stop
 condition; do not bypass it.

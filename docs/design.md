@@ -25,6 +25,24 @@ The agent owns interpretation and reconciliation because those tasks depend on
 project meaning. Scripts own repeatable mechanical checks because those tasks
 benefit from determinism.
 
+```mermaid
+flowchart TD
+  Agent[active coding agent]
+  Agent --> Harness{harness capability profile}
+  Harness --> Inspect[inventory target + read local guidance]
+  Inspect --> Catalog[read reusable skill catalog]
+  Catalog --> Propose[propose smallest useful selection<br/>ADD/ADAPT/KEEP_LOCAL/DEFER/SKIP + ADAPT prompt improvements]
+  Propose --> Gate{{approval gate}}
+  Gate -->|approve| Install[install_skills plan/apply<br/>receipt-aware + managed AGENTS routes]
+  Gate -->|defer| Stop
+  Install --> Adapt[adapt target routing & invariants<br/>via git-github-workflow if needed]
+  Adapt --> Verify[validate + hygiene + make check]
+  Verify --> Maintain[agent-guidance-maintenance<br/>refresh / audit]
+  Maintain --> Discover[catalog-discovery<br/>SOURCE_ONLY pull]
+  Discover --> Review[skill-reviewer intake]
+  Review --> Upstream[upstream-contribution<br/>target proposer → kit PR]
+```
+
 ## Guidance hierarchy
 
 ```text

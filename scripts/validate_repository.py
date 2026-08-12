@@ -34,6 +34,11 @@ EXCLUDED_DIRECTORIES = frozenset(
         "coverage",
         "dist",
         "node_modules",
+        ".kilo",
+        ".idea",
+        ".cursor",
+        ".vscode",
+        ".clinerules",
     }
 )
 
@@ -161,6 +166,22 @@ def validate_harness_imports(errors: list[str]) -> None:
                 continue
             if not resolved.is_file() or resolved.is_symlink():
                 errors.append(f"{relative_path}: broken or unsafe import: {raw_target}")
+
+    copilot = ROOT / ".github/copilot-instructions.md"
+    if not copilot.is_file() or copilot.is_symlink():
+        errors.append(
+            ".github/copilot-instructions.md: missing real harness entrypoint"
+        )
+    else:
+        text = without_fenced_code(copilot.read_text(encoding="utf-8"))
+        has_canonical = any(
+            canonical in text
+            for canonical in ("AGENTS.md", ".agents/AGENTS.md", ".agents/OPERATING.md")
+        )
+        if not has_canonical:
+            errors.append(
+                ".github/copilot-instructions.md: expected at least one canonical-file reference"
+            )
 
 
 def validate_skills(errors: list[str]) -> tuple[set[str], set[str]]:
@@ -662,18 +683,109 @@ def validate_python(errors: list[str]) -> None:
             errors.append(f"{path.relative_to(ROOT)}: Python syntax error: {error}")
 
 
+def validate_related_links(skill_names: set[str], errors: list[str]) -> None:
+    """Ensure related skills are not linked via relative file paths.
+
+    Related skills are suggestions that do not require installation; a direct
+    file link like `](skills/other/SKILL.md)` would break selective installs.
+    They should be referenced by plain name or non-file link, not a relative
+    path to the sibling skill directory.
+    """
+    if DEPENDENCIES_PATH.is_symlink() or not DEPENDENCIES_PATH.is_file():
+        return
+    try:
+        value = json.loads(DEPENDENCIES_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return
+    entries = value.get("skills") if isinstance(value, dict) else None
+    if not isinstance(entries, dict):
+        return
+    catalog_root = SKILLS_ROOT.resolve()
+    for name in sorted(skill_names & set(entries)):
+        entry = entries.get(name)
+        if not isinstance(entry, dict):
+            continue
+        related = entry.get("related")
+        if not isinstance(related, list) or not related:
+            continue
+        related_set = {str(item) for item in related if isinstance(item, str)}
+        if not related_set:
+            continue
+        skill_directory = SKILLS_ROOT / name
+        skill_root = skill_directory.resolve()
+        for markdown in sorted(skill_directory.rglob("*.md")):
+            if markdown.is_symlink():
+                continue
+            if not is_project_path(markdown):
+                continue
+            text = markdown.read_text(encoding="utf-8")
+            # Check file links that resolve to a sibling skill
+            for raw_target in LINK_RE.findall(text):
+                target = raw_target.strip()
+                if target.startswith("<") and target.endswith(">"):
+                    target = target[1:-1]
+                split = urlsplit(target)
+                if split.scheme or target.startswith("#") or not split.path:
+                    continue
+                candidate = (markdown.parent / unquote(split.path)).resolve()
+                try:
+                    candidate.relative_to(skill_root)
+                    continue
+                except ValueError:
+                    pass
+                try:
+                    relative_to_catalog = candidate.relative_to(catalog_root)
+                except ValueError:
+                    continue
+                dependency = relative_to_catalog.parts[0]
+                if dependency in related_set:
+                    errors.append(
+                        f"{markdown.relative_to(ROOT)}: related skill {dependency!r} must not be linked via relative path; "
+                        f"use plain reference instead (skill {name} related={dependency!r})"
+                    )
+
+
 def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Validate the guidance hierarchy, skills, links, metadata, and Python syntax."
+    )
+    parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON instead of text"
+    )
+    args = parser.parse_args()
+
     errors: list[str] = []
     if not SKILLS_ROOT.is_dir() or SKILLS_ROOT.is_symlink():
-        print("error: .agents/skills must be a real directory", file=sys.stderr)
+        msg = "error: .agents/skills must be a real directory"
+        if args.json:
+            print(json.dumps({"errors": [msg], "valid": False}, indent=2))
+        else:
+            print(msg, file=sys.stderr)
         return 2
     skills, eval_definitions = validate_skills(errors)
     validate_index(skills, errors)
     validate_skill_dependencies(skills, errors)
+    validate_related_links(skills, errors)
     validate_links(errors)
     validate_harness_imports(errors)
     validate_evaluation_results(skills, errors)
     validate_python(errors)
+    if args.json:
+        results_root = ROOT / "docs/evaluations/results"
+        results_count = (
+            len(list(results_root.glob("*.json"))) if results_root.is_dir() else 0
+        )
+        payload = {
+            "errors": errors,
+            "valid": not errors,
+            "skills_validated": len(skills),
+            "evaluation_definitions": len(eval_definitions),
+            "evaluation_results": results_count,
+        }
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 1 if errors else 0
     if errors:
         for error in errors:
             print(f"ERROR {error}", file=sys.stderr)

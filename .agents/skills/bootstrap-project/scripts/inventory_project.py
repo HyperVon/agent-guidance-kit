@@ -230,12 +230,16 @@ def inventory(root: Path, max_files: int) -> dict[str, object]:
 def markdown(data: dict[str, object]) -> str:
     git = data["git"]
     languages = data["languages_by_file_count"]
+    limit_note = (
+        " (truncated — limit reached; re-run with --max-files)"
+        if data["truncated"]
+        else ""
+    )
     lines = [
         "# Project inventory",
         "",
         f"- Root: `{data['root']}`",
-        f"- Files scanned: **{data['files_scanned']}**"
-        + (" (limit reached)" if data["truncated"] else ""),
+        f"- Files scanned: **{data['files_scanned']}**" + limit_note,
         f"- Git: **{'yes' if git['repository'] else 'no'}**; branch `{git['branch'] or 'unknown'}`; commit `{git['commit'] or 'unknown'}`; dirty `{git['dirty']}`",
         "",
         "## Languages by file count",

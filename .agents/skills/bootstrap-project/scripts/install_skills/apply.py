@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 import shutil
@@ -307,6 +308,142 @@ def print_summary(plan: dict[str, Any]) -> None:
     print(f"{route['status']:9} managed routes -> {route['path']}{detail}")
 
 
+def _is_text_file(path: Path) -> bool:
+    try:
+        path.read_text(encoding="utf-8")
+        return True
+    except UnicodeDecodeError:
+        return False
+    except OSError:
+        return False
+
+
+def generate_diff(plan: dict[str, Any], kit_root: Path, target_root: Path) -> str:
+    lines: list[str] = []
+    # Skill file diffs
+    for item in plan["skills"]:
+        status = item["status"]
+        if status == "UNCHANGED":
+            continue
+        name = item["name"]
+        source_base = kit_root / Path(item["source"])
+        dest_base = target_root / Path(item["destination"])
+        if status == "CONFLICT":
+            lines.append(
+                f"--- CONFLICT {name}: {item['conflict']['reason'] if item['conflict'] else 'unknown'}"
+            )
+            continue
+        if status == "CREATE":
+            lines.append(
+                f"--- CREATE {name} -> {item['destination']} ({len(item['files'])} files)"
+            )
+            for f in item["files"]:
+                lines.append(f"+++ {f['path']}")
+            continue
+        if status == "UPDATE":
+            lines.append(f"--- UPDATE {name} -> {item['destination']}")
+            for manifest_item in item["files"]:
+                rel = Path(manifest_item["path"])
+                src = source_base / rel
+                dst = dest_base / rel
+                if not dst.exists():
+                    lines.append(f"+++ new file {rel}")
+                    continue
+                # Only diff text files
+                if not _is_text_file(src) or not _is_text_file(dst):
+                    lines.append(
+                        f"*** binary or unreadable {rel} (sha {manifest_item['sha256'][:8]})"
+                    )
+                    continue
+                try:
+                    src_text = src.read_text(encoding="utf-8").splitlines(keepends=True)
+                    dst_text = dst.read_text(encoding="utf-8").splitlines(keepends=True)
+                except OSError:
+                    continue
+                if src_text == dst_text:
+                    continue
+                diff = difflib.unified_diff(
+                    dst_text,
+                    src_text,
+                    fromfile=f"a/{rel}",
+                    tofile=f"b/{rel}",
+                    lineterm="",
+                )
+                diff_text = "\n".join(diff)
+                if diff_text:
+                    lines.append(diff_text)
+    # Routing diff
+    routing = plan.get("routing", {})
+    rstatus = routing.get("status")
+    if rstatus and rstatus not in {"UNCHANGED", "CONFLICT"}:
+        try:
+            rel = Path(str(routing.get("path", "")))
+            current_path = target_root / rel
+            current = (
+                current_path.read_text(encoding="utf-8")
+                if current_path.exists()
+                else ""
+            )
+            # Render desired routing content
+            from .routing import render_routing
+
+            desired = render_routing(current, routing.get("block", ""))
+            if current != desired:
+                lines.append(f"--- ROUTING {rel} ({rstatus})")
+                diff = difflib.unified_diff(
+                    current.splitlines(keepends=True),
+                    desired.splitlines(keepends=True),
+                    fromfile=f"a/{rel}",
+                    tofile=f"b/{rel}",
+                    lineterm="",
+                )
+                diff_text = "\n".join(diff)
+                if diff_text:
+                    lines.append(diff_text)
+        except Exception:
+            pass
+    elif rstatus == "CONFLICT":
+        lines.append(
+            f"--- ROUTING CONFLICT {routing.get('path')}: {routing.get('conflict', {}).get('reason', 'unknown')}"
+        )
+    # Harness harness entrypoint notes (informational, not part of plan apply)
+    # These are read-only recommendations; they show what harness files exist and
+    # whether they reference the canonical guidance.
+    harness_notes: list[str] = []
+    for harness_file in (
+        "AGENTS.md",
+        "CLAUDE.md",
+        "GEMINI.md",
+        ".github/copilot-instructions.md",
+    ):
+        p = target_root / harness_file
+        if p.exists() and not p.is_symlink():
+            try:
+                txt = p.read_text(encoding="utf-8")
+                has_canonical = ".agents/AGENTS.md" in txt or "AGENTS.md" in txt
+                if not has_canonical and harness_file != "AGENTS.md":
+                    harness_notes.append(
+                        f"harness {harness_file} does not reference canonical .agents/AGENTS.md"
+                    )
+            except OSError:
+                pass
+    if harness_notes:
+        lines.append("--- HARNESS RECOMMENDATIONS (informational, no auto-apply) ---")
+        lines.extend(f"*** {note}" for note in harness_notes)
+        lines.append("*** Run harness-adaptation for paste-ready thin-pointer updates.")
+    return "\n".join(lines) + ("\n" if lines else "")
+
+
+def print_diff(plan: dict[str, Any], kit_root: Path, target_root: Path) -> None:
+    diff = generate_diff(plan, kit_root, target_root)
+    if diff:
+        sys.stdout.write(diff)
+        if not diff.endswith("\n"):
+            sys.stdout.write("\n")
+    else:
+        print("(no diff: plan is unchanged)")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Plan and apply receipt-aware skill adoption from Agent Guidance Kit."
@@ -319,6 +456,16 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--skill", action="append", required=True)
     plan_parser.add_argument(
         "--output", help="Write plan JSON to a new file; defaults to stdout"
+    )
+    plan_parser.add_argument(
+        "--diff",
+        action="store_true",
+        help="Show unified diff of planned skill and routing changes",
+    )
+    plan_parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Conflict-only check: do not write plan file, exit 1 if conflicts exist",
     )
 
     apply_parser = subparsers.add_parser(
@@ -341,18 +488,35 @@ def main() -> int:
         if args.command == "plan":
             skills = normalize_skills(args.skill)
             plan = build_plan(kit_root, target_root, skills)
-            if args.output:
-                write_new_json(Path(args.output).expanduser(), plan)
-                print_summary(plan)
-                print(f"Plan file: {Path(args.output).expanduser()}")
-            else:
-                json.dump(plan, sys.stdout, indent=2, sort_keys=True)
-                sys.stdout.write("\n")
             has_conflict = (
                 any(item["status"] == "CONFLICT" for item in plan["skills"])
                 or plan["routing"]["status"] == "CONFLICT"
                 or plan["source_resolution"]["status"] in {"CONFLICT", "ASK"}
             )
+            # --check is conflict-only: no file write, no JSON to stdout, just summary
+            if getattr(args, "check", False):
+                if getattr(args, "diff", False):
+                    print_diff(plan, kit_root, target_root)
+                else:
+                    print_summary(plan)
+                if has_conflict:
+                    print("CHECK: conflicts detected", file=sys.stderr)
+                else:
+                    print("CHECK: no conflicts")
+                return 1 if has_conflict else 0
+            if getattr(args, "diff", False):
+                print_diff(plan, kit_root, target_root)
+                # Still emit plan JSON / file after diff unless --check
+            if args.output:
+                write_new_json(Path(args.output).expanduser(), plan)
+                print_summary(plan)
+                print(f"Plan file: {Path(args.output).expanduser()}")
+            else:
+                if getattr(args, "diff", False):
+                    # Separate diff from JSON with a marker when both go to stdout
+                    print("--- PLAN JSON ---")
+                json.dump(plan, sys.stdout, indent=2, sort_keys=True)
+                sys.stdout.write("\n")
             return 1 if has_conflict else 0
 
         if not args.approve:

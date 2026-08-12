@@ -1,0 +1,34 @@
+[project]
+name = "agent-guidance-kit"
+version = "1.0.0"
+description = "Portable library of project-local agent skills and bootstrap workflow"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "PyYAML==6.0.3",
+  "ruff==0.16.2",
+  "skills-ref==0.1.1",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = ["E501", "E402"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 50
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"

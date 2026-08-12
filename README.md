@@ -1,5 +1,8 @@
 # Agent Guidance Kit
 
+[![Check](https://github.com/HyperVon/agent-guidance-kit/actions/workflows/check.yml/badge.svg)](https://github.com/HyperVon/agent-guidance-kit/actions/workflows/check.yml)
+[![Validated skills: 20](https://img.shields.io/badge/Validated%20skills-20-brightgreen)](.agents/AGENTS.md) [![Evaluated: 20/20](https://img.shields.io/badge/Evaluated-20%2F20-blue)](docs/evaluations/validation-matrix.md) [![Harness: VERIFIED (muse)](https://img.shields.io/badge/Harness-VERIFIED%20(muse)-brightgreen)](docs/harness-compatibility.md)
+
 Agent Guidance Kit helps a coding agent add curated, project-local guidance to
 an existing software repository without replacing that repository's own rules.
 

@@ -1,0 +1,36 @@
+{
+  "skill_name": "git-github-workflow",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "Create a branch, commit these changes with a conventional message, and open a PR using the template.",
+      "expected_output": "The agent checks git status/base, plans an atomic conventional commit, drafts a PR with scope/safety and verification, and asks for push approval before publishing.",
+      "assertions": [
+        "The response checks git status and base branch before branching",
+        "The response proposes atomic conventional commits without force-push",
+        "The response drafts a PR with verification and requests approval to push"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "neighboring",
+      "prompt": "Review this diff for correctness and security issues.",
+      "expected_output": "The agent routes to code-review or security-review rather than treating it as a git workflow task.",
+      "assertions": [
+        "The response does not treat a diff review as a git branching task",
+        "The response routes to the closer review skill"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "ambiguous",
+      "prompt": "Can you help with git?",
+      "expected_output": "The agent asks for intent, scope, branch/base, and whether push/PR is authorized before acting.",
+      "assertions": [
+        "The response establishes intent and authority before acting",
+        "The response does not force-push or rewrite history from the vague request"
+      ]
+    }
+  ]
+}

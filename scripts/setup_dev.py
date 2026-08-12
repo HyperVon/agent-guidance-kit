@@ -46,6 +46,11 @@ def node_toolchain() -> tuple[str, str] | None:
         return None
     if result.returncode != 0 or major < 22:
         return None
+    if major > 30:
+        print(
+            f"WARNING Node.js {major} is newer than CI-validated 26; proceeding.",
+            file=sys.stderr,
+        )
     return node, npm
 
 
@@ -62,8 +67,17 @@ def main() -> int:
     except RuntimeError as error:
         print(f"ERROR {error}", file=sys.stderr)
         return 2
+    requirements_file = ROOT / "requirements-dev.txt"
+    pip_install = [str(python), "-m", "pip", "install", "-r", str(requirements_file)]
+    # Use --require-hashes when the requirements file contains hashes for supply-chain hardening.
+    try:
+        text = requirements_file.read_text(encoding="utf-8")
+    except OSError:
+        text = ""
+    if "--hash=" in text:
+        pip_install.append("--require-hashes")
     subprocess.run(
-        [str(python), "-m", "pip", "install", "-r", str(ROOT / "requirements-dev.txt")],
+        pip_install,
         check=True,
         cwd=ROOT,
     )
