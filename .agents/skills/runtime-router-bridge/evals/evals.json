@@ -1,0 +1,39 @@
+{
+  "skill_name": "runtime-router-bridge",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "This project already uses Agent Guidance Kit. Add Agent Runtime Router from the explicit checkout, but first show separate Guidance Kit and ARR plans and do not modify anything.",
+      "expected_output": "The response reads both projects' canonical skills, inventories the target and active harness, resolves the explicit ARR checkout, produces separate read-only plans, preserves target-owned routing policy, and waits for approval.",
+      "assertions": [
+        "Keeps Agent Guidance Kit as the guidance owner and ARR as the routing owner",
+        "Uses install_runtime.py plan and integration-plan without mutation",
+        "Requires separate approvals and does not inspect credentials"
+      ],
+      "files": ["SKILL.md"]
+    },
+    {
+      "id": 2,
+      "kind": "neighboring",
+      "prompt": "Refresh the Agent Guidance Kit skills in this repository from its resolved checkout.",
+      "expected_output": "The response routes to agent-guidance-maintenance and does not invoke the runtime-router bridge unless ARR adoption is also requested.",
+      "assertions": [
+        "Does not create or update ARR adapter files",
+        "Preserves the existing Guidance Kit receipt workflow"
+      ],
+      "files": ["SKILL.md"]
+    },
+    {
+      "id": 3,
+      "kind": "ambiguous",
+      "prompt": "Set up subagent routing in this project; it already has Agent Guidance Kit, but I have not said which router or harness behavior I want.",
+      "expected_output": "The response asks for or inventories the explicit ARR source and active harness, checks for an existing router owner, and stops at a read-only plan until the router and approval scope are clear.",
+      "assertions": [
+        "Does not guess a provider, model, harness, or ARR checkout",
+        "Does not overwrite an existing router or run a provider probe"
+      ],
+      "files": ["SKILL.md"]
+    }
+  ]
+}

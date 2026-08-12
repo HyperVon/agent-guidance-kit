@@ -23,6 +23,7 @@
     "**/.kilo/**",
     "**/.idea/**",
     "**/.cursor/**",
-    "**/.vscode/**"
+    "**/.vscode/**",
+    "**/.agents/.agent-runtime-router/**"
   ]
 }

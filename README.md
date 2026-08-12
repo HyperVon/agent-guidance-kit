@@ -108,7 +108,7 @@ copied into consuming repositories.
 The catalog covers:
 
 - Adoption and compatibility: `agent-guidance-maintenance`, `bootstrap-project`,
-  `harness-adaptation`, `catalog-discovery`
+  `harness-adaptation`, `catalog-discovery`, `runtime-router-bridge`
 - Review and quality: `ai-slop-detector`, `architecture-review`, `code-review`,
   `documentation-review`, `quality-hardening`, `security-review`,
   `systematic-debugging`, `adversarial-pr-review`
@@ -119,6 +119,11 @@ The catalog covers:
 
 Technology, product, and domain-specific guidance remains in the consuming
 repository.
+
+For a target that already uses this kit and also wants optional Agent Runtime
+Router routing, use [`runtime-router-bridge`](.agents/skills/runtime-router-bridge/SKILL.md).
+It keeps the two projects' plans, approvals, policies, catalogs, and harness
+adapters separate; it does not copy router code or choose providers.
 
 ## Harness compatibility
 

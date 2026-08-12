@@ -4,6 +4,12 @@ Notable changes to Agent Guidance Kit are recorded here.
 
 ## Unreleased
 
+### Added
+
+- Optional `runtime-router-bridge` workflow for coordinating Agent Runtime
+  Router adoption in an existing Guidance Kit target without copying routing
+  policy, catalogs, credentials, or harness-specific code.
+
 ### Fixed
 
 - Documentation review corrections: `README.md` skill-count badges and status line

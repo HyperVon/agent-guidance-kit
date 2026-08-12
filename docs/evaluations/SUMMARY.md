@@ -9,7 +9,7 @@ Human interface: ask the agent to “run evals” or “update the eval summary�
 
 ## Current coverage
 
-* Validated skills: `22` (`22/22` with at least one executed result in the latest set).
+* Validated skills: `23` (`22/23` with at least one executed result in the latest set).
 * Result files: `5` JSON + companions in `docs/evaluations/results/`.
 * Files: `2026-08-11-muse-spark-1.2-contributor-muse-code.json`, `2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-2.json`, `2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-3.json`, `2026-08-12-muse-spark-1.2-contributor-muse-code.json`, `2026-08-12-tencent-hy3-free-kilo.json`
 * Latest window: `2026-08-11T23:50:00+00:00` → `2026-08-12T09:52:04+00:00`.
