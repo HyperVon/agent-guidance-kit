@@ -5,7 +5,7 @@ profiles the active harness at adoption time, so an unknown or changed harness
 can still use native discovery, a thin pointer, a narrow projection, or a manual
 entrypoint.
 
-Snapshot date: 2026-08-10. `DOCUMENTED` means current primary documentation
+Snapshot date: 2026-08-12. `DOCUMENTED` means current primary documentation
 supports the route but this project has not yet exercised it in that harness.
 `BEST_EFFORT` marks an explicit discovery gap. No row is claimed `VERIFIED`
 until a fresh harness task demonstrates it.
@@ -20,7 +20,7 @@ until a fresh harness task demonstrates it.
 | OpenCode | `AGENTS.md`; `CLAUDE.md` fallback | Native | canonical files directly | DOCUMENTED |
 | Kilo Code | `AGENTS.md` and configured instructions | Native | canonical files directly | DOCUMENTED |
 | Pi | `AGENTS.md` and `CLAUDE.md` context | Native | canonical files directly | DOCUMENTED |
-| Muse Code | no public file contract established | no public skill contract established | unknown-harness manual entrypoint | BEST_EFFORT |
+| Muse Code | `AGENTS.md` hierarchy | Native (`.agents/skills/`) | canonical files directly | VERIFIED |
 
 Primary evidence:
 

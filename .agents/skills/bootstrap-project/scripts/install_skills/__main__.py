@@ -25,6 +25,16 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument(
         "--output", help="Write plan JSON to a new file; defaults to stdout"
     )
+    plan_parser.add_argument(
+        "--diff",
+        action="store_true",
+        help="Show unified diff of planned skill and routing changes",
+    )
+    plan_parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Conflict-only check: do not write plan file, exit 1 if conflicts exist",
+    )
 
     apply_parser = subparsers.add_parser(
         "apply", help="Apply an unchanged approved plan"
@@ -44,22 +54,37 @@ def main() -> int:
         kit_root = validate_root(Path(args.kit_root), "kit root")
         target_root = validate_root(Path(args.target), "target root")
         if args.command == "plan":
+            from .apply import print_diff
             from .validation import normalize_skills
 
             skills = normalize_skills(args.skill)
             plan = build_plan(kit_root, target_root, skills)
-            if args.output:
-                write_new_json(Path(args.output).expanduser(), plan)
-                print_summary(plan)
-                print(f"Plan file: {Path(args.output).expanduser()}")
-            else:
-                json.dump(plan, sys.stdout, indent=2, sort_keys=True)
-                sys.stdout.write("\n")
             has_conflict = (
                 any(item["status"] == "CONFLICT" for item in plan["skills"])
                 or plan["routing"]["status"] == "CONFLICT"
                 or plan["source_resolution"]["status"] in {"CONFLICT", "ASK"}
             )
+            if getattr(args, "check", False):
+                if getattr(args, "diff", False):
+                    print_diff(plan, kit_root, target_root)
+                else:
+                    print_summary(plan)
+                if has_conflict:
+                    print("CHECK: conflicts detected", file=sys.stderr)
+                else:
+                    print("CHECK: no conflicts")
+                return 1 if has_conflict else 0
+            if getattr(args, "diff", False):
+                print_diff(plan, kit_root, target_root)
+            if args.output:
+                write_new_json(Path(args.output).expanduser(), plan)
+                print_summary(plan)
+                print(f"Plan file: {Path(args.output).expanduser()}")
+            else:
+                if getattr(args, "diff", False):
+                    print("--- PLAN JSON ---")
+                json.dump(plan, sys.stdout, indent=2, sort_keys=True)
+                sys.stdout.write("\n")
             return 1 if has_conflict else 0
 
         if not args.approve:

@@ -54,7 +54,7 @@ update it in the same PR that implements each item and keep `make check` green.
   `EXCLUDED_DIRECTORIES` in `scripts/validate_repository.py` and hygiene/markdown ignores.
 - [x] **F4** Clarify Node support: `scripts/setup_dev.py >=22` vs CI `26.6.0` —
   document range and add `22` to CI matrix.
-- [ ] **F5** Harden `requirements-dev.txt` — add hashes or `pip --require-hashes`
+- [x] **F5** Harden `requirements-dev.txt` — add hashes or `pip --require-hashes`
   path and update `scripts/setup_dev.py`.
 - [x] **F6** Expand `scripts/public_hygiene_check.py` patterns (Anthropic, npm,
   generic tokens) + tests.
@@ -66,11 +66,11 @@ update it in the same PR that implements each item and keep `make check` green.
 - [x] **2A** Centralize Python config in `pyproject.toml` (`[tool.ruff]`,
   `[project]` version).
 - [x] **2B** `scripts/check.py --quick` / `--fix` hints (keep full gate for CI).
-- [ ] **2C** `install_skills` UX: `plan --diff` and `plan --check` (conflict-only).
-- [ ] **2D** `scripts/validate_repository.py --json` and `related`-link checks.
-- [ ] **2E** Harness verification probe `scripts/verify_harness.py` to move
+- [x] **2C** `install_skills` UX: `plan --diff` and `plan --check` (conflict-only).
+- [x] **2D** `scripts/validate_repository.py --json` and `related`-link checks.
+- [x] **2E** Harness verification probe `scripts/verify_harness.py` to move
   `muse code` from `BEST_EFFORT` → `VERIFIED` (`docs/harness-compatibility.md`).
-- [ ] **2F** `pre-commit` config + `.devcontainer` for uniform setup.
+- [x] **2F** `pre-commit` config + `.devcontainer` for uniform setup.
 - [x] **2G** Catalog-driven existing-prompt improvement (`ADAPT` enhancement) —
   inventory local `AGENTS.md`/`CLAUDE.md`/`.cursor/rules` bodies, compare against
   catalog skill triggers/decisions/stop-conditions, propose paste-ready
@@ -100,10 +100,10 @@ update it in the same PR that implements each item and keep `make check` green.
 
 ### Tranche 4 — Docs and process
 
-- [ ] Mermaid diagram for `docs/design.md` architecture.
-- [ ] `docs/adr/` for schema bumps (`SCHEMA_VERSION`, `skill-dependencies`).
-- [ ] `README.md` adoption-health badge from `validation-matrix.md`.
-- [ ] `CONTRIBUTING.md` pre-commit workflow note.
+- [x] Mermaid diagram for `docs/design.md` architecture.
+- [x] `docs/adr/` for schema bumps (`SCHEMA_VERSION`, `skill-dependencies`) — ADR 001, 002, 003.
+- [x] `README.md` adoption-health badge from `validation-matrix.md`.
+- [x] `CONTRIBUTING.md` pre-commit workflow note.
 
 Progress is tracked here and in the PR description. Each tranche lands as one
 or more focused commits with `make check` evidence. Distribution impact: 3A
