@@ -1,0 +1,68 @@
+name: Bug report
+description: Report reproducible behavior that does not match the documented contract.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Do not include credentials, private repository content, personal paths,
+        or other sensitive data. Report security vulnerabilities through the
+        private channel linked in the issue chooser.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and which documented behavior did you expect?
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Bootstrap or adoption
+        - Inventory or installation
+        - Validation or checks
+        - Skill guidance
+        - Harness compatibility
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or revision
+      description: Provide the kit version or commit SHA where the problem occurs.
+      placeholder: v1.0.0 or a commit SHA
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Provide the smallest safe sequence that reproduces the problem.
+      placeholder: Include commands, sanitized inputs, and relevant environment details.
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed result
+      description: Include the exact sanitized error or incorrect result.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Additional verification
+      description: List checks already run or other evidence that may help diagnosis.
+  - type: checkboxes
+    id: hygiene
+    attributes:
+      label: Public hygiene
+      options:
+        - label: I removed secrets, personal paths, and private project data.
+          required: true
