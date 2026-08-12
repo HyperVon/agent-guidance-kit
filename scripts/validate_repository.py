@@ -141,9 +141,9 @@ def validate_harness_imports(errors: list[str]) -> None:
         if not path.is_file() or path.is_symlink():
             errors.append(f"{relative_path}: missing real harness entrypoint")
             continue
-        imports = IMPORT_RE.findall(
-            without_fenced_code(path.read_text(encoding="utf-8"))
-        )
+        raw = path.read_text(encoding="utf-8")
+        text = without_fenced_code(raw)
+        imports = IMPORT_RE.findall(text)
         if not imports:
             errors.append(
                 f"{relative_path}: expected at least one canonical-file import"
@@ -166,6 +166,43 @@ def validate_harness_imports(errors: list[str]) -> None:
                 continue
             if not resolved.is_file() or resolved.is_symlink():
                 errors.append(f"{relative_path}: broken or unsafe import: {raw_target}")
+        # Thin-adapter check: harness file should not duplicate canonical policy
+        if "Product boundary" in raw or "Repository invariants" in raw:
+            errors.append(
+                f"{relative_path}: should be thin adapter, not duplicate canonical policy"
+            )
+
+    copilot = ROOT / ".github/copilot-instructions.md"
+    if not copilot.is_file() or copilot.is_symlink():
+        errors.append(
+            ".github/copilot-instructions.md: missing real harness entrypoint"
+        )
+    else:
+        raw = copilot.read_text(encoding="utf-8")
+        text = without_fenced_code(raw)
+        has_canonical = any(
+            canonical in text
+            for canonical in ("AGENTS.md", ".agents/AGENTS.md", ".agents/OPERATING.md")
+        )
+        if not has_canonical:
+            errors.append(
+                ".github/copilot-instructions.md: expected at least one canonical-file reference"
+            )
+        if "Product boundary" in raw:
+            errors.append(
+                ".github/copilot-instructions.md: should be thin, not duplicate canonical policy"
+            )
+
+    # Root AGENTS.md thin-pointer check
+    root_agents = ROOT / "AGENTS.md"
+    if root_agents.is_file() and not root_agents.is_symlink():
+        raw = root_agents.read_text(encoding="utf-8")
+        if ".agents/AGENTS.md" not in raw:
+            errors.append("AGENTS.md: should reference canonical .agents/AGENTS.md")
+        if "Product boundary" in raw or "Skill index" in raw:
+            errors.append(
+                "AGENTS.md: root should be thin pointer, not duplicate canonical policy"
+            )
 
     copilot = ROOT / ".github/copilot-instructions.md"
     if not copilot.is_file() or copilot.is_symlink():
@@ -673,6 +710,60 @@ def validate_evaluation_results(skill_names: set[str], errors: list[str]) -> Non
                 )
 
 
+def validate_evaluation_summary(errors: list[str]) -> None:
+    """Ensure docs/evaluations/SUMMARY.md is fresh vs results/*.json."""
+    summary = ROOT / "docs/evaluations/SUMMARY.md"
+    results_root = ROOT / "docs/evaluations/results"
+    generator = ROOT / "scripts/generate_evaluation_summary.py"
+    # If there are no results yet, summary is optional
+    has_results = results_root.is_dir() and any(results_root.glob("*.json"))
+    if not has_results:
+        return
+    if summary.is_symlink():
+        errors.append("docs/evaluations/SUMMARY.md: must not be a symlink")
+        return
+    if not summary.is_file():
+        errors.append(
+            "docs/evaluations/SUMMARY.md: missing — run python3 scripts/generate_evaluation_summary.py --write"
+        )
+        return
+    if not generator.is_file() or generator.is_symlink():
+        errors.append("scripts/generate_evaluation_summary.py: missing real generator")
+        return
+    # Check freshness by invoking the generator in --check mode or by direct comparison
+    # Prefer direct import to avoid subprocess overhead; fall back to file comparison
+    try:
+        import importlib.util
+        import sys as _sys
+
+        spec = importlib.util.spec_from_file_location(
+            "generate_evaluation_summary", str(generator)
+        )
+        if spec is None or spec.loader is None:
+            raise ImportError("cannot load generator spec")
+        mod = importlib.util.module_from_spec(spec)
+        _sys.modules["generate_evaluation_summary"] = mod
+        spec.loader.exec_module(mod)  # type: ignore
+        expected = mod.generate_summary_text()  # type: ignore
+        existing = summary.read_text(encoding="utf-8")
+        if existing != expected:
+            errors.append(
+                "docs/evaluations/SUMMARY.md: stale — run python3 scripts/generate_evaluation_summary.py --write"
+            )
+    except Exception as exc:  # pragma: no cover - defensive
+        # If generation fails, surface as validation error rather than crash
+        errors.append(f"docs/evaluations/SUMMARY.md: cannot verify freshness: {exc}")
+    # Also ensure the marker is present to prevent hand-edited drift
+    try:
+        text = summary.read_text(encoding="utf-8")
+        if "<!-- GENERATED by scripts/generate_evaluation_summary.py" not in text:
+            errors.append(
+                "docs/evaluations/SUMMARY.md: missing GENERATED marker — regenerate via scripts/generate_evaluation_summary.py"
+            )
+    except OSError:
+        pass
+
+
 def validate_python(errors: list[str]) -> None:
     for path in sorted(ROOT.rglob("*.py")):
         if path.is_symlink() or not is_project_path(path):
@@ -771,6 +862,7 @@ def main() -> int:
     validate_links(errors)
     validate_harness_imports(errors)
     validate_evaluation_results(skills, errors)
+    validate_evaluation_summary(errors)
     validate_python(errors)
     if args.json:
         results_root = ROOT / "docs/evaluations/results"

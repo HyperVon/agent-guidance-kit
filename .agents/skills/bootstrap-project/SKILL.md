@@ -126,6 +126,15 @@ root entrypoint, one canonical project rules/index file, one compact operating
 file, and conditional skill directories. Do not create parallel canonical
 sources.
 
+For `AGENTS.md` and every harness adapter (`CLAUDE.md`, `GEMINI.md`,
+`.github/copilot-instructions.md`, `.cursor/rules`, `.clinerules`,
+`.claude/settings.json`, etc.):
+
+1. Run `python3 <kit-root>/scripts/harness_recommendations.py --kit-root <kit-root> --target <target-root> --diff` to inventory bodies and get paste-ready diffs.
+2. Compare the target's `AGENTS.md` (root thin pointer) and `.agents/AGENTS.md` / `.agents/OPERATING.md` against the kit canonicals. A thick root `AGENTS.md` that duplicates `Product boundary` / `Skill index` is a `RECOMMEND` to thin; outdated `.agents/AGENTS.md` is `REVIEW` via `skill-authoring`.
+3. For each harness file, classify as `KEEP_LOCAL` (strong target-specific policy), `ADAPT` (apply paste-ready thin-pointer diff), or `SKIP` (unused harness). Never auto-overwrite divergent harness content; use `harness-adaptation` + `skill-authoring` with approval gate.
+4. Surface the table in the approval plan (Section 5) alongside skill decisions so the user sees `AGENTS.md` + harness upgrades together with skill adds.
+
 Build a capability profile for the active harness rather than selecting from a
 closed product list. Use native discovery when available, then a thin pointer,
 then a narrow projection, and finally a manual invocation prompt. Unknown
