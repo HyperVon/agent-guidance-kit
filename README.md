@@ -98,10 +98,12 @@ The installer always includes `agent-guidance-maintenance`, adds declared
 required dependencies, and leaves optional related skills unselected. It
 creates missing skills and may refresh an adopted skill only when its current
 content still matches a prior receipt. Local modifications or routing conflicts
-stop the entire operation. The approved plan also creates or updates a managed
-AGENTS routing block so future agents can discover maintenance without knowing
-the source checkout path. Kit-side evaluation material under `evals/` is not
-copied into consuming repositories.
+stop the entire operation. A refresh removes only files previously listed as
+receipt-owned; target-local files that are absent from the receipt are
+preserved, including evaluation or transient material. The approved plan also
+creates or updates a managed AGENTS routing block so future agents can discover
+maintenance without knowing the source checkout path. Kit-side evaluation
+material under `evals/` is not copied into consuming repositories.
 
 ## Included skills
 

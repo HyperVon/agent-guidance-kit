@@ -219,11 +219,14 @@ python3 <kit-root>/.agents/skills/bootstrap-project/scripts/install_skills.py \
   --plan <plan.json> --approve
 ```
 
-The helper revalidates source and destination state, stages complete skill
-directories, creates missing destinations, atomically refreshes only content
-whose current digest matches a prior receipt, maintains a digest-guarded route
-block, and writes a content-hash receipt. Local divergence is a conflict and is
-never overwritten.
+The helper revalidates source and destination state, stages complete managed
+skill content, creates missing destinations, and atomically refreshes only
+content whose current digest matches a prior receipt. During a refresh it
+removes only paths that a prior receipt proves Agent Guidance Kit owned; target
+files omitted from the receipt (including evaluation or transient material)
+are preserved and are never silently adopted. It maintains a digest-guarded
+route block and writes a content-hash receipt. Local divergence is a conflict
+and is never overwritten.
 
 If no higher-priority portable source already resolves the approved kit, the
 first approved apply configures the ignored target-local source locator when the

@@ -36,6 +36,11 @@ Notable changes to Agent Guidance Kit are recorded here.
 
 ### Fixed
 
+- Receipt-aware skill refreshes now preserve target files that were not proven
+  Agent Guidance Kit-owned by an earlier receipt, including evaluation and
+  transient material. Only previously receipt-owned paths may be removed when
+  they disappear from a newer source manifest; regression coverage protects
+  both preservation and intentional cleanup.
 - Documentation review corrections: `README.md` skill-count badges and status line
   now read `22/22` (were `20/20`), matching `docs/evaluations/SUMMARY.md` and
   `validation-matrix.md` after the `adversarial-pr-review` and `dependency-upgrade`

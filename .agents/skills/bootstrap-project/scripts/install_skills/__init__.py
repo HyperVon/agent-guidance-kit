@@ -46,6 +46,7 @@ from .receipts import (
     receipt_for,
     receipt_route_block_digests,
     receipt_skill_digests,
+    receipt_skill_file_paths,
 )
 from .routing import (
     inspect_routing,
@@ -115,6 +116,7 @@ __all__ = [
     "receipt_for",
     "receipt_route_block_digests",
     "receipt_skill_digests",
+    "receipt_skill_file_paths",
     "render_routing",
     "restore_routing",
     "restore_source_locator",

@@ -331,6 +331,64 @@ class InstallSkillsTest(unittest.TestCase):
         self.assertFalse(any(path.startswith("evals/") for path in planned))
         self.assertFalse((self.target / ".agents/skills/alpha/evals").exists())
 
+    def test_unowned_target_material_survives_a_skill_refresh(self) -> None:
+        source = self.add_skill("alpha", "# Skill\n\nVersion one.\n")
+        initial = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        install_skills.apply_plan(self.kit, self.target, initial)
+
+        destination = self.target / ".agents/skills/alpha"
+        local_eval = destination / "evals/evals.json"
+        local_eval.parent.mkdir(parents=True)
+        local_eval.write_text("target-local evaluation\n", encoding="utf-8")
+        local_transient = destination / ".DS_Store"
+        local_transient.write_bytes(b"target metadata")
+
+        (source / "SKILL.md").write_text("# Skill\n\nVersion two.\n", encoding="utf-8")
+        update = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        self.assertEqual("UPDATE", update["skills"][-1]["status"])
+        install_skills.apply_plan(self.kit, self.target, update)
+
+        self.assertIn("Version two.", (destination / "SKILL.md").read_text())
+        self.assertEqual("target-local evaluation\n", local_eval.read_text())
+        self.assertEqual(b"target metadata", local_transient.read_bytes())
+
+    def test_only_receipt_owned_files_are_removed_when_source_drops_them(self) -> None:
+        source = self.add_skill("alpha", "# Skill\n")
+        managed = source / "managed.md"
+        managed.write_text("kit-owned\n", encoding="utf-8")
+        initial = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        install_skills.apply_plan(self.kit, self.target, initial)
+
+        managed.unlink()
+        update = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        self.assertEqual("UPDATE", update["skills"][-1]["status"])
+        install_skills.apply_plan(self.kit, self.target, update)
+
+        self.assertFalse((self.target / ".agents/skills/alpha/managed.md").exists())
+
+    def test_legacy_receipt_without_file_manifest_preserves_target_content(
+        self,
+    ) -> None:
+        source = self.add_skill("alpha", "# Skill\n\nVersion one.\n")
+        initial = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        receipt_path = install_skills.apply_plan(self.kit, self.target, initial)
+
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        for entry in receipt["skills"]:
+            entry.pop("files", None)
+        receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+
+        local_file = self.target / ".agents/skills/alpha/evals/local.json"
+        local_file.parent.mkdir(parents=True)
+        local_file.write_text("legacy target content\n", encoding="utf-8")
+        (source / "SKILL.md").write_text("# Skill\n\nVersion two.\n", encoding="utf-8")
+
+        update = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        self.assertEqual("UPDATE", update["skills"][-1]["status"])
+        install_skills.apply_plan(self.kit, self.target, update)
+
+        self.assertEqual("legacy target content\n", local_file.read_text())
+
     def test_required_dependencies_are_added_but_related_skills_are_not(self) -> None:
         self.add_skill("alpha")
         self.add_skill("gamma")

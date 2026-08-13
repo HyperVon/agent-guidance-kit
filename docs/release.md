@@ -91,6 +91,9 @@ python -c "import sys; sys.path.insert(0, '.agents/skills/bootstrap-project/scri
 * `UPDATE` is expected for `agent-guidance-maintenance` after `52bd05b` (wrapper + `install_skills/` package, `resolve_source.py` canonical validator) — the installer detects `source_digest != target_digest` and refreshes atomically. `security-review`/`systematic-debugging` remain `UNCHANGED` if their digests match.
 * Local project skills (e.g., Kraken's `code-review`, `ai-slop-detector`) are not receipt-owned — the installer leaves them untouched and reports `CONFLICT` if you request a kit skill that collides with a local same-named skill; resolve by `KEEP_LOCAL` or rename.
 * `evals/` and `docs/` are `SOURCE_ONLY`/`TRANSIENT` — never copied to targets, so new `validation-matrix.md` or `docs/release.md` changes do not create drift.
+  Existing target material under those excluded paths is preserved during a
+  receipt-owned skill refresh; only paths explicitly listed in an earlier
+  receipt may be removed.
 * The kit now validates `docs/evaluations/results/*.json` and `validation-matrix.md` links — run `make check` after the upgrade to confirm `1 file(s) validated` and no broken links. If `harness-compatibility` or other docs links were outside the portable catalog (fixed in `bootstrap-project/references/harness-integration.md`), the previous kit would have failed `validate_declared_links` for `bootstrap-project`; the fix makes that skill installable again.
 
 ## After a release

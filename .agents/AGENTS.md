@@ -114,3 +114,13 @@ reject unfinished templates, and scan tracked content for common secret and
 personal-path patterns. These checks are required before commit or push;
 address findings rather than skipping the gate. Report skipped optional tooling
 as skipped, never passed.
+
+<!-- agent-guidance-kit:routes:start -->
+## Agent Guidance Kit skills
+
+These receipt-managed skills were adopted from Agent Guidance Kit.
+
+| Task | Skill |
+| :--- | :--- |
+| Adopt, add, audit, refresh, or update Agent Guidance Kit content | [agent-guidance-maintenance](skills/agent-guidance-maintenance/SKILL.md) |
+<!-- agent-guidance-kit:routes:end -->

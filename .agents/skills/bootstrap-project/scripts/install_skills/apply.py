@@ -23,10 +23,17 @@ from .manifest import (
     canonical_json,
     copy_manifest,
     digest_bytes,
+    digest_file,
     manifest_digest,
     tree_manifest,
 )
-from .receipts import read_json, receipt_for, receipt_skill_digests, write_new_json
+from .receipts import (
+    read_json,
+    receipt_for,
+    receipt_skill_digests,
+    receipt_skill_file_paths,
+    write_new_json,
+)
 from .routing import inspect_routing, restore_routing, write_routing
 from .source import (
     configure_source_locator,
@@ -37,6 +44,7 @@ from .utils import read_text_exact
 from .validation import (
     AdoptionError,
     ensure_safe_ancestors,
+    ensure_no_symlink_tree,
     validate_relative,
     validate_root,
 )
@@ -86,6 +94,49 @@ def validate_installed(target_root: Path, plan: dict[str, Any]) -> None:
 
 # Module-level reference to allow monkey-patching in tests
 validate_installed_impl = validate_installed
+
+
+def _preserve_unowned_files(
+    previous: Path,
+    destination: Path,
+    receipt_owned_paths: set[str],
+    managed_paths: set[str],
+) -> None:
+    """Restore target files that the receipt never proved AGK owned.
+
+    The skill manifest intentionally omits evaluation and transient material.
+    A directory swap must therefore not make those paths deletion authority.
+    Paths in a prior receipt may be removed when they disappear from the new
+    source; every other existing file is copied back into the refreshed tree.
+    """
+
+    ensure_no_symlink_tree(previous)
+    for directory, _, filenames in os.walk(previous, followlinks=False):
+        current = Path(directory)
+        for filename in sorted(filenames):
+            source_file = current / filename
+            relative = source_file.relative_to(previous)
+            validate_relative(relative, "preserved skill file")
+            relative_name = relative.as_posix()
+            if relative_name in receipt_owned_paths or relative_name in managed_paths:
+                continue
+            destination_file = destination / relative
+            if destination_file.exists() or destination_file.is_symlink():
+                if destination_file.is_symlink() or not destination_file.is_file():
+                    raise AdoptionError(
+                        f"preserved skill path is unsafe: {relative_name}"
+                    )
+                # This should only happen if a future manifest policy starts
+                # copying an unowned path. Never silently overwrite it.
+                if digest_file(destination_file) != digest_file(source_file):
+                    raise AdoptionError(
+                        f"preserved skill path changed during apply: {relative_name}"
+                    )
+                continue
+            if relative.parent.parts:
+                ensure_safe_ancestors(destination, relative.parent, create=True)
+            destination_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_file, destination_file)
 
 
 def apply_plan(kit_root: Path, target_root: Path, plan: dict[str, Any]) -> Path:
@@ -162,6 +213,7 @@ def apply_plan(kit_root: Path, target_root: Path, plan: dict[str, Any]) -> Path:
         raise AdoptionError(
             f"plan contains unsupported statuses for: {', '.join(unexpected)}"
         )
+    receipt_file_paths = receipt_skill_file_paths(target_root)
 
     ensure_safe_ancestors(target_root, Path(".agents"), create=True)
     ensure_safe_ancestors(target_root, TARGET_SKILLS, create=True)
@@ -214,6 +266,13 @@ def apply_plan(kit_root: Path, target_root: Path, plan: dict[str, Any]) -> Path:
                 os.replace(destination, previous)
             os.replace(staged, destination)
             moved.append((item["status"], destination, staged, previous))
+            if item["status"] == "UPDATE" and previous is not None:
+                _preserve_unowned_files(
+                    previous,
+                    destination,
+                    receipt_file_paths.get(item["name"], set()),
+                    {file_item["path"] for file_item in item["files"]},
+                )
 
         if routing.get("status") != "UNCHANGED":
             route_before = write_routing(target_root, routing, plan["plan_id"])
