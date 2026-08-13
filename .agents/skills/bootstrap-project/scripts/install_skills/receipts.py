@@ -58,6 +58,7 @@ def receipt_skill_file_paths(target_root: Path) -> dict[str, set[str]]:
     """
 
     paths_by_skill: dict[str, set[str]] = {}
+    untrusted_skills: set[str] = set()
     directory = target_root / RECEIPTS
     if not directory.exists() and not directory.is_symlink():
         return paths_by_skill
@@ -82,6 +83,8 @@ def receipt_skill_file_paths(target_root: Path) -> dict[str, set[str]]:
                 raise AdoptionError(
                     f"receipt skill identity is malformed: {path.relative_to(target_root)}"
                 )
+            if name in untrusted_skills:
+                continue
             files = entry.get("files")
             if files is None:
                 # Pre-manifest receipts cannot prove ownership of any path.
@@ -118,10 +121,13 @@ def receipt_skill_file_paths(target_root: Path) -> dict[str, set[str]]:
                     ) from error
                 owned.add(relative.as_posix())
             if manifest_digest(files) != source_digest:
-                raise AdoptionError(
-                    f"receipt skill file manifest does not match its source digest: "
-                    f"{path.relative_to(target_root)}"
-                )
+                # Historical receipts may have been generated with a broader
+                # manifest policy (for example, including evals/). They are
+                # still useful for update detection, but they are not safe
+                # deletion authority. Preserve all paths for this skill and
+                # let the next successful apply write a current receipt.
+                untrusted_skills.add(name)
+                paths_by_skill[name] = set()
     return paths_by_skill
 
 
