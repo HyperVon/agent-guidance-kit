@@ -33,6 +33,18 @@
         "The response verifies trigger and owner are distinct from existing skills",
         "The response does not edit without explicit approval"
       ]
+    },
+    {
+      "id": 4,
+      "kind": "edge",
+      "prompt": "Revise a portable skill whose body is growing. Preserve its trigger, owner, approval and safety boundaries, make the entrypoint a compact table of contents, move rare detail behind a directly linked reference, and check for harness projection or name collisions.",
+      "expected_output": "The agent edits only the approved skill, preserves the canonical source of truth and stop conditions, validates links and routing, and reports context-cost and portability checks.",
+      "assertions": [
+        "The response identifies the trigger, owner, non-goals, side effects, and stop condition before editing",
+        "The response moves only low-frequency detail behind a resolvable reference while preserving common-path guidance",
+        "The response checks canonical ownership, body/context cost, harness portability, and collisions",
+        "The response validates matching, neighboring, and ambiguous routing before handoff"
+      ]
     }
   ]
 }

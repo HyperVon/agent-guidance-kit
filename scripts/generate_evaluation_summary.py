@@ -106,6 +106,7 @@ def load_results() -> list[dict]:
                     any_better = True
             decision = entry.get("decision", "")
             overall_better = entry.get("overall_better", any_better)
+            measurement_status = entry.get("measurement_status", "legacy")
             # Dedup key: skill × harness × model × effort
             key = (
                 skill_name,
@@ -135,6 +136,9 @@ def load_results() -> list[dict]:
                     if isinstance(overall_better, bool)
                     else any_better,
                     "decision": decision if isinstance(decision, str) else "",
+                    "measurement_status": measurement_status
+                    if isinstance(measurement_status, str)
+                    else "legacy",
                     "file": path.name,
                     "file_path": path,
                     "harness_label": f"{harness_name} {harness_version}".strip()
@@ -205,6 +209,10 @@ def generate_summary_text() -> str:
     )
     lines.append("")
     lines.append(
+        "Integrity note: new comparisons require separate fresh `WITH-SKILL` and `BASELINE` workers or harness sessions with verifiable skill loading/absence; a role-played no-skill baseline is invalid. Historical result files may be structurally valid without proving that boundary."
+    )
+    lines.append("")
+    lines.append(
         f"_Generated from {len(results_files)} result file(s) in `docs/evaluations/results/`; {len(records)} skill-records considered, {len(latest)} latest entries retained (dedup key: skill × harness × model × reasoning_effort)._"
     )
     lines.append("")
@@ -243,25 +251,32 @@ def generate_summary_text() -> str:
     lines.append("## Latest per skill × harness × model")
     lines.append("")
     lines.append(
-        "`Better` means `overall_better` (`any(case.better)`) and `skill_pass > baseline_pass` on at least one case; `Decision` from the result file."
+        "`Better` means `overall_better` (`any(case.better)`) and `skill_pass > baseline_pass` on at least one case. `?` means a valid comparison was non-discriminating or inconclusive; it is not evidence that the skill failed. `Decision` and `Measurement` come from the result file."
     )
     lines.append("")
     lines.append(
-        "| Skill | Harness | Model | Run ID | Date | Cases | Skill pass | Baseline pass | Better | Decision | Source |"
+        "| Skill | Harness | Model | Run ID | Date | Cases | Skill pass | Baseline pass | Better | Measurement | Decision | Source |"
     )
     lines.append(
-        "| :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | :---: | :--- | :--- |"
+        "| :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | :---: | :--- | :--- | :--- |"
     )
     if not sorted_latest:
-        lines.append("| _none_ | – | – | – | – | – | – | – | – | – | – |")
+        lines.append("| _none_ | – | – | – | – | – | – | – | – | – | – | – |")
     else:
         for r in sorted_latest:
             harness_cell = r["harness_label"] or "–"
             model_cell = r["model_label"] or "–"
             # Date only (YYYY-MM-DD) from timestamp
             date = r["timestamp"][:10] if r["timestamp"] else "–"
-            better = "✓" if r["overall_better"] else "–"
+            better = (
+                "?"
+                if r["measurement_status"] in {"inconclusive", "non_discriminating"}
+                else "✓"
+                if r["overall_better"]
+                else "–"
+            )
             decision = f"`{r['decision']}`" if r["decision"] else "–"
+            measurement = r["measurement_status"] or "–"
             source = f"[{r['file']}](results/{r['file']})"
             # Human companion expected same basename .md
             md_name = r["file"].replace(".json", ".md")
@@ -269,7 +284,7 @@ def generate_summary_text() -> str:
             if md_path.is_file():
                 source += f" · [human](results/{md_name})"
             lines.append(
-                f"| `{r['skill_name']}` | {harness_cell} | {model_cell} | `{r['run_id']}` | {date} | {r['cases']} | {r['skill_pass']}/{r['total_assertions']} | {r['baseline_pass']}/{r['total_assertions']} | {better} | {decision} | {source} |"
+                f"| `{r['skill_name']}` | {harness_cell} | {model_cell} | `{r['run_id']}` | {date} | {r['cases']} | {r['skill_pass']}/{r['total_assertions']} | {r['baseline_pass']}/{r['total_assertions']} | {better} | `{measurement}` | {decision} | {source} |"
             )
     lines.append("")
 
@@ -288,6 +303,14 @@ def generate_summary_text() -> str:
         )
         lines.append(
             f"* Better: `{better_count}/{len(sorted_latest)}` entries where `overall_better=true` (skill outperformed baseline)."
+        )
+        inconclusive_count = sum(
+            1
+            for r in sorted_latest
+            if r["measurement_status"] in {"inconclusive", "non_discriminating"}
+        )
+        lines.append(
+            f"* Inconclusive: `{inconclusive_count}/{len(sorted_latest)}` entries with a valid but non-discriminating measurement."
         )
     else:
         lines.append("* No executed results yet.")

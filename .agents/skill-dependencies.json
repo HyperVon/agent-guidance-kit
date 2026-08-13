@@ -63,6 +63,16 @@
       "requires": [],
       "route": "Verify and update documentation against implementation and build truth"
     },
+    "frontend-quality-review": {
+      "related": [
+        "ai-slop-detector",
+        "code-review",
+        "quality-hardening",
+        "security-review"
+      ],
+      "requires": [],
+      "route": "Review frontend/UI quality, interaction states, accessibility, and responsive behavior"
+    },
     "harness-adaptation": {
       "related": [
         "bootstrap-project"
@@ -182,6 +192,15 @@
       ],
       "requires": [],
       "route": "Diagnose an observed failure and find its root cause before fixing it"
+    },
+    "threat-modeling": {
+      "related": [
+        "architecture-review",
+        "quality-hardening",
+        "security-review"
+      ],
+      "requires": [],
+      "route": "Build a repository-grounded design-time threat model"
     },
     "adversarial-pr-review": {
       "related": [

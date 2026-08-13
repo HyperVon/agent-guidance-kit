@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Product placeholder">
+  <rect width="64" height="64" rx="10" fill="#ececf4" />
+  <path d="M18 24h28l-3 25H21l-3-25Z" fill="#6046d8" opacity=".82" />
+  <path d="M25 25c0-6 3-10 7-10s7 4 7 10" fill="none" stroke="#20242d" stroke-width="3" />
+</svg>

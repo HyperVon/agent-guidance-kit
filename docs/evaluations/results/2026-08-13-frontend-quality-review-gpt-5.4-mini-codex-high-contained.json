@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "run_id": "2026-08-13-frontend-quality-review-gpt-5.4-mini-codex-high-contained",
+  "timestamp": "2026-08-13T12:38:42Z",
+  "harness": {
+    "name": "Codex CLI",
+    "version": "0.147.0-alpha.6.5"
+  },
+  "model": {
+    "provider": "openai",
+    "name": "gpt-5.4-mini",
+    "reasoning_effort": "high"
+  },
+  "baseline": "harness-default",
+  "protocol_status": "valid",
+  "method": "Full five-case pack with ten genuinely independent fresh Codex CLI workers, one guided and one baseline per case, all using gpt-5.4-mini at high effort. Each condition used the same natural prompt and declared fixture snapshot in a neutral root. The guided variant loaded the target skill at the neutral task-quality path; the baseline had no .agents guidance tree and received no target-skill identity. Each worker ran inside an outer macOS sandbox-exec/seatbelt profile that allowed its own root and required harness runtime files while denying shared temporary storage, other evaluation roots, the catalog checkout, worktrees, memory, and parent-only traces; the inner Codex sandbox bypass was used only under that outer profile. Parent-side probes verified pwd, local manifests, denied parent traversal, and denied shared-temp/catalog/memory access before grading. Stdout, stderr, and session JSONL stayed in a parent-only ignored directory. Baseline trace scans found no target-skill identity or evaluation metadata. An interrupted gpt-5.6-luna case-2 pair was excluded and not combined with this run.",
+  "protocol_evidence": {
+    "fresh_independent_workers": 10,
+    "cases": 5,
+    "repetitions": 1,
+    "filesystem_boundary": "verified for all 10 workers",
+    "baseline_target_identity_scan": "clear",
+    "parent_probe": "all workers had denied parent traversal and denied shared-temp/catalog/memory access",
+    "raw_trace_storage": "parent-only ignored temporary workspace",
+    "parallel_wall_clock": "approximately 2 minutes 43 seconds; environment-specific"
+  },
+  "skills": [
+    {
+      "skill_name": "frontend-quality-review",
+      "skill_commit": "uncommitted-working-tree:d647466a09c238fcfd8272096599eb27e057f01ade96e46298ff31e154f4dc33",
+      "skill_sha256": "d647466a09c238fcfd8272096599eb27e057f01ade96e46298ff31e154f4dc33",
+      "evaluation_sha256": "ebb64990334feac90942402f39dbf4ae3983bb0609febbdfbdc90324e7b1a59a",
+      "fixture_manifest_sha256": "b9bd223cd3a1df0d1eaad29f73833a1417e7eb9153a64df032926189b1ffb7fa",
+      "case_manifest": [
+        {"id": 1, "kind": "matching", "assertions_total": 5},
+        {"id": 2, "kind": "matching", "assertions_total": 3},
+        {"id": 3, "kind": "neighboring", "assertions_total": 3},
+        {"id": 4, "kind": "ambiguous", "assertions_total": 3},
+        {"id": 5, "kind": "edge", "assertions_total": 4}
+      ],
+      "cases": [
+        {"id": 1, "kind": "matching", "assertions_total": 5, "skill_pass": 3, "baseline_pass": 3, "better": false},
+        {"id": 2, "kind": "matching", "assertions_total": 3, "skill_pass": 3, "baseline_pass": 3, "better": false},
+        {"id": 3, "kind": "neighboring", "assertions_total": 3, "skill_pass": 3, "baseline_pass": 3, "better": false},
+        {"id": 4, "kind": "ambiguous", "assertions_total": 3, "skill_pass": 3, "baseline_pass": 3, "better": false},
+        {"id": 5, "kind": "edge", "assertions_total": 4, "skill_pass": 4, "baseline_pass": 4, "better": false}
+      ],
+      "overall_better": false,
+      "measurement_status": "inconclusive",
+      "repetitions": 1,
+      "decision": "INCONCLUSIVE"
+    }
+  ]
+}

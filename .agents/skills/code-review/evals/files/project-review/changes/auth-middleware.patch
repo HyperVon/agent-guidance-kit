@@ -1,0 +1,34 @@
+diff --git a/src/auth.py b/src/auth.py
+new file mode 100644
+--- /dev/null
++++ b/src/auth.py
+@@ -0,0 +1,6 @@
++def authenticate(request):
++    user = request.headers.get("X-User")
++    if not user:
++        return False
++    request.user = user
++    return request.headers.get("X-Role") == "admin"
+diff --git a/src/router.py b/src/router.py
+new file mode 100644
+--- /dev/null
++++ b/src/router.py
+@@ -0,0 +1,7 @@
++from .auth import authenticate
++
++
++def dispatch(request, handler):
++    if authenticate(request):
++        return handler(request)
++    return {"status": 403}
+diff --git a/tests/test_auth.py b/tests/test_auth.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_auth.py
+@@ -0,0 +1,6 @@
++from src.auth import authenticate
++
++
++def test_admin_header_is_allowed():
++    request = type("Request", (), {"headers": {"X-User": "alice", "X-Role": "admin"}})()
++    assert authenticate(request) is True

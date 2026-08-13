@@ -105,6 +105,28 @@ update it in the same PR that implements each item and keep `make check` green.
 - [x] `README.md` adoption-health badge from `validation-matrix.md`.
 - [x] `CONTRIBUTING.md` pre-commit workflow note.
 
+### Tranche 5 — Comprehensive catalog enrichment (2026-08-13)
+
+- [x] Source-only discovery ledger and approval-oriented intake proposal.
+- [x] Evidence-backed improvements to existing review, quality, security,
+  debugging, dependency, authoring, evaluation, optimizer, and discovery
+  owners.
+- [x] Add `frontend-quality-review` and `threat-modeling` with routing metadata
+  and matching/neighboring/ambiguous evaluation definitions.
+- [x] Strengthen the evaluation protocol so `WITH-SKILL` and `BASELINE` are
+  separate fresh workers/sessions with verifiable skill loading/absence;
+  role-played no-skill baselines are invalid.
+- [x] Audit an attempted Luna/Max worker run and reject it: child session
+  metadata showed the catalog checkout as the actual cwd, and the supposed
+  baseline could read catalog evaluation metadata despite a neutral path in the
+  prompt.
+- [ ] Audit or rerun historical result files under the independent-worker
+  protocol before treating their matrix marks as strong evidence.
+- [ ] Execute clean-context comparisons for the new and materially changed
+  skills under a confirmed harness/model/reasoning configuration.
+- [ ] Re-run the full repository gate and refresh the evaluation matrix after
+  dynamic evaluation results are recorded.
+
 Progress is tracked here and in the PR description. Each tranche lands as one
 or more focused commits with `make check` evidence. Distribution impact: 3A
 and 3C proposer ship to targets; 3B remains repository-only and is excluded

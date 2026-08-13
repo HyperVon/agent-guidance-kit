@@ -50,6 +50,18 @@
         "The response covers vulnerable direct and transitive dependencies where the advisory or package manager identifies them",
         "The response groups security fixes separately from unrelated minor bumps and verifies each group"
       ]
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "prompt": "Upgrade a dependency that has a version-matched advisory and a schema migration. Inventory direct and transitive pins, check yanked/deprecated or abandoned status, install scripts and provenance, use an additive expand/backfill/contract sequence, and verify rollback and full gates after the group.",
+      "expected_output": "The agent groups the security upgrade separately, records evidence-backed supply-chain signals without inflating them, preserves compatibility during migration, and reports complete verification.",
+      "assertions": [
+        "The response inventories manifests, lockfiles, direct/transitive status, and authoritative advisory evidence",
+        "The response checks supply-chain signals and distinguishes them from confirmed vulnerabilities",
+        "The response uses additive compatibility phases and isolates destructive schema steps when required",
+        "The response verifies focused and full gates plus rollback or down-path evidence"
+      ]
     }
   ]
 }

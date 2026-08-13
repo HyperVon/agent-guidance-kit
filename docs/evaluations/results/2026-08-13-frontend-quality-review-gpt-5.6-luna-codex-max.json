@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "run_id": "2026-08-13-frontend-quality-review-gpt-5.6-luna-codex-max",
+  "timestamp": "2026-08-13T09:32:11Z",
+  "harness": {
+    "name": "Codex CLI",
+    "version": "0.147.0-alpha.6.5"
+  },
+  "model": {
+    "provider": "openai",
+    "name": "gpt-5.6-luna",
+    "reasoning_effort": "max"
+  },
+  "baseline": "harness-default",
+  "protocol_status": "valid",
+  "method": "For each of the three committed frontend-quality-review cases, the runner launched two independent fresh Codex CLI sessions with codex exec --cd <neutral-root> --ephemeral --ignore-user-config --ignore-rules --skip-git-repo-check --sandbox read-only. The guided root contained the target skill at the neutral path .agents/skills/task-quality/SKILL.md and a guided AGENTS.md; the baseline root contained a separate neutral AGENTS.md with no guidance reference and no .agents tree. Both variants performed the same pwd and local-file preflight, received the same natural task prompt and byte-identical fixture snapshot, and did not receive assertions, expected outputs, or grading instructions. Raw stdout, stderr, and session JSONL were captured in a parent-only temporary directory outside both worker roots. The parent verified session identity, actual cwd, visible manifests, skill and fixture hashes, baseline-blind traces, and then graded the frozen assertions.",
+  "protocol": {
+    "status": "verified",
+    "fresh_sessions": 6,
+    "distinct_session_ids": true,
+    "actual_cwd_verified": true,
+    "visible_manifest_verified": true,
+    "fixture_snapshot_identical": true,
+    "target_skill_loaded_only_guided": true,
+    "baseline_target_identity_absent": true,
+    "worker_logs_outside_roots": true,
+    "workers_received_frozen_assertions": false
+  },
+  "evaluation_sha256": "43ce683f4da6e64ed5d8b8f38539327712fc5b0aabc1ca3e30a0e252b33eea93",
+  "skills": [
+    {
+      "skill_name": "frontend-quality-review",
+      "skill_commit": "uncommitted-working-tree:d647466a09c238fcfd8272096599eb27e057f01ade96e46298ff31e154f4dc33",
+      "skill_sha256": "d647466a09c238fcfd8272096599eb27e057f01ade96e46298ff31e154f4dc33",
+      "evaluation_sha256": "43ce683f4da6e64ed5d8b8f38539327712fc5b0aabc1ca3e30a0e252b33eea93",
+      "case_manifest": [
+        {"id": 1, "kind": "matching", "assertions_total": 4},
+        {"id": 2, "kind": "neighboring", "assertions_total": 2},
+        {"id": 3, "kind": "ambiguous", "assertions_total": 3}
+      ],
+      "fixture_sha256": {
+        "README.md": "299280dbcd6c5c0d3c16e746a9bd1b31038ea5b11ab113f6f5d366142532b91c",
+        "checkout.html": "970c6f142c4f9db8f50b55b286e819f9742a99e046618480368ba5a55fad7139",
+        "checkout.css": "bc61222e4d4a8ffefb75d197c19ccfe5b89e7f936be3d8fa4ceeff0b4c1c33bc",
+        "checkout.js": "7dcb899ba3b674b5f8cd5c5562a0281a892bf46547888eba02332c90eb1f545e"
+      },
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 4,
+          "better": false
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 1,
+          "baseline_pass": 1,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 1,
+          "baseline_pass": 1,
+          "better": false
+        }
+      ],
+      "overall_better": false,
+      "measurement_status": "inconclusive",
+      "repetitions": 1,
+      "decision": "INCONCLUSIVE"
+    }
+  ]
+}

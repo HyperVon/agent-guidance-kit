@@ -33,6 +33,18 @@
         "The response clarifies audit-only vs. authorized edit",
         "The response does not edit without explicit reduction request"
       ]
+    },
+    {
+      "id": 4,
+      "kind": "edge",
+      "prompt": "Reduce this module's size without changing behavior. Define a scope allowlist and behavior-parity checklist, work in checkpoints with changed paths and verification evidence, preserve generated and contract-owned files, and stop with a waiver if the next reduction is not proven safe.",
+      "expected_output": "The agent measures before and after, preserves behavior and tests, records checkpoints and waivers, and refuses line-count-only reductions.",
+      "assertions": [
+        "The response defines the scope allowlist, callers, contract-owned files, and behavior-parity risks before editing",
+        "The response records incremental checkpoints and relevant verification evidence",
+        "The response does not delete tests or weaken boundaries for a smaller diff",
+        "The response stops or waives an unverified reduction rather than optimizing line count alone"
+      ]
     }
   ]
 }

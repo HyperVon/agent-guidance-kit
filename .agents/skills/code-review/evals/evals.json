@@ -6,6 +6,14 @@
       "kind": "matching",
       "prompt": "Review this PR for concrete defects. The diff adds a new authentication middleware. Report findings with severity and anchors.",
       "expected_output": "The agent establishes review truth from the diff, reads the contract (auth spec, tests), inspects boundary ownership and input validation, checks tests against defect classes, and reports ranked findings with path:line anchors and smallest safe corrections.",
+      "files": [
+        "evals/files/project-review/README.md",
+        "evals/files/project-review/changes/auth-middleware.patch",
+        "evals/files/project-review/current/src/auth.py",
+        "evals/files/project-review/current/src/router.py",
+        "evals/files/project-review/current/docs/auth-contract.md",
+        "evals/files/project-review/current/tests/test_auth.py"
+      ],
       "assertions": [
         "The response identifies the complete changed surface from the diff",
         "The response reads source-of-truth contracts before evaluating",
@@ -32,6 +40,27 @@
         "The response requests the specific diff or scope",
         "The response asks for the review question and contracts",
         "The response does not evaluate without established review truth"
+      ]
+    },
+    {
+      "id": 4,
+      "kind": "edge",
+      "prompt": "Review a change that renames a public response field and removes a sibling implementation. Freeze the base and review point, inspect callers and removed behavior, separate contract review from standards review, test whether the tests have independent oracles, and report a disposition for every finding and uncovered area.",
+      "expected_output": "The agent traces the contract across callers and siblings, checks removed behavior and test efficacy, reports evidence-backed findings with coverage and dispositions, and does not edit the change.",
+      "files": [
+        "evals/files/contract-review/README.md",
+        "evals/files/contract-review/changes/response-rename.patch",
+        "evals/files/contract-review/current/src/api.py",
+        "evals/files/contract-review/current/src/client.py",
+        "evals/files/contract-review/current/src/legacy_api.py",
+        "evals/files/contract-review/current/docs/public-contract.md",
+        "evals/files/contract-review/current/tests/test_api.py"
+      ],
+      "assertions": [
+        "The response freezes and records the review point and complete scope",
+        "The response traces callers, removed behavior, sibling paths, and source-of-truth contract",
+        "The response separates contract findings from style or standards observations and checks test independence",
+        "The response gives a disposition for findings and uncovered scope without applying edits"
       ]
     }
   ]

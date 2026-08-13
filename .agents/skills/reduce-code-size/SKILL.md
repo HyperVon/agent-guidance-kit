@@ -34,7 +34,8 @@ Size alone is an investigation trigger, not evidence that code is defective.
 
 1. **Confirm the target and contract.** Identify public callers, distinct test
    cases, generated or contract-owned files, and behavior that must remain
-   unchanged. Stop if the request would require a semantic change.
+   unchanged. Write a scope allowlist and behavior-parity checklist, and stop
+   if the request would require a semantic change.
 2. **Apply the ladder in order.** Prefer deleting proven dead code, removing
    duplicate local logic, reusing an existing helper, and using established
    language idioms. Extract a helper only for multiple genuine uses and a
@@ -43,9 +44,11 @@ Size alone is an investigation trigger, not evidence that code is defective.
 3. **Split selectively.** Split a large file only by a cohesive reason to
    change and an ownership boundary that makes future work clearer. Do not
    split mechanically or move code merely to change a line count.
-4. **Work in small slices.** After each cohesive slice, run the relevant
-   formatter, compiler, linter, and tests before starting the next slice.
-   Keep contract expectations independent from the implementation.
+4. **Work in small slices.** After each cohesive slice, record a checkpoint
+   containing changed paths, the remaining allowlist, behavior risks, and
+   verification evidence. Run the relevant formatter, compiler, linter, and
+   tests before starting the next slice. Keep contract expectations independent
+   from the implementation and preserve a handoff if the work must pause.
 5. **Compare the result.** Re-measure per-file and aggregate size, confirm
    behavior and test coverage did not regress, and assess readability,
    coupling, dependency cost, and merge surface. Keep a change only when it is
@@ -58,6 +61,11 @@ a trust boundary, or hide a warning or failure to obtain a smaller diff. A
 reduction that changes error handling, retry behavior, cancellation,
 idempotency, persistence, or protocol output is a behavior change: stop and
 return it to the appropriate owner instead.
+
+Do not resolve a size-only review finding by citing a line-count reduction.
+Each retained slice needs behavior-parity evidence, and an explicit waiver is
+preferable to an unverified reduction when a contract or generated source is
+out of scope.
 
 Stop when a relevant check fails, behavior cannot be proven, the change adds
 more abstraction or coupling than it removes, the size objective is met, or

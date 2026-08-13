@@ -33,6 +33,18 @@
         "The response clarifies S/M/high-risk approval gate",
         "The response does not change production code without approval"
       ]
+    },
+    {
+      "id": 4,
+      "kind": "edge",
+      "prompt": "Harden a legacy parser refactor. Add characterization coverage before changing behavior, use an independent public-seam oracle, choose a property or mutation probe if example tests could be tautological, then rerun the original reproduction and relevant gates.",
+      "expected_output": "The agent establishes a baseline, adds behavior-protecting tests before the fix, rejects percentage-only coverage, and reports focused and complete verification evidence.",
+      "assertions": [
+        "The response adds characterization or independent-oracle coverage before the behavior-changing refactor",
+        "The response chooses property or mutation testing only when it can distinguish a likely wrong implementation",
+        "The response does not use coverage percentage as the sole success criterion",
+        "The response reruns the original reproduction and reports counts or artifacts for relevant gates"
+      ]
     }
   ]
 }
