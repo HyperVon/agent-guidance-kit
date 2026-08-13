@@ -17,6 +17,12 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:
+    from skill_ownership import OwnershipError, external_skill_names
+except ModuleNotFoundError:  # Loaded directly by repository helper tests.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from skill_ownership import OwnershipError, external_skill_names
+
 ROOT = Path(__file__).resolve().parents[1]
 RESULTS_ROOT = ROOT / "docs/evaluations/results"
 SUMMARY_PATH = ROOT / "docs/evaluations/SUMMARY.md"
@@ -168,10 +174,17 @@ def latest_per_key(records: list[dict]) -> dict[tuple, dict]:
 def count_skills() -> int:
     if not SKILLS_ROOT.is_dir():
         return 0
+    try:
+        external = external_skill_names(ROOT)
+    except OwnershipError:
+        external = set()
     return sum(
         1
         for p in SKILLS_ROOT.iterdir()
-        if p.is_dir() and not p.name.startswith(".") and not p.is_symlink()
+        if p.is_dir()
+        and not p.name.startswith(".")
+        and not p.is_symlink()
+        and p.name not in external
     )
 
 

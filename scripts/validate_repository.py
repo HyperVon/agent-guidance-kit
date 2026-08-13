@@ -408,9 +408,12 @@ def validate_evals(directory: Path, name: str, errors: list[str]) -> bool:
     return True
 
 
-def validate_index(skill_names: set[str], errors: list[str]) -> None:
+def validate_index(
+    skill_names: set[str], external_names: set[str], errors: list[str]
+) -> None:
     index_path = ROOT / ".agents/AGENTS.md"
     indexed = set(INDEX_RE.findall(index_path.read_text(encoding="utf-8")))
+    indexed -= external_names
     missing = sorted(skill_names - indexed)
     extra = sorted(indexed - skill_names)
     if missing:
@@ -860,7 +863,7 @@ def main() -> int:
         external_names = set()
         errors.append(f"external skill ownership: {error}")
     skills, eval_definitions = validate_skills(errors, external_names)
-    validate_index(skills, errors)
+    validate_index(skills, external_names, errors)
     validate_skill_dependencies(skills, errors)
     validate_related_links(skills, errors)
     validate_links(errors)

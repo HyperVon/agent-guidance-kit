@@ -73,6 +73,8 @@ target guidance and explicitly named router/configuration files; exclude `.git`,
 `coverage`, `.idea`, `.cursor`, and `.vscode`. Prefer `git ls-files` and bounded
 `rg --glob` queries. If the budget expires, stop and report
 `INCONCLUSIVE`/`BLOCKED` rather than continuing repository exploration.
+When the harness is Kilo Code, verify `kilo agent list` and use its `plan` agent
+for this phase when available; reserve `code` for separately approved edits.
 ```
 
 After the approvals, apply only the unchanged plans through their own
