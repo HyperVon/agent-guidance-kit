@@ -18,6 +18,14 @@ signals are investigation prompts, not evidence of defect or authorship. Default
 anything unless the user explicitly asks to clean up, fix, or remove findings.
 When cleanup is authorized, make only the smallest safe corrections in scope.
 
+When this hierarchy is adopted, keep the compact evidence-first quality
+baseline in the target's canonical always-on operating guidance (normally
+`.agents/OPERATING.md`). This skill owns the deeper procedure when a request
+explicitly concerns AI slop, evidence-backed artifact quality, or a broad
+cross-artifact audit. Do not load or copy this full audit merely to get the
+baseline, and do not broaden an ordinary implementation task into a full audit
+without evidence or a matching request.
+
 Review the requested repository, diff, subsystem, or artifact and the relevant
 source of truth. Depending on scope, this can include source, tests,
 documentation, skills, rules, configuration, build files, generated artifacts,

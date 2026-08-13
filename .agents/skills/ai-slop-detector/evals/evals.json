@@ -33,6 +33,53 @@
         "The response clarifies audit-only vs. authorized cleanup",
         "The response does not edit files without explicit authorization"
       ]
+    },
+    {
+      "id": 4,
+      "kind": "neighboring",
+      "prompt": "Implement the requested small change using the repository's existing pattern, add a regression test, and run the normal checks. Keep the change focused and do not perform a repository-wide quality audit.",
+      "expected_output": "The agent treats this as an ordinary implementation task, applies the always-on evidence-first baseline lightly, and does not create unrelated audit or cleanup work.",
+      "assertions": [
+        "The response identifies ordinary implementation as the primary workflow rather than a broad artifact-quality audit",
+        "The response limits inspection and edits to the requested change and its relevant tests",
+        "The response verifies the implementation against the existing pattern and normal repository checks"
+      ]
+    },
+    {
+      "id": 5,
+      "kind": "matching",
+      "prompt": "Before adding a generic BaseWorkflow helper used by several modules, audit whether the repository has a demonstrated recurring need, identify the canonical owner and a simpler alternative, and recommend the smallest safe change with outcome-level verification.",
+      "expected_output": "The agent traces current consumers and existing contracts, tests whether the abstraction is justified, names the owner and simpler alternative or an evidence gap, and recommends or defers the abstraction without speculative implementation.",
+      "assertions": [
+        "The response inspects current consumer workflows and existing contracts before recommending the abstraction",
+        "The response identifies a canonical owner and simpler alternative, or explicitly records the evidence gap",
+        "The response defines outcome-level verification for the recommendation",
+        "The response does not add a speculative abstraction or duplicate mechanism without evidence and approval"
+      ]
+    },
+    {
+      "id": 6,
+      "kind": "matching",
+      "prompt": "Clean up the README by removing internal design history and repeated exclusions, but preserve all setup, usage, safety, and compatibility instructions. Review the current implementation and tests first; only remove material that demonstrably obscures user tasks or duplicates canonical documentation.",
+      "expected_output": "The agent verifies documentation claims against the implementation and checks, identifies only material with demonstrated user-task or duplication cost, performs a bounded cleanup, and verifies links and retained instructions.",
+      "assertions": [
+        "The response compares documentation claims with current source, configuration, tests, or CI before editing",
+        "The response removes or relocates only material with demonstrated user-task or canonical-duplication cost",
+        "The response preserves setup, usage, safety, and compatibility instructions",
+        "The response runs relevant Markdown, link, or documentation checks after cleanup"
+      ]
+    },
+    {
+      "id": 7,
+      "kind": "ambiguous",
+      "prompt": "The repository has a lot of AI slop. Clean everything up and make the guidance much better.",
+      "expected_output": "The agent establishes a bounded artifact scope and definition of done before editing, applies the evidence standard, and refuses to turn a broad label into an unreviewed mass rewrite.",
+      "assertions": [
+        "The response requests concrete artifacts and scope or proposes a bounded audit plan",
+        "The response states the cleanup boundary and approval or review step before broad edits",
+        "The response treats authorship, style, verbosity, and formulaic language as insufficient evidence by themselves",
+        "The response does not claim completed cleanup or verification without performing and reporting it"
+      ]
     }
   ]
 }
