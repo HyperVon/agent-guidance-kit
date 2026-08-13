@@ -17,6 +17,20 @@ plan.
 
 ## Repository invariants
 
+- Keep Agent Guidance Kit itself project-agnostic. Every reusable skill,
+  canonical rule, helper, and public example must be usable without assuming a
+  particular consumer product, language stack, repository layout, provider,
+  model, or harness. If a finding comes from a real target, generalize the
+  behavior into a portable contract or keep the target-specific material in an
+  explicitly labeled evaluation, provenance record, or target repository; do
+  not copy its commands, nouns, policy, credentials, or local paths into the
+  portable core.
+- Before committing AGK guidance, classify each changed artifact as portable
+  core, target-local adaptation, or evidence-only material. A target-specific
+  gate, migration, adapter, catalog, blacklist, or configuration belongs in
+  the target project unless a provider-neutral contract is the demonstrated
+  owner. Verify the classification in the diff and report any deliberate
+  exception.
 - Keep the root `AGENTS.md` and harness entrypoints thin. Canonical project
   policy lives here; portable always-on behavior lives in `OPERATING.md`; deep
   procedures live in skills.

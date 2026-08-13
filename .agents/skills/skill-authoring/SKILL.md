@@ -51,6 +51,11 @@ named skill does not authorize unrelated guidance, index, or runtime changes.
 4. Preserve portability. Use repository-relative examples and generic tool
    language. Do not add credentials, private data, personal paths, provider
    catalogs, vendor metadata, or network-dependent behavior.
+   When editing this kit, classify the change as portable core, target-local
+   adaptation, or evidence-only material. Keep product names, stack-specific
+   commands, provider/model policy, local paths, and target migrations out of
+   reusable core guidance; preserve those only in clearly labeled evidence or
+   the consumer project.
 5. Apply only the explicitly approved files and findings. Do not overwrite
    unrelated guidance, create duplicate skill bodies, add unrequested harness
    projections, commit, publish, or send external messages unless separately

@@ -37,6 +37,11 @@ replace stronger project-local guidance.
 
 ## Hard boundaries
 
+- The kit checkout is reusable source, not a consumer project. Keep its
+  canonical rules, skills, helpers, and examples project-agnostic. Classify
+  target-specific commands, migrations, provider/model policy, harness quirks,
+  and acceptance fixtures as target-local or evidence-only; generalize them
+  into a provider-neutral contract before adding anything to the kit.
 - Do not use a local LLM, embedded classifier, embeddings, or a separate
   semantic service. The active harness model performs selection and
   reconciliation.
