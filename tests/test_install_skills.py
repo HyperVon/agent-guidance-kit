@@ -55,6 +55,38 @@ class InstallSkillsTest(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def test_arr_receipt_owned_skill_is_outside_kit_dependency_catalog(self) -> None:
+        external = self.add_skill("agent-runtime-router")
+        receipt = self.kit / ".agents/.agent-runtime-router/receipt.json"
+        receipt.parent.mkdir(parents=True, exist_ok=True)
+        receipt.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "skills": [{"name": "agent-runtime-router"}],
+                }
+            ),
+            encoding="utf-8",
+        )
+        # The external skill is deliberately absent from the kit dependency
+        # catalog; the receipt-owned integration must not break Kit planning.
+        self.catalog.pop("agent-runtime-router")
+        self.write_catalog()
+        plan = install_skills.build_plan(self.kit, self.target, ["bootstrap-project"])
+        self.assertNotIn(
+            "agent-runtime-router", {item["name"] for item in plan["skills"]}
+        )
+        self.assertTrue((external / "SKILL.md").is_file())
+
+    def test_unowned_extra_skill_still_fails_closed(self) -> None:
+        self.add_skill("agent-runtime-router")
+        self.catalog.pop("agent-runtime-router")
+        self.write_catalog()
+        with self.assertRaisesRegex(
+            install_skills.AdoptionError, "does not match source skills"
+        ):
+            install_skills.build_plan(self.kit, self.target, ["bootstrap-project"])
+
     def add_skill(
         self,
         name: str,

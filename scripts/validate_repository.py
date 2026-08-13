@@ -12,6 +12,12 @@ from urllib.parse import unquote, urlsplit
 
 import yaml
 
+try:
+    from skill_ownership import OwnershipError, external_skill_names
+except ModuleNotFoundError:  # Loaded directly by repository helper tests.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from skill_ownership import OwnershipError, external_skill_names
+
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS_ROOT = ROOT / ".agents/skills"
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -39,6 +45,7 @@ EXCLUDED_DIRECTORIES = frozenset(
         ".cursor",
         ".vscode",
         ".clinerules",
+        ".agent-runtime-router",
     }
 )
 
@@ -209,11 +216,15 @@ def validate_harness_imports(
             )
 
 
-def validate_skills(errors: list[str]) -> tuple[set[str], set[str]]:
+def validate_skills(
+    errors: list[str], external_names: set[str]
+) -> tuple[set[str], set[str]]:
     names: set[str] = set()
     eval_definitions: set[str] = set()
     for directory in sorted(SKILLS_ROOT.iterdir()):
         if directory.name.startswith("."):
+            continue
+        if directory.name in external_names:
             continue
         if directory.is_symlink() or not directory.is_dir():
             errors.append(
@@ -843,7 +854,12 @@ def main() -> int:
         else:
             print(msg, file=sys.stderr)
         return 2
-    skills, eval_definitions = validate_skills(errors)
+    try:
+        external_names = external_skill_names(ROOT)
+    except OwnershipError as error:
+        external_names = set()
+        errors.append(f"external skill ownership: {error}")
+    skills, eval_definitions = validate_skills(errors, external_names)
     validate_index(skills, errors)
     validate_skill_dependencies(skills, errors)
     validate_related_links(skills, errors)

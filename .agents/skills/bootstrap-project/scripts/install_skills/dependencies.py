@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
@@ -10,6 +11,9 @@ from urllib.parse import unquote, urlsplit
 from .constants import DEPENDENCIES, MARKDOWN_LINK, SOURCE_SKILLS
 from .utils import without_fenced_code
 from .validation import AdoptionError
+
+EXTERNAL_RECEIPT = Path(".agents/.agent-runtime-router/receipt.json")
+SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 def get_mandatory_skill(kit_root: Path) -> str:
@@ -76,9 +80,11 @@ def load_dependencies(kit_root: Path) -> dict[str, dict[str, Any]]:
         for path in (kit_root / SOURCE_SKILLS).iterdir()
         if path.is_dir() and not path.is_symlink() and not path.name.startswith(".")
     }
-    if set(skills) != source_names:
-        missing = sorted(source_names - set(skills))
-        extra = sorted(set(skills) - source_names)
+    external_names = _external_skill_names(kit_root)
+    catalog_names = set(skills)
+    if catalog_names != source_names - external_names:
+        missing = sorted((source_names - external_names) - catalog_names)
+        extra = sorted(catalog_names - source_names)
         raise AdoptionError(
             "skill dependency catalog does not match source skills; "
             f"missing={missing}, extra={extra}"
@@ -110,6 +116,44 @@ def load_dependencies(kit_root: Path) -> dict[str, dict[str, Any]]:
                 f"dependency entry has an invalid route description: {name}"
             )
     return skills
+
+
+def _external_skill_names(kit_root: Path) -> set[str]:
+    """Return names owned by the ARR receipt, rejecting malformed receipts."""
+    path = kit_root / EXTERNAL_RECEIPT
+    if not path.exists() and not path.is_symlink():
+        return set()
+    if path.is_symlink() or not path.is_file():
+        raise AdoptionError(f"external skill receipt is unsafe: {EXTERNAL_RECEIPT}")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise AdoptionError(f"cannot read external skill receipt: {error}") from error
+    entries = value.get("skills") if isinstance(value, dict) else None
+    if (
+        not isinstance(value, dict)
+        or value.get("schema_version") != 1
+        or not isinstance(entries, list)
+        or not entries
+    ):
+        raise AdoptionError("external skill receipt has an invalid shape")
+    names: set[str] = set()
+    for entry in entries:
+        name = entry.get("name") if isinstance(entry, dict) else None
+        if not isinstance(name, str) or not SKILL_NAME.fullmatch(name):
+            raise AdoptionError("external skill receipt has an invalid skill name")
+        skill = kit_root / SOURCE_SKILLS / name
+        if (
+            skill.is_symlink()
+            or not skill.is_dir()
+            or (skill / "SKILL.md").is_symlink()
+            or not (skill / "SKILL.md").is_file()
+        ):
+            raise AdoptionError(
+                f"external skill receipt names a missing or unsafe skill: {name}"
+            )
+        names.add(name)
+    return names
 
 
 def dependency_closure(

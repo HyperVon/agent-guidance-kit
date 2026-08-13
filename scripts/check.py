@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from skill_ownership import OwnershipError, external_skill_names
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -44,10 +46,17 @@ def agent_skills_commands(
         return None
 
     skills_root = root / ".agents/skills"
+    try:
+        external = external_skill_names(root)
+    except OwnershipError:
+        # validate_repository.py reports the structured ownership failure later.
+        external = set()
     skills = sorted(
         directory
         for directory in skills_root.iterdir()
-        if directory.is_dir() and not directory.name.startswith(".")
+        if directory.is_dir()
+        and not directory.name.startswith(".")
+        and directory.name not in external
     )
     return [[str(validator), "validate", str(skill)] for skill in skills]
 
