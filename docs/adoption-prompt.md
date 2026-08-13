@@ -56,6 +56,15 @@ request. It stops on dirty, detached, non-`main`, divergent, or unexpected
 source checkouts. A source refresh does not approve target changes, and a
 refresh does not silently add optional related skills.
 
+Every refresh or update must also include a source-canonical guidance check.
+The receipt tracks adopted skill directories, but it does not by itself track
+the kit's `.agents/AGENTS.md`, `.agents/OPERATING.md`, or harness projections.
+Run `scripts/harness_recommendations.py --json --diff`, carry every
+`REVIEW`/`RECOMMEND` result into the approval plan, and explicitly choose
+`ADAPT`, `KEEP_LOCAL`, or `DEFER`. Never treat a changed always-on section as
+an informational recommendation, and never overwrite target-specific policy
+without an approved adaptation.
+
 ## Common maintenance prompts
 
 Choose the closest prompt below. In every case, the agent should read the

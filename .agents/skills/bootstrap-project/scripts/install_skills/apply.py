@@ -433,17 +433,20 @@ def generate_diff(plan: dict[str, Any], kit_root: Path, target_root: Path) -> st
         hr_recs = hr.collect_harness_recommendations(kit_root, target_root)
     except (FileNotFoundError, ImportError, OSError, ValueError) as error:
         lines.append(
-            "--- HARNESS & AGENTS.md RECOMMENDATIONS (informational, no auto-apply) ---"
+            "--- CANONICAL GUIDANCE REVIEW (approval required; no auto-apply) ---"
         )
         lines.append(f"*** recommender unavailable: {error}")
         return "\n".join(lines) + ("\n" if lines else "")
 
     if hr_recs:
         lines.append(
-            "--- HARNESS & AGENTS.md RECOMMENDATIONS (informational, no auto-apply) ---"
+            "--- CANONICAL GUIDANCE REVIEW (approval required; no auto-apply) ---"
         )
         for rec in hr_recs:
-            lines.append(f"*** {rec['file']} [{rec['status']}]: {rec['reason']}")
+            required = " [REQUIRED PLAN ITEM]" if rec.get("review_required") else ""
+            lines.append(
+                f"*** {rec['file']} [{rec['status']}]{required}: {rec['reason']}"
+            )
             lines.append(f"    -> {rec['action']}")
             if rec.get("current") is not None and rec.get("desired") is not None:
                 diff = difflib.unified_diff(

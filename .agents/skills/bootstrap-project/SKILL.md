@@ -121,6 +121,17 @@ Identify the target's canonical owners for:
 - task-specific procedures;
 - harness entrypoints and projections.
 
+Before finalizing skill selection, perform a source-canonical drift check. The
+kit's `.agents/AGENTS.md` and `.agents/OPERATING.md` are source-owned reference
+guidance, while a target's copies remain target-owned and may contain stronger
+project invariants. Run the recommender with `--json --diff` and treat every
+`REVIEW`/`RECOMMEND` result as a plan item requiring an explicit disposition.
+In particular, do not miss additive changes to `OPERATING.md` (such as a new
+always-on quality baseline) merely because the installer receipt only tracks
+skill directories. Preserve target-specific sections and propose an exact
+`ADAPT`, `KEEP_LOCAL`, or `DEFER` decision; never silently replace the target
+file.
+
 Prefer adapting the target's current hierarchy. If it has none, propose a thin
 root entrypoint, one canonical project rules/index file, one compact operating
 file, and conditional skill directories. Do not create parallel canonical
@@ -130,8 +141,8 @@ For `AGENTS.md` and every harness adapter (`CLAUDE.md`, `GEMINI.md`,
 `.github/copilot-instructions.md`, `.cursor/rules`, `.clinerules`,
 `.claude/settings.json`, etc.):
 
-1. Run `python3 <kit-root>/scripts/harness_recommendations.py --kit-root <kit-root> --target <target-root> --diff` to inventory bodies and get paste-ready diffs.
-2. Compare the target's `AGENTS.md` (root thin pointer) and `.agents/AGENTS.md` / `.agents/OPERATING.md` against the kit canonicals. A thick root `AGENTS.md` that duplicates `Product boundary` / `Skill index` is a `RECOMMEND` to thin; outdated `.agents/AGENTS.md` is `REVIEW` via `skill-authoring`.
+1. Run `python3 <kit-root>/scripts/harness_recommendations.py --kit-root <kit-root> --target <target-root> --json --diff` to inventory bodies and get machine-readable findings plus paste-ready diffs.
+2. Compare the target's `AGENTS.md` (root thin pointer) and `.agents/AGENTS.md` / `.agents/OPERATING.md` against the kit canonicals. A thick root `AGENTS.md` that duplicates `Product boundary` / `Skill index` is a `RECOMMEND` to thin; outdated `.agents/AGENTS.md` or `.agents/OPERATING.md` is a required `REVIEW`/adaptation item via `harness-adaptation` and `skill-authoring`, not an informational note.
 3. For each harness file, classify as `KEEP_LOCAL` (strong target-specific policy), `ADAPT` (apply paste-ready thin-pointer diff), or `SKIP` (unused harness). Never auto-overwrite divergent harness content; use `harness-adaptation` + `skill-authoring` with approval gate.
 4. Surface the table in the approval plan (Section 5) alongside skill decisions so the user sees `AGENTS.md` + harness upgrades together with skill adds.
 
@@ -156,6 +167,7 @@ Also list:
 - local guidance preserved unchanged;
 - proposed text-level adaptations;
 - harness projections, if any;
+- every source-canonical guidance finding and its explicit disposition;
 - validation commands;
 - material exclusions and why.
 

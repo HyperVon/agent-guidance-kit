@@ -91,6 +91,17 @@ class HarnessRecommendationsTest(unittest.TestCase):
         self.assertEqual("REVIEW", rec["status"])
         self.assertIsNone(rec["desired"])
 
+    def test_canonical_operating_drift_is_a_required_plan_item(self) -> None:
+        (self.target / ".agents").mkdir(parents=True)
+        (self.target / ".agents/OPERATING.md").write_text(
+            "# Target operating\n\nTarget-specific rules.\n", encoding="utf-8"
+        )
+        recs = self._recs()
+        rec = self._by_file(recs)[".agents/OPERATING.md"]
+        self.assertEqual("REVIEW", rec["status"])
+        self.assertTrue(rec["review_required"])
+        self.assertEqual("source-canonical-guidance", rec["owner"])
+
     def test_no_truncation_of_recommendation_bodies(self) -> None:
         # A genuinely thin root AGENTS.md with a long body must be reported in
         # full, never silently truncated to a fragment.

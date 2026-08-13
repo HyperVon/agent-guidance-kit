@@ -220,6 +220,8 @@ def recommendation_for_file(
                     return {
                         "file": relative,
                         "status": "REVIEW",
+                        "review_required": True,
+                        "owner": "source-canonical-guidance",
                         "reason": f"{relative} differs from kit canonical",
                         "current": text,
                         "desired": None,
@@ -245,7 +247,7 @@ def collect_harness_recommendations(kit_root: Path, target_root: Path) -> list[d
             recs.append(r)
     # Check .agents hierarchy. These are project-local policy: never emit the
     # kit's own canonical body as paste-ready target content. Missing canonical
-    # files are an advisory REVIEW, not a CREATE with kit policy.
+    # files are a required REVIEW item, not a CREATE with kit policy.
     for rel in [".agents/AGENTS.md", ".agents/OPERATING.md"]:
         tp = target_root / rel
         kp = kit_root / rel
@@ -259,6 +261,8 @@ def collect_harness_recommendations(kit_root: Path, target_root: Path) -> list[d
                         {
                             "file": rel,
                             "status": "REVIEW",
+                            "review_required": True,
+                            "owner": "source-canonical-guidance",
                             "reason": f"{rel} local content differs from kit; may need ADAPT merge",
                             "current": t_text,
                             "desired": None,
@@ -268,13 +272,16 @@ def collect_harness_recommendations(kit_root: Path, target_root: Path) -> list[d
             except OSError:
                 pass
         elif not tp.exists() and kp.exists():
-            # Advisory only: a target that wants kit canonical content should
+            # The target still needs an explicit adaptation decision: a target
+            # that wants kit canonical content should
             # create it through harness-adaptation / skill-authoring rather than
             # copy the kit's repository policy verbatim.
             recs.append(
                 {
                     "file": rel,
                     "status": "REVIEW",
+                    "review_required": True,
+                    "owner": "source-canonical-guidance",
                     "reason": f"Missing canonical {rel}",
                     "current": "",
                     "desired": None,
@@ -350,14 +357,16 @@ def main(argv: list[str] | None = None) -> int:
 
     # Markdown
     out: list[str] = []
-    out.append("# Harness & AGENTS.md recommendations")
+    out.append("# Harness and canonical-guidance review")
     out.append("")
     out.append(f"- Kit: `{kit_root}`")
     out.append(f"- Target: `{target_root}`")
     out.append(f"- Findings: **{len(recs)}**")
     out.append("")
     if not recs:
-        out.append("No recommendations — harness entrypoints are thin and canonical.")
+        out.append(
+            "No recommendations — harness entrypoints and canonical guidance are aligned."
+        )
         out.append("")
     else:
         out.append("| File | Status | Reason | Action |")
