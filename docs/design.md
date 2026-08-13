@@ -87,6 +87,9 @@ canonical owner for each rule or skill regardless of the adapter used.
   updates; it preflights every skill and managed-route conflict before writing.
 - A prior receipt permits refresh only while target content still matches the
   previously adopted digest. Local divergence fails closed.
+- A refresh may remove only paths explicitly recorded as receipt-owned. Files
+  omitted from the receipt remain target-owned and are preserved, even when
+  the source manifest intentionally excludes them.
 - Existing target guidance remains authoritative.
 - Scripts do not execute imported content or access networks, credentials,
   databases, logs, or application state.

@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from .constants import RECEIPTS, SHA256, SKILL_NAME
-from .validation import AdoptionError
+from .manifest import manifest_digest
+from .validation import AdoptionError, validate_relative
 
 
 def receipt_skill_digests(target_root: Path) -> dict[str, set[str]]:
@@ -45,6 +46,83 @@ def receipt_skill_digests(target_root: Path) -> dict[str, set[str]]:
                 )
             digests.setdefault(name, set()).add(digest)
     return digests
+
+
+def receipt_skill_file_paths(target_root: Path) -> dict[str, set[str]]:
+    """Return paths previously owned by receipts, conservatively.
+
+    Older receipts may not contain a ``files`` manifest.  In that case the
+    skill has no proven file ownership and callers must preserve all existing
+    target content during a refresh.  When a manifest is present, malformed
+    paths fail closed rather than becoming deletion authority.
+    """
+
+    paths_by_skill: dict[str, set[str]] = {}
+    directory = target_root / RECEIPTS
+    if not directory.exists() and not directory.is_symlink():
+        return paths_by_skill
+    if directory.is_symlink() or not directory.is_dir():
+        raise AdoptionError(f"receipt directory is unsafe: {RECEIPTS}")
+    for path in sorted(directory.glob("*.json")):
+        if path.is_symlink() or not path.is_file():
+            raise AdoptionError(f"receipt is unsafe: {path.relative_to(target_root)}")
+        receipt = read_json(path)
+        entries = receipt.get("skills")
+        if not isinstance(entries, list):
+            raise AdoptionError(
+                f"receipt skills must be a list: {path.relative_to(target_root)}"
+            )
+        for entry in entries:
+            if not isinstance(entry, dict):
+                raise AdoptionError(
+                    f"receipt skill entry is malformed: {path.relative_to(target_root)}"
+                )
+            name = entry.get("name")
+            if not isinstance(name, str) or not SKILL_NAME.fullmatch(name):
+                raise AdoptionError(
+                    f"receipt skill identity is malformed: {path.relative_to(target_root)}"
+                )
+            files = entry.get("files")
+            if files is None:
+                # Pre-manifest receipts cannot prove ownership of any path.
+                paths_by_skill.setdefault(name, set())
+                continue
+            if not isinstance(files, list):
+                raise AdoptionError(
+                    f"receipt skill files must be a list: {path.relative_to(target_root)}"
+                )
+            source_digest = entry.get("source_digest")
+            if not isinstance(source_digest, str) or not SHA256.fullmatch(
+                source_digest
+            ):
+                raise AdoptionError(
+                    f"receipt skill source digest is malformed: "
+                    f"{path.relative_to(target_root)}"
+                )
+            owned = paths_by_skill.setdefault(name, set())
+            for file_entry in files:
+                if not isinstance(file_entry, dict) or not isinstance(
+                    file_entry.get("path"), str
+                ):
+                    raise AdoptionError(
+                        f"receipt skill file entry is malformed: "
+                        f"{path.relative_to(target_root)}"
+                    )
+                relative = Path(file_entry["path"])
+                try:
+                    validate_relative(relative, "receipt skill file")
+                except AdoptionError as error:
+                    raise AdoptionError(
+                        f"receipt skill file path is unsafe: "
+                        f"{path.relative_to(target_root)}"
+                    ) from error
+                owned.add(relative.as_posix())
+            if manifest_digest(files) != source_digest:
+                raise AdoptionError(
+                    f"receipt skill file manifest does not match its source digest: "
+                    f"{path.relative_to(target_root)}"
+                )
+    return paths_by_skill
 
 
 def receipt_route_block_digests(target_root: Path) -> set[str]:
