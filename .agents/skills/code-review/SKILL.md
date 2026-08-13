@@ -24,6 +24,11 @@ Use this skill for a focused diff or subsystem and its concrete behavior. Use
 set of correctness fixes, and `reduce-code-size` when the goal is size
 reduction.
 
+Freeze the review point before judging findings: record the base, diff, source
+version, generated-file policy, and checks that were actually run. Review the
+specification or public contract separately from engineering standards so a
+style preference cannot masquerade as a correctness defect.
+
 ## Inputs and evidence
 
 Take the named diff, branch, subsystem, or repository; the review question;
@@ -50,17 +55,22 @@ itself.
 3. **Inspect concrete risks.** Check boundary ownership, input validation,
    state transitions, error propagation, cancellation and lifecycle, retries,
    timeouts, duplicate or out-of-order work, security and secret handling,
-   compatibility, and data-loss behavior as applicable.
+   compatibility, and data-loss behavior as applicable. Trace changed symbols
+   through callers, removed behavior, sibling implementations, and the
+   canonical source of truth; do not assume a local diff is the whole contract.
 4. **Inspect tests and evidence.** Each changed test should protect a distinct
    defect class and derive expected values from a contract or independent
    oracle. Ask whether a plausible wrong implementation would fail. Run the
-   smallest relevant local checks and record anything not run.
+   smallest relevant local checks and record anything not run. Treat an
+   unverified blocker as unresolved rather than a confirmed finding.
 5. **Check adjacent claims.** Verify changed docs, configuration, generated
    artifacts, and integration instructions against current source. Do not
    expand into a full documentation or architecture audit without that scope.
 6. **Report and stop.** Rank concrete findings, state the smallest safe
    correction, include strengths and verification gaps, then stop unless the
-   user explicitly authorizes applying selected findings.
+   user explicitly authorizes applying selected findings. Maintain one
+   disposition for every finding and every uncovered review area: confirmed,
+   disproved, duplicate, needs-information, waived, or carried forward.
 
 ## Findings and severity
 
@@ -79,6 +89,11 @@ finding should include a severity and precise evidence anchor.
 
 Do not call a check passed when it was not run. Do not claim merge readiness,
 approval, or external completion from this review alone.
+
+Before the final verdict, check review coverage against the frozen scope and
+state what was not inspected. A clean report means no evidence-backed finding
+was confirmed in the examined scope; it does not mean the change is universally
+safe.
 
 ## Side effects and stop conditions
 

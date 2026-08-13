@@ -1,0 +1,10 @@
+{
+  "dependencies": [
+    {
+      "name": "requests",
+      "version": "2.19.0",
+      "signal": "local advisory snapshot reports a high severity redirect and certificate-validation issue",
+      "reachable": "unknown"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+diff --git a/src/api.py b/src/api.py
+--- a/src/api.py
++++ b/src/api.py
+@@ -1,2 +1,2 @@
+ def render_user(user):
+-    return {"userName": user.name, "active": user.active}
++    return {"displayName": user.name, "active": user.active}
+diff --git a/src/legacy_api.py b/src/legacy_api.py
+deleted file mode 100644
+--- a/src/legacy_api.py
++++ /dev/null
+@@ -1,1 +0,0 @@
+-def render_legacy_user(user):

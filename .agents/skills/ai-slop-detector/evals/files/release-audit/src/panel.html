@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="panel.css" />
+    <title>Dispatch Console</title>
+  </head>
+  <body>
+    <main class="dispatch-shell">
+      <h1>Dispatch order</h1>
+      <form id="dispatch-form" class="dispatch-grid">
+        <div>
+          <div class="field-label">Order ID</div>
+          <input id="order-id" name="orderId" required />
+        </div>
+        <div>
+          <div class="field-label">Destination</div>
+          <input id="destination" name="destination" required />
+        </div>
+        <button id="dispatch-button" type="submit">Send dispatch</button>
+        <p id="dispatch-status"></p>
+      </form>
+    </main>
+    <script type="module" src="panel.js"></script>
+  </body>
+</html>

@@ -33,6 +33,18 @@
         "The response reads existing repository guidance before proposing",
         "The response does not modify target before approval"
       ]
+    },
+    {
+      "id": 4,
+      "kind": "edge",
+      "prompt": "Adapt the repository's canonical skill to an unfamiliar harness. Build a capability profile, choose the smallest native or pointer projection, check body-size and name-collision risks, and verify that the projection round-trips without losing stop conditions or safety boundaries.",
+      "expected_output": "The agent reports evidence and unknowns, preserves one canonical owner, proposes or applies only the approved thin projection, and verifies discovery and drift at the harness boundary.",
+      "assertions": [
+        "The response distinguishes observed, documented, best-effort, and unsupported harness capabilities",
+        "The response keeps the repository skill as the sole source of truth and checks projection collisions and drift",
+        "The response proposes the smallest compatible projection rather than copying the full skill body",
+        "The response includes a harmless discovery and reload or round-trip verification"
+      ]
     }
   ]
 }

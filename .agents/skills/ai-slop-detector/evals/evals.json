@@ -10,7 +10,25 @@
         "The response sets scope before broad searching",
         "The response runs or references existing repository checks",
         "The response reports findings with path:line anchors and evidence",
-        "The response separates observations from inferences"
+        "The response separates observations from inferences",
+        "The response does not infer authorship from style or label an artifact as AI-generated without evidence",
+        "The response treats a failed or unrun check as a verification gap rather than claiming the repository is clean"
+      ],
+      "files": [
+        "evals/files/release-audit/README.md",
+        "evals/files/release-audit/Makefile",
+        "evals/files/release-audit/package.json",
+        "evals/files/release-audit/src/config.js",
+        "evals/files/release-audit/src/dispatch.js",
+        "evals/files/release-audit/src/workflows/email.js",
+        "evals/files/release-audit/src/workflows/sms.js",
+        "evals/files/release-audit/src/panel.html",
+        "evals/files/release-audit/src/panel.css",
+        "evals/files/release-audit/src/panel.js",
+        "evals/files/release-audit/test/dispatch.test.js",
+        "evals/files/release-audit/docs/configuration.md",
+        "evals/files/release-audit/docs/release-notes.md",
+        "evals/files/release-audit/.github/workflows/check.yml"
       ]
     },
     {
@@ -55,6 +73,16 @@
         "The response identifies a canonical owner and simpler alternative, or explicitly records the evidence gap",
         "The response defines outcome-level verification for the recommendation",
         "The response does not add a speculative abstraction or duplicate mechanism without evidence and approval"
+      ],
+      "files": [
+        "evals/files/release-audit/README.md",
+        "evals/files/release-audit/package.json",
+        "evals/files/release-audit/src/config.js",
+        "evals/files/release-audit/src/dispatch.js",
+        "evals/files/release-audit/src/workflows/email.js",
+        "evals/files/release-audit/src/workflows/sms.js",
+        "evals/files/release-audit/test/dispatch.test.js",
+        "evals/files/release-audit/docs/configuration.md"
       ]
     },
     {
@@ -67,6 +95,17 @@
         "The response removes or relocates only material with demonstrated user-task or canonical-duplication cost",
         "The response preserves setup, usage, safety, and compatibility instructions",
         "The response runs relevant Markdown, link, or documentation checks after cleanup"
+      ],
+      "files": [
+        "evals/files/release-audit/README.md",
+        "evals/files/release-audit/Makefile",
+        "evals/files/release-audit/package.json",
+        "evals/files/release-audit/src/config.js",
+        "evals/files/release-audit/src/dispatch.js",
+        "evals/files/release-audit/test/dispatch.test.js",
+        "evals/files/release-audit/docs/configuration.md",
+        "evals/files/release-audit/docs/release-notes.md",
+        "evals/files/release-audit/.github/workflows/check.yml"
       ]
     },
     {
@@ -79,6 +118,28 @@
         "The response states the cleanup boundary and approval or review step before broad edits",
         "The response treats authorship, style, verbosity, and formulaic language as insufficient evidence by themselves",
         "The response does not claim completed cleanup or verification without performing and reporting it"
+      ]
+    },
+    {
+      "id": 8,
+      "kind": "edge",
+      "prompt": "Audit this generated frontend diff for observable code and UI quality defects. Check invented imports or flags, swallowed errors, tautological tests, missing loading/error/permission states, keyboard focus, contrast, and responsive behavior. Do not infer authorship.",
+      "expected_output": "The agent reports only anchored, evidence-backed code or UI defects, preserves uncertainty, distinguishes taste from product/accessibility defects, and recommends minimum corrections.",
+      "assertions": [
+        "The response checks invented code claims, hidden fallback/error behavior, and test independence",
+        "The response checks UI states, focus/keyboard, contrast, and responsive behavior when in scope",
+        "The response does not infer authorship from style or generated-code signals",
+        "The response gives evidence, impact, and a minimum effective correction for each finding"
+      ],
+      "files": [
+        "evals/files/release-audit/README.md",
+        "evals/files/release-audit/package.json",
+        "evals/files/release-audit/src/dispatch.js",
+        "evals/files/release-audit/src/panel.html",
+        "evals/files/release-audit/src/panel.css",
+        "evals/files/release-audit/src/panel.js",
+        "evals/files/release-audit/test/dispatch.test.js",
+        "evals/files/release-audit/docs/release-notes.md"
       ]
     }
   ]

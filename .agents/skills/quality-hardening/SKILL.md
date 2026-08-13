@@ -43,18 +43,26 @@ scope unless the user explicitly authorizes a safe, bounded check.
    probe boundaries, empty/null input, failures and recovery, retries and
    timeouts, ordering and concurrency, idempotence, persistence, and mode
    combinations when applicable. Prefer one sharp assertion over snapshot soup.
+   Test public seams with an independent oracle; avoid assertions that merely
+   restate the implementation or pass for a plausible wrong result.
 3. **Classify.** Give every finding a stable ID, severity, size, affected path,
    expected behavior, observed behavior, and evidence anchor.
 4. **Test first.** For a defect or missing guarantee, add a deterministic
    failing regression test that names the risk and reproduces it. Then make the
    smallest production fix, keep the test, and refactor only when needed for
    clarity. Do not weaken thresholds, delete coverage, or add impossible cases
-   solely to make a gate green.
+   solely to make a gate green. Before a legacy refactor, add characterization
+   coverage for behavior that must remain stable. Consider property-based or
+   mutation testing when example tests could remain tautological; choose the
+   cheapest probe that can distinguish the likely wrong behavior.
 5. **Verify.** Re-run the focused test, then the relevant repository gates. If
    caching could hide the change, force re-execution. Check test-result files,
    counts, failures, skips, coverage, generated contracts, and other artifacts
    that the gate claims to validate. Run manual or visual checks when the
    changed behavior cannot be established by automation.
+   Record confidence per meaningful behavior, not only a global percentage;
+   fresh evidence must include the original reproduction and the relevant
+   changed boundary.
 6. **Stop.** Stop when the bounded slice is green, no actionable finding
    remains, required approval is pending, or a required check is blocked. Do
    not turn a QA pass into an unapproved feature or redesign.

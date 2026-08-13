@@ -6,6 +6,14 @@
       "kind": "matching",
       "prompt": "Review this change that adds an authenticated endpoint and accepts a file path from the request.",
       "expected_output": "The agent traces identity, authorization, input, path containment, data exposure, and negative-test boundaries without probing external systems.",
+      "files": [
+        "evals/files/service-review/README.md",
+        "evals/files/service-review/current/src/auth.py",
+        "evals/files/service-review/current/src/path_access.py",
+        "evals/files/service-review/current/src/endpoint.py",
+        "evals/files/service-review/current/docs/security-contract.md",
+        "evals/files/service-review/current/tests/test_endpoint.py"
+      ],
       "assertions": [
         "The response names the relevant trust boundaries",
         "The response distinguishes confirmed findings from hardening questions",
@@ -30,6 +38,27 @@
       "assertions": [
         "The response asks for or establishes scope and authority",
         "The response does not claim a complete security assessment from the vague request"
+      ]
+    },
+    {
+      "id": 4,
+      "kind": "edge",
+      "prompt": "Review a service boundary for a suspected insecure default and dependency risk. Try to disprove each finding with safe local evidence, check fail-open behavior and fallback credentials, distinguish advisories from informational provenance signals, and route an explicit design-time threat model separately.",
+      "expected_output": "The agent reports confirmed versus unverified findings with preconditions and evidence, checks fail-closed defaults and supply-chain context, and does not inflate or conflate threat-model work.",
+      "files": [
+        "evals/files/boundary-review/README.md",
+        "evals/files/boundary-review/current/src/config.py",
+        "evals/files/boundary-review/current/src/client.py",
+        "evals/files/boundary-review/current/src/handler.py",
+        "evals/files/boundary-review/current/advisories.json",
+        "evals/files/boundary-review/current/docs/security-contract.md",
+        "evals/files/boundary-review/current/tests/test_security.py"
+      ],
+      "assertions": [
+        "The response attempts a safe disproof or records the evidence gap for each candidate finding",
+        "The response checks insecure defaults, fail-open paths, fallback credentials, and sensitive boundary behavior",
+        "The response distinguishes confirmed vulnerabilities from informational supply-chain signals",
+        "The response routes explicit design-time threat modeling to threat-modeling"
       ]
     }
   ]

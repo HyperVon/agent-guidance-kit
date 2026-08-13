@@ -1,0 +1,106 @@
+{
+  "skill_name": "frontend-quality-review",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "Review the checkout release candidate before it goes to production. Customers use a phone or laptop to pay for a two-item order. Findings only; do not modify files.",
+      "expected_output": "The agent produces a prioritized, evidence-backed review of the customer task, interaction and recovery behavior, responsive/accessibility risks, and verification limits without confusing product choices with defects or editing the fixture.",
+      "files": [
+        "evals/files/checkout-ui/README.md",
+        "evals/files/checkout-ui/checkout.html",
+        "evals/files/checkout-ui/checkout.css",
+        "evals/files/checkout-ui/checkout.js",
+        "evals/files/checkout-ui/payment-client.js",
+        "evals/files/checkout-ui/product-placeholder.svg",
+        "evals/files/checkout-ui/package.json",
+        "evals/files/checkout-ui/Makefile",
+        "evals/files/checkout-ui/tests/checkout.test.js",
+        "evals/files/checkout-ui/tests/fixtures/order.json",
+        "evals/files/checkout-ui/docs/release-notes.md"
+      ],
+      "assertions": [
+        "The response identifies at least one concrete failure in the primary purchase or error-recovery path with a precise source anchor",
+        "The response identifies at least one concrete responsive or accessibility defect and explains the affected user or state",
+        "The response distinguishes seeded defects from valid design choices and states what cannot be verified from source-only evidence",
+        "The response reports prioritized findings with a smallest correction and a verification probe",
+        "The response remains report-only and does not claim universal accessibility or production-payment correctness"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "matching",
+      "prompt": "The checkout team is asking for an accessibility sign-off on the release candidate. Review the implementation and its existing checks, then report only release-blocking or high-impact concerns. Do not edit files.",
+      "expected_output": "The agent focuses on user-observable accessibility and interaction failures, uses the implementation and tests as evidence, avoids treating the smoke test as complete coverage, and records evidence gaps without making edits.",
+      "files": [
+        "evals/files/checkout-ui/README.md",
+        "evals/files/checkout-ui/checkout.html",
+        "evals/files/checkout-ui/checkout.css",
+        "evals/files/checkout-ui/checkout.js",
+        "evals/files/checkout-ui/payment-client.js",
+        "evals/files/checkout-ui/package.json",
+        "evals/files/checkout-ui/Makefile",
+        "evals/files/checkout-ui/tests/checkout.test.js",
+        "evals/files/checkout-ui/tests/fixtures/order.json"
+      ],
+      "assertions": [
+        "The response connects accessibility findings to a concrete checkout state or user action rather than only citing a generic standard",
+        "The response notices that the existing check does not exercise the relevant browser interaction and treats that as a verification gap",
+        "The response separates high-impact defects from optional visual preferences and does not edit files"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "prompt": "Review the order-total API change for correctness and regression risk, then make the smallest approved fix and run the repository check. The browser checkout is not part of this request.",
+      "expected_output": "The agent treats this as a backend correctness/implementation task, investigates the API and tests, and does not turn it into a frontend quality audit or claim report-only authority.",
+      "files": [
+        "evals/files/checkout-ui/server/order_total.py",
+        "evals/files/checkout-ui/server/order_total_test.py",
+        "evals/files/checkout-ui/server/README.md",
+        "evals/files/checkout-ui/Makefile"
+      ],
+      "assertions": [
+        "The response does not invent a frontend-quality review when the request is scoped to the backend API",
+        "The response inspects the implementation and test contract before proposing or applying a backend change",
+        "The response does not claim a passing check without running or inspecting the declared check"
+      ]
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "prompt": "Something about checkout feels wrong on smaller screens after the latest release. Can you take a look?",
+      "expected_output": "The agent establishes whether the user wants diagnosis, review, or implementation, asks for the relevant viewport and evidence, and avoids an unsupported redesign or edit.",
+      "assertions": [
+        "The response clarifies or explicitly bounds the requested action before changing or redesigning anything",
+        "The response requests the relevant viewport, reproduction, or rendered evidence instead of inferring a visual defect from taste",
+        "The response does not claim to have verified responsive behavior without an appropriate runtime or rendering probe"
+      ]
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "prompt": "We are deciding whether to ship this checkout this week. Use the repository evidence to call out anything that would make the customer task unreliable, and tell me what still needs a browser or payment-system check.",
+      "expected_output": "The agent traces normal, validation, failure, and success paths; finds meaningful source-level risks; distinguishes confirmed findings from unverified runtime behavior; and gives a bounded release recommendation without editing.",
+      "files": [
+        "evals/files/checkout-ui/README.md",
+        "evals/files/checkout-ui/checkout.html",
+        "evals/files/checkout-ui/checkout.css",
+        "evals/files/checkout-ui/checkout.js",
+        "evals/files/checkout-ui/payment-client.js",
+        "evals/files/checkout-ui/product-placeholder.svg",
+        "evals/files/checkout-ui/package.json",
+        "evals/files/checkout-ui/Makefile",
+        "evals/files/checkout-ui/tests/checkout.test.js",
+        "evals/files/checkout-ui/tests/fixtures/order.json",
+        "evals/files/checkout-ui/docs/release-notes.md"
+      ],
+      "assertions": [
+        "The response covers more than the happy path, including validation or payment failure recovery and success-state communication",
+        "The response reports at least one source-confirmed release risk and one runtime or integration limitation that remains unverified",
+        "The response gives a bounded recommendation rather than declaring the checkout universally accessible or production-ready",
+        "The response remains report-only and does not make unapproved edits"
+      ]
+    }
+  ]
+}

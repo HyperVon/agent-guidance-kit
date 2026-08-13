@@ -81,9 +81,11 @@ plan.
 | Review a system architecture with fresh eyes and compare options | [architecture-review](skills/architecture-review/SKILL.md) |
 | Review a diff, branch, subsystem, or repository for concrete defects | [code-review](skills/code-review/SKILL.md) |
 | Verify documentation against source, build, configuration, and CI truth | [documentation-review](skills/documentation-review/SKILL.md) |
+| Review frontend/UI quality, interaction states, accessibility, and responsive behavior | [frontend-quality-review](skills/frontend-quality-review/SKILL.md) |
 | Adapt canonical guidance to a known or future agent harness | [harness-adaptation](skills/harness-adaptation/SKILL.md) |
 | Diagnose an observed failure by finding its root cause before fixing it | [systematic-debugging](skills/systematic-debugging/SKILL.md) |
 | Review security boundaries, authority, secrets, and sensitive data flows | [security-review](skills/security-review/SKILL.md) |
+| Build a repository-grounded design-time threat model | [threat-modeling](skills/threat-modeling/SKILL.md) |
 | Discover and close a bounded set of meaningful correctness gaps | [quality-hardening](skills/quality-hardening/SKILL.md) |
 | Simplify or split code while preserving behavior | [reduce-code-size](skills/reduce-code-size/SKILL.md) |
 | Partition independent work among bounded workers | [parallel-multi-agent](skills/parallel-multi-agent/SKILL.md) |

@@ -537,6 +537,18 @@ def validate_evaluation_results(skill_names: set[str], errors: list[str]) -> Non
         "MERGE",
         "DEFER",
         "REJECT",
+        "INCONCLUSIVE",
+    }
+    allowed_baselines = {
+        "harness-default",
+        "no-skill",
+        "previous version",
+        "previous-version",
+    }
+    allowed_measurement_statuses = {
+        "discriminating",
+        "non_discriminating",
+        "inconclusive",
     }
     for path in sorted(results_root.glob("*.json")):
         if path.is_symlink():
@@ -556,6 +568,14 @@ def validate_evaluation_results(skill_names: set[str], errors: list[str]) -> Non
         for key in ("run_id", "timestamp", "baseline"):
             if not isinstance(value.get(key), str) or not value[key].strip():
                 errors.append(f"{label}: {key} must be a non-empty string")
+        baseline = value.get("baseline")
+        if isinstance(baseline, str) and baseline not in allowed_baselines:
+            errors.append(
+                f"{label}: baseline must be one of {', '.join(sorted(allowed_baselines))}"
+            )
+        protocol_status = value.get("protocol_status")
+        if protocol_status is not None and protocol_status not in {"valid", "invalid"}:
+            errors.append(f"{label}: protocol_status must be valid or invalid")
         harness = value.get("harness")
         if (
             not isinstance(harness, dict)
@@ -601,6 +621,62 @@ def validate_evaluation_results(skill_names: set[str], errors: list[str]) -> Non
                 errors.append(f"{prefix}: cases must be a non-empty list")
                 continue
             committed = eval_index.get(skill_name, {})
+            committed_totals: dict[int, int] = {}
+            case_manifest = entry.get("case_manifest")
+            if case_manifest is not None:
+                if not isinstance(case_manifest, list) or not case_manifest:
+                    errors.append(f"{prefix}: case_manifest must be a non-empty list")
+                else:
+                    frozen: dict[int, str] = {}
+                    for manifest_index, manifest_case in enumerate(
+                        case_manifest, start=1
+                    ):
+                        manifest_prefix = f"{prefix} case_manifest[{manifest_index}]"
+                        if not isinstance(manifest_case, dict):
+                            errors.append(f"{manifest_prefix}: must be an object")
+                            continue
+                        manifest_id = manifest_case.get("id")
+                        manifest_kind = manifest_case.get("kind")
+                        manifest_total = manifest_case.get("assertions_total")
+                        if (
+                            isinstance(manifest_id, bool)
+                            or not isinstance(manifest_id, int)
+                            or manifest_id in frozen
+                        ):
+                            errors.append(
+                                f"{manifest_prefix}: id must be a unique integer"
+                            )
+                            continue
+                        if manifest_kind not in {
+                            "matching",
+                            "neighboring",
+                            "ambiguous",
+                            "edge",
+                        }:
+                            errors.append(
+                                f"{manifest_prefix}: kind must be a valid eval kind"
+                            )
+                            continue
+                        if (
+                            isinstance(manifest_total, bool)
+                            or not isinstance(manifest_total, int)
+                            or manifest_total <= 0
+                        ):
+                            errors.append(
+                                f"{manifest_prefix}: assertions_total must be a positive int"
+                            )
+                            continue
+                        frozen[manifest_id] = manifest_kind
+                        committed_totals[manifest_id] = manifest_total
+                    if frozen:
+                        committed = frozen
+                        if (
+                            not isinstance(entry.get("evaluation_sha256"), str)
+                            or not entry["evaluation_sha256"].strip()
+                        ):
+                            errors.append(
+                                f"{prefix}: case_manifest requires evaluation_sha256"
+                            )
             for cidx, case in enumerate(cases, start=1):
                 cprefix = f"{prefix} cases[{cidx}]"
                 if not isinstance(case, dict):
@@ -638,16 +714,19 @@ def validate_evaluation_results(skill_names: set[str], errors: list[str]) -> Non
                             f"{cprefix}: better must be (skill_pass > baseline_pass)"
                         )
                 if isinstance(total, int) and isinstance(spass, int):
-                    committed_total = None
-                    try:
-                        eval_path = SKILLS_ROOT / skill_name / "evals/evals.json"
-                        eval_value = json.loads(eval_path.read_text(encoding="utf-8"))
-                        for ec in eval_value.get("evals", []):
-                            if ec.get("id") == cid:
-                                committed_total = len(ec.get("assertions", []))
-                                break
-                    except (OSError, json.JSONDecodeError):
-                        pass
+                    committed_total = committed_totals.get(cid)
+                    if committed_total is None:
+                        try:
+                            eval_path = SKILLS_ROOT / skill_name / "evals/evals.json"
+                            eval_value = json.loads(
+                                eval_path.read_text(encoding="utf-8")
+                            )
+                            for ec in eval_value.get("evals", []):
+                                if ec.get("id") == cid:
+                                    committed_total = len(ec.get("assertions", []))
+                                    break
+                        except (OSError, json.JSONDecodeError):
+                            pass
                     if committed_total is not None and total != committed_total:
                         errors.append(
                             f"{cprefix}: assertions_total {total} != committed "
@@ -658,6 +737,22 @@ def validate_evaluation_results(skill_names: set[str], errors: list[str]) -> Non
                 errors.append(
                     f"{prefix}: decision must be one of {', '.join(sorted(allowed_decisions))}"
                 )
+            measurement_status = entry.get("measurement_status")
+            if (
+                measurement_status is not None
+                and measurement_status not in allowed_measurement_statuses
+            ):
+                errors.append(
+                    f"{prefix}: measurement_status must be one of "
+                    f"{', '.join(sorted(allowed_measurement_statuses))}"
+                )
+            repetitions = entry.get("repetitions")
+            if repetitions is not None and (
+                isinstance(repetitions, bool)
+                or not isinstance(repetitions, int)
+                or repetitions < 1
+            ):
+                errors.append(f"{prefix}: repetitions must be a positive integer")
             overall = entry.get("overall_better")
             if not isinstance(overall, bool):
                 errors.append(f"{prefix}: overall_better must be a boolean")

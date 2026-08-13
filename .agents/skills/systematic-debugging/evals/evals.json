@@ -38,6 +38,18 @@
         "The response requests concrete observed behavior and reproduction conditions",
         "The response avoids claiming a diagnosis from the vague prompt"
       ]
+    },
+    {
+      "id": 4,
+      "kind": "edge",
+      "prompt": "Diagnose an intermittent concurrency failure. Reproduce the smallest case, wait on a bounded observable condition rather than sleeping or retrying until green, state one falsifiable hypothesis, capture a comparable performance baseline if relevant, add a seam regression, and rerun the original reproduction.",
+      "expected_output": "The agent preserves and narrows the failure, runs discriminating one-variable diagnostics, avoids masking uncertainty with retries or sleeps, and reports root cause and fresh verification.",
+      "assertions": [
+        "The response uses bounded condition-based waiting rather than arbitrary sleeps or retry-until-green behavior",
+        "The response states one falsifiable hypothesis and a diagnostic that distinguishes alternatives",
+        "The response adds regression protection at the failing seam and reruns the original reproduction",
+        "The response reports unresolved uncertainty instead of claiming root cause without evidence"
+      ]
     }
   ]
 }

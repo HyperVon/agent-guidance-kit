@@ -31,6 +31,18 @@
         "The response asks for scope and clarifies catalog vs target",
         "The response does not bulk-copy external content from the vague request"
       ]
+    },
+    {
+      "id": 4,
+      "kind": "edge",
+      "prompt": "Search popular collections and registries for software-engineering skills that might improve this catalog. Recurse from indexes to canonical origins, deduplicate repeated listings, pin revisions and licenses, record unavailable paths, compare behavior to current owners, and never execute or install external content.",
+      "expected_output": "The agent uses popularity only for discovery, follows sources to evidence-backed origins, records provenance and coverage limits, maps each candidate to a disposition, and preserves source-only boundaries.",
+      "assertions": [
+        "The response explicitly recurses from registries or collections to canonical source files",
+        "The response records revision/license/path evidence and unavailable or duplicate sources",
+        "The response maps behavior to existing owners or a distinct new trigger rather than copying names",
+        "The response does not execute, install, authenticate, or treat popularity as quality evidence"
+      ]
     }
   ]
 }

@@ -1,0 +1,8 @@
+{
+  "currency": "USD",
+  "items": [
+    {"name": "Everyday backpack", "quantity": 1, "unitPrice": 72.00},
+    {"name": "Travel pouch", "quantity": 1, "unitPrice": 12.00}
+  ],
+  "customer": {"country": "US", "locale": "en-US"}
+}

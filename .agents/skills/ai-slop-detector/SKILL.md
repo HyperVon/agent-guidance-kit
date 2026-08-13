@@ -73,6 +73,28 @@ reproduction), the actual or credible impact, the smallest safe correction or
 reason to defer, and a severity based on impact rather than suspected origin.
 Separate observations, inferences, and unknowns.
 
+## Observable quality patterns
+
+Use these as investigation prompts, then verify them against the relevant
+source of truth. Do not report a pattern merely because it is common in
+generated artifacts:
+
+- invented imports, APIs, flags, configuration, dependencies, or test claims;
+- swallowed exceptions, hidden fallbacks, unsafe casts, dead or placeholder
+  branches, duplicate helpers, and abstractions without a demonstrated
+  consumer or outcome-level verification;
+- tests that only mirror implementation details or assertions that cannot fail
+  for a plausible wrong behavior;
+- comments and documentation that narrate obvious code, conceal uncertainty,
+  or state behavior not established by source and checks;
+- UI changes with no product/user/job intent, missing loading/empty/error/
+  success/disabled/permission states, broken focus or keyboard behavior,
+  inaccessible contrast, or unverified responsive and reduced-motion behavior.
+
+For UI findings, distinguish a product or interaction defect from an optional
+visual preference. Route a dedicated frontend/accessibility review to
+`frontend-quality-review` when it needs a complete UI quality pass.
+
 ## Workflow
 
 1. **Establish scope and mode.** Record the requested inputs, relevant local
@@ -91,7 +113,8 @@ Separate observations, inferences, and unknowns.
    and context burden with the recurring need it claims to solve. Check whether
    tests prove that outcome or only prove internal schemas and abstractions, and
    whether reference-project concepts leaked into generic behavior without an
-   unrelated-target justification. Do not infer motive.
+   unrelated-target justification. For code and UI, inspect relevant states and
+   failure paths rather than applying a style blacklist. Do not infer motive.
 5. **Report findings.** Prefer a short list of concrete findings over a
    list of suspicions. Include strengths or explicit non-issues when they
    prevent unnecessary churn.

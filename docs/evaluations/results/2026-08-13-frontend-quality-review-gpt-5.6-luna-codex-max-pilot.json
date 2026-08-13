@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "run_id": "2026-08-13-frontend-quality-review-gpt-5.6-luna-codex-max-pilot",
+  "timestamp": "2026-08-13T11:29:40Z",
+  "harness": {
+    "name": "Codex CLI",
+    "version": "0.147.0-alpha.6.5"
+  },
+  "model": {
+    "provider": "openai",
+    "name": "gpt-5.6-luna",
+    "reasoning_effort": "max"
+  },
+  "baseline": "harness-default",
+  "protocol_status": "valid",
+  "method": "Pilot for the first matching case in the revised frontend benchmark. Two independent fresh Codex CLI sessions used identical neutral fixture roots with --sandbox workspace-write: the guided root loaded the target skill at the neutral task-quality path and the baseline root contained no guidance tree. Both received only the natural user prompt and identical fixture files; the parent verified actual cwd, manifests, skill loading/absence, baseline-blind traces, final source parity, and the absence of edits to declared files. Raw traces remain outside both roots.",
+  "protocol": {
+    "status": "verified",
+    "fresh_sessions": 2,
+    "distinct_session_ids": true,
+    "actual_cwd_verified": true,
+    "visible_manifest_verified": true,
+    "fixture_snapshot_identical": true,
+    "target_skill_loaded_only_guided": true,
+    "baseline_target_identity_absent": true,
+    "worker_logs_outside_roots": true,
+    "workers_received_frozen_assertions": false,
+    "task_matched_write_sandbox": true,
+    "declared_files_unchanged": true,
+    "generated_runtime_files_only": true
+  },
+  "skills": [
+    {
+      "skill_name": "frontend-quality-review",
+      "skill_commit": "uncommitted-working-tree:d647466a09c238fcfd8272096599eb27e057f01ade96e46298ff31e154f4dc33",
+      "skill_sha256": "d647466a09c238fcfd8272096599eb27e057f01ade96e46298ff31e154f4dc33",
+      "evaluation_sha256": "ebb64990334feac90942402f39dbf4ae3983bb0609febbdfbdc90324e7b1a59a",
+      "fixture_manifest_sha256": "a947a5ffb396def9678952c0673c70c06be19097accd268ca0bbc4a150c65cf3",
+      "case_manifest": [
+        {"id": 1, "kind": "matching", "assertions_total": 5}
+      ],
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 5,
+          "skill_pass": 5,
+          "baseline_pass": 4,
+          "better": true
+        }
+      ],
+      "overall_better": true,
+      "measurement_status": "inconclusive",
+      "repetitions": 1,
+      "decision": "INCONCLUSIVE"
+    }
+  ]
+}

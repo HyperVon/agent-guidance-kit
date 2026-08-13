@@ -49,6 +49,40 @@ Disposition: `NEW_SKILL` for systematic debugging, security review, and skill
 evaluation; `IMPROVE_EXISTING` for skill-authoring and repository validation;
 `DEFER` for technology-specific skills without enough portable evidence.
 
+## 2026-08-13 comprehensive software-engineering skill discovery
+
+The catalog expansion proposal was informed by a bounded, source-only review
+of public registries, curated collections, official repositories, and
+engineering-domain skill sources. The complete provenance ledger, revisions,
+licenses, dispositions, and forward-test prompts are in
+`docs/evaluations/2026-08-13-comprehensive-skill-discovery.md`.
+
+Sources that materially informed the approved changes included:
+
+- [Matt Pocock engineering skills](https://github.com/mattpocock/skills) (MIT):
+  falsifiable debugging, independent test oracles, fixed-point review, and
+  issue-state evidence.
+- [Wshobson agents](https://github.com/wshobson/agents) (MIT): progressive
+  disclosure, portable authoring, harness projections, and evaluation layers.
+- [Qwen Code review](https://github.com/QwenLM/qwen-code) (Apache-2.0):
+  cross-file review coverage, removed behavior, test efficacy, and fail-closed
+  treatment of unverified scope.
+- [GitHub Awesome Copilot anti-UI-slop](https://github.com/github/awesome-copilot)
+  (MIT collection): product-specific UI intent, complete states, accessibility,
+  responsive behavior, and verification handoff.
+- [OpenAI security-threat-model](https://github.com/openai/skills): explicit
+  design-time threat-model routing, repository-grounded boundaries/assets, and
+  attacker capability calibration. The source was reviewed as untrusted
+  research; its text was not copied.
+- [Murat context-engineering skills](https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering)
+  (MIT): context degradation categories, measurable optimization, and durable
+  filesystem-backed handoffs.
+
+External source text, scripts, tools, credentials, and provider-specific
+workflows were not copied or executed. The adopted guidance was independently
+rewritten as portable core behavior; source licenses remain evidence for the
+research inputs rather than licenses for copied text.
+
 ## First-use adoption evidence
 
 A first adoption of the kit exposed broken links after selective installation,

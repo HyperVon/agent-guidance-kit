@@ -1,0 +1,7 @@
+{
+  "name": "acme-checkout-release-candidate",
+  "private": true,
+  "scripts": {
+    "test": "node tests/checkout.test.js"
+  }
+}

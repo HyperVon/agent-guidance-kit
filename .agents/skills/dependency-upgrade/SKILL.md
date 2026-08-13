@@ -46,6 +46,12 @@ lockfiles, and container or action pins (for example `Dockerfile`, workflow
 pins, or a version file). Record current versions, latest available patch or
 minor, and the owning manifest.
 
+Record supply-chain context when available: publisher or maintainer change,
+yanked or deprecated status, abandonment signals, install scripts, bundled
+binaries, provenance or attestation, registry source, and whether the package
+is transitive. Treat these as risk signals requiring evidence, not automatic
+vulnerability findings.
+
 ## Step 3 — Risk-grouped bumps
 
 Order work by risk and reviewability:
@@ -75,6 +81,10 @@ make check   # or the repository's documented full gate
 - Confirm tests still protect distinct behavior and that coverage or lint
   gates still pass.
 - Inspect the diff for unexpected transitive changes.
+- For schema or data-shape changes, use an additive expand → backfill →
+  contract sequence when compatibility requires it. Keep old and new code
+  valid at each deploy step, throttle backfills, isolate destructive drops or
+  renames, and verify the rollback/down path before the next group.
 
 ## Step 5 — Document and propose
 

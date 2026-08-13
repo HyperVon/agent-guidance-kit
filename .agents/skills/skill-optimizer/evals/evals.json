@@ -33,6 +33,18 @@
         "The response clarifies report-only vs. approved edits",
         "The response does not apply mechanical rewrite without explicit authorization"
       ]
+    },
+    {
+      "id": 4,
+      "kind": "edge",
+      "prompt": "Optimize this catalog's guidance for context cost. Measure loaded skills, root instructions, harness projections, tool descriptions, and linked references; classify routing waste, progressive-disclosure misses, context distraction or clashes, and intentional safety reinforcement before proposing changes.",
+      "expected_output": "The agent establishes a baseline, measures the relevant context surface, proposes reversible owner-preserving changes, and refuses line-count-only deletion that weakens routing, safety, approval, ownership, or verification.",
+      "assertions": [
+        "The response measures or explicitly scopes the complete context surface rather than only word count",
+        "The response distinguishes routing/progressive-disclosure/context-quality problems from intentional reinforcement",
+        "The response preserves safety, approval, source-of-truth, routing, and verification guarantees",
+        "The response proposes before/after evaluation and a reversible apply order"
+      ]
     }
   ]
 }

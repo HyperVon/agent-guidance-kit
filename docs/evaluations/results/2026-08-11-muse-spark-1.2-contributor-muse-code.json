@@ -28,6 +28,12 @@
     {
       "skill_name": "ai-slop-detector",
       "skill_commit": "c4c79e15094ecb035137b7b0643662ef2d4635f1",
+      "evaluation_sha256": "62cf996133f40311575c916ea3dfc29b572643ab3fcfd6cf952861eb6da76c40",
+      "case_manifest": [
+        {"id": 1, "kind": "matching", "assertions_total": 4},
+        {"id": 2, "kind": "neighboring", "assertions_total": 2},
+        {"id": 3, "kind": "ambiguous", "assertions_total": 3}
+      ],
       "cases": [
         {"id": 1, "kind": "matching", "assertions_total": 4, "skill_pass": 4, "baseline_pass": 0, "better": true},
         {"id": 2, "kind": "neighboring", "assertions_total": 2, "skill_pass": 2, "baseline_pass": 0, "better": true},

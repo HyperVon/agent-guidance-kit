@@ -46,8 +46,11 @@ named skill does not authorize unrelated guidance, index, or runtime changes.
 2. Keep the canonical file at `.agents/skills/<name>/SKILL.md`. The directory
    name, frontmatter `name`, and index entry must agree.
 3. Draft a short, routeable description followed by purpose, boundaries,
-   decision points, stop conditions, and verification. Keep the body below
-   roughly 500 lines; move rare detail to a directly linked sibling reference.
+   decision points, stop conditions, and verification. Make the entrypoint a
+   table of contents for the common path, keep the body below roughly 500
+   lines, and move rare detail to a directly linked sibling reference. Include
+   trigger phrases and a neighboring-task tie-breaker in the description or
+   body; do not rely on a global name or a long index to route the skill.
 4. Preserve portability. Use repository-relative examples and generic tool
    language. Do not add credentials, private data, personal paths, provider
    catalogs, vendor metadata, or network-dependent behavior.
@@ -55,7 +58,9 @@ named skill does not authorize unrelated guidance, index, or runtime changes.
    adaptation, or evidence-only material. Keep product names, stack-specific
    commands, provider/model policy, local paths, and target migrations out of
    reusable core guidance; preserve those only in clearly labeled evidence or
-   the consumer project.
+   the consumer project. Confirm that the canonical skill remains the sole
+   source of truth and that no harness projection or sibling name collision
+   creates a second authority.
 5. Apply only the explicitly approved files and findings. Do not overwrite
    unrelated guidance, create duplicate skill bodies, add unrequested harness
    projections, commit, publish, or send external messages unless separately
@@ -69,6 +74,8 @@ named skill does not authorize unrelated guidance, index, or runtime changes.
   ambiguous request with a stated tie-breaker.
 - Check every relative link and referenced script or option against the current
   tree. Remove unverifiable claims and unfinished placeholders.
+- Check the entrypoint's context cost and move low-frequency detail behind a
+  clear reference link when that preserves discoverability and verification.
 - For a new or materially changed skill, use
   [skill-evaluation](../skill-evaluation/SKILL.md) to compare matching,
   neighboring, and ambiguous cases before claiming that it improves outcomes.

@@ -4,6 +4,36 @@ Notable changes to Agent Guidance Kit are recorded here.
 
 ## Unreleased
 
+### Added
+
+- `frontend-quality-review` for report-only UI, interaction-state,
+  accessibility, responsive, and frontend-quality review.
+- `threat-modeling` for explicit repository-grounded design-time threat models,
+  distinct from implementation-focused `security-review`.
+- Clean-context evaluation definitions for the two new skills and additional
+  behavior-specific probes for the approved existing-skill improvements.
+
+### Changed
+
+- Enriched the evidence/verification spine across `ai-slop-detector`,
+  `skill-optimizer`, `code-review`, `quality-hardening`, `skill-authoring`,
+  `harness-adaptation`, `systematic-debugging`, `security-review`,
+  `dependency-upgrade`, `reduce-code-size`, `skill-evaluation`, and
+  `catalog-discovery`.
+- Updated catalog routing, dependency metadata, README inventory, and public
+  provenance for the 2026-08-13 external skill-discovery intake.
+- Strengthened evaluation integrity guidance: every new comparison must use
+  separate fresh `WITH-SKILL` and `BASELINE` workers or harness sessions with
+  verifiable skill loading/absence; role-played baselines are invalid. Workers
+  are also blind to the evaluation purpose and receive neutral paths without
+  rubric leakage. Actual session cwd/workspace metadata and a visible-file
+  manifest are now required; a prompt-mentioned path is not isolation. The
+  attempted Luna/Max run that exposed catalog evaluation metadata was rejected
+  and not recorded. Harness-level exposure of the target skill's name, path,
+  description, catalog entry, or injection metadata is also contamination.
+  Historical result files are now documented as provisional until that
+  boundary is rerun or evidenced.
+
 ### Fixed
 
 - Documentation review corrections: `README.md` skill-count badges and status line
