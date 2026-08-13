@@ -36,6 +36,10 @@ Notable changes to Agent Guidance Kit are recorded here.
 
 ### Fixed
 
+- Refreshes now tolerate historical receipts whose file manifest was generated
+  under an older policy: those ownership claims are ignored for cleanup, target
+  files are preserved, and the next successful apply can establish a current
+  receipt instead of blocking the refresh.
 - Receipt-aware skill refreshes now preserve target files that were not proven
   Agent Guidance Kit-owned by an earlier receipt, including evaluation and
   transient material. Only previously receipt-owned paths may be removed when

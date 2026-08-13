@@ -389,6 +389,33 @@ class InstallSkillsTest(unittest.TestCase):
 
         self.assertEqual("legacy target content\n", local_file.read_text())
 
+    def test_stale_receipt_manifest_is_not_cleanup_authority(self) -> None:
+        source = self.add_skill("alpha", "# Skill\n\nVersion one.\n")
+        initial = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        receipt_path = install_skills.apply_plan(self.kit, self.target, initial)
+
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        entry = next(item for item in receipt["skills"] if item["name"] == "alpha")
+        entry["files"].append(
+            {
+                "mode": 420,
+                "path": "evals/evals.json",
+                "sha256": "a" * 64,
+                "size": 1,
+            }
+        )
+        receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+
+        local_file = self.target / ".agents/skills/alpha/evals/local.json"
+        local_file.parent.mkdir(parents=True)
+        local_file.write_text("preserve this\n", encoding="utf-8")
+        (source / "SKILL.md").write_text("# Skill\n\nVersion two.\n", encoding="utf-8")
+
+        update = install_skills.build_plan(self.kit, self.target, ["alpha"])
+        install_skills.apply_plan(self.kit, self.target, update)
+
+        self.assertEqual("preserve this\n", local_file.read_text())
+
     def test_required_dependencies_are_added_but_related_skills_are_not(self) -> None:
         self.add_skill("alpha")
         self.add_skill("gamma")
