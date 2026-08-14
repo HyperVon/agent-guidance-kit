@@ -1,0 +1,986 @@
+{
+  "schema_version": 1,
+  "run_id": "2026-08-14-gemini-flash-lite-antigravity",
+  "timestamp": "2026-08-14T01:38:00Z",
+  "harness": {
+    "name": "Antigravity",
+    "version": "2.0.0"
+  },
+  "model": {
+    "provider": "google",
+    "name": "gemini-flash-lite",
+    "reasoning_effort": "low"
+  },
+  "baseline": "no-skill",
+  "method": "Live multi-agent skill evaluations executed across all 24 kit catalog skills using independent Gemini Flash Lite subagents under Google Antigravity. Each case prompt was evaluated in parallel across WITH-SKILL (guided agent initialized with target skill guidance) and BASELINE (clean general agent without skill instructions) conditions. All assertions graded against actual output messages.",
+  "skills": [
+    {
+      "skill_name": "adversarial-pr-review",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 3,
+          "skill_pass": 3,
+          "baseline_pass": 3,
+          "better": false
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 1,
+          "better": true
+        },
+        {
+          "id": 3,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 4,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 3,
+          "baseline_pass": 2,
+          "better": true
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "agent-guidance-maintenance",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 3,
+          "skill_pass": 3,
+          "baseline_pass": 1,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "ai-slop-detector",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 6,
+          "skill_pass": 6,
+          "baseline_pass": 5,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 3,
+          "baseline_pass": 3,
+          "better": false
+        },
+        {
+          "id": 4,
+          "kind": "neighboring",
+          "assertions_total": 3,
+          "skill_pass": 3,
+          "baseline_pass": 3,
+          "better": false
+        },
+        {
+          "id": 5,
+          "kind": "matching",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 4,
+          "better": false
+        },
+        {
+          "id": 6,
+          "kind": "matching",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 4,
+          "better": false
+        },
+        {
+          "id": 7,
+          "kind": "ambiguous",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 3,
+          "better": true
+        },
+        {
+          "id": 8,
+          "kind": "edge",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 4,
+          "better": false
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "architecture-review",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 3,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "bootstrap-project",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 2,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "catalog-discovery",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 3,
+          "skill_pass": 3,
+          "baseline_pass": 3,
+          "better": false
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 4,
+          "kind": "edge",
+          "assertions_total": 4,
+          "skill_pass": 3,
+          "baseline_pass": 2,
+          "better": true
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "code-review",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 2,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 4,
+          "kind": "edge",
+          "assertions_total": 4,
+          "skill_pass": 3,
+          "baseline_pass": 3,
+          "better": false
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "dependency-upgrade",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 3,
+          "skill_pass": 3,
+          "baseline_pass": 3,
+          "better": false
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 1,
+          "better": true
+        },
+        {
+          "id": 4,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 3,
+          "baseline_pass": 3,
+          "better": false
+        },
+        {
+          "id": 5,
+          "kind": "edge",
+          "assertions_total": 4,
+          "skill_pass": 3,
+          "baseline_pass": 2,
+          "better": true
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "documentation-review",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 3,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "frontend-quality-review",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 5,
+          "skill_pass": 4,
+          "baseline_pass": 4,
+          "better": false
+        },
+        {
+          "id": 2,
+          "kind": "matching",
+          "assertions_total": 3,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "neighboring",
+          "assertions_total": 3,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 4,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 2,
+          "baseline_pass": 3,
+          "better": false
+        },
+        {
+          "id": 5,
+          "kind": "edge",
+          "assertions_total": 4,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        }
+      ],
+      "overall_better": false,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "git-github-workflow",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 3,
+          "skill_pass": 3,
+          "baseline_pass": 2,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "harness-adaptation",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 2,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 4,
+          "kind": "edge",
+          "assertions_total": 4,
+          "skill_pass": 3,
+          "baseline_pass": 3,
+          "better": false
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "parallel-multi-agent",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 3,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "quality-hardening",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 2,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 4,
+          "kind": "edge",
+          "assertions_total": 4,
+          "skill_pass": 3,
+          "baseline_pass": 3,
+          "better": false
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "reduce-code-size",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 2,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 4,
+          "kind": "edge",
+          "assertions_total": 4,
+          "skill_pass": 3,
+          "baseline_pass": 3,
+          "better": false
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "rules-and-skills-audit",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 4,
+          "skill_pass": 3,
+          "baseline_pass": 3,
+          "better": false
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        }
+      ],
+      "overall_better": false,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "security-review",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 3,
+          "skill_pass": 3,
+          "baseline_pass": 1,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 4,
+          "kind": "edge",
+          "assertions_total": 4,
+          "skill_pass": 2,
+          "baseline_pass": 1,
+          "better": true
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "skill-authoring",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 2,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 4,
+          "kind": "edge",
+          "assertions_total": 4,
+          "skill_pass": 3,
+          "baseline_pass": 3,
+          "better": false
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "skill-evaluation",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 4,
+          "better": false
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 4,
+          "kind": "edge",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 4,
+          "better": false
+        },
+        {
+          "id": 5,
+          "kind": "edge",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 4,
+          "better": false
+        },
+        {
+          "id": 6,
+          "kind": "edge",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 3,
+          "better": true
+        },
+        {
+          "id": 7,
+          "kind": "edge",
+          "assertions_total": 4,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 8,
+          "kind": "edge",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 4,
+          "better": false
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "skill-optimizer",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 2,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 4,
+          "kind": "edge",
+          "assertions_total": 4,
+          "skill_pass": 3,
+          "baseline_pass": 3,
+          "better": false
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "skill-reviewer",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 5,
+          "skill_pass": 4,
+          "baseline_pass": 3,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "matching",
+          "assertions_total": 3,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 4,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 3,
+          "baseline_pass": 2,
+          "better": true
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "systematic-debugging",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 3,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 4,
+          "kind": "edge",
+          "assertions_total": 4,
+          "skill_pass": 3,
+          "baseline_pass": 2,
+          "better": true
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "threat-modeling",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 3,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        }
+      ],
+      "overall_better": true,
+      "decision": "KEEP_PROVISIONAL"
+    },
+    {
+      "skill_name": "upstream-contribution",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 3,
+          "skill_pass": 3,
+          "baseline_pass": 3,
+          "better": false
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 2,
+          "skill_pass": 2,
+          "baseline_pass": 2,
+          "better": false
+        }
+      ],
+      "overall_better": false,
+      "decision": "KEEP_PROVISIONAL"
+    }
+  ]
+}

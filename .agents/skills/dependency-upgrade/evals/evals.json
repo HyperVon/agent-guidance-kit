@@ -4,7 +4,7 @@
     {
       "id": 1,
       "kind": "matching",
-      "prompt": "Update our pinned dependencies and refresh lockfiles. Inventory all manifests, group bumps by risk (security, patch, minor, major), and verify with full gates after each group.",
+      "prompt": "We have open security advisories for our dependencies. Please update our dependencies to resolve the vulnerabilities safely, keep unrelated changes isolated, and ensure our build and test suite passes.",
       "expected_output": "The agent inventories manifests, lockfiles, and container/action pins, triages open vulnerability alerts, groups bumps by risk and reviewability, and verifies each group with the repository's full gates and lockfile regeneration.",
       "assertions": [
         "The response inventories dependency manifests, lockfiles, and pinned container or action versions",
@@ -43,7 +43,7 @@
     {
       "id": 4,
       "kind": "ambiguous",
-      "prompt": "We have critical security alerts for a direct dependency and also want to bump several minor dev dependencies. Some alerts are for transitive dependencies flagged by the advisory source. How should we proceed?",
+      "prompt": "We have security alerts in both direct and transitive packages, and also want to bump our dev tooling. How should we plan and execute this update?",
       "expected_output": "The agent triages all open alerts, prioritizes critical and high severity, covers both direct and transitive vulnerabilities where the package manager or advisory identifies them, groups critical fixes separately from unrelated minor bumps, documents blockers for unfixable alerts, and verifies each group with full gates. It does not ignore medium or low findings without triage.",
       "assertions": [
         "The response triages all open alerts and prioritizes critical and high severity while documenting blockers",

@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "run_id": "2026-08-14-threat-modeling-gemini-flash-lite-antigravity",
+  "timestamp": "2026-08-14T01:23:00Z",
+  "harness": {
+    "name": "Antigravity",
+    "version": "2.0.0"
+  },
+  "model": {
+    "provider": "google",
+    "name": "gemini-flash-lite",
+    "reasoning_effort": "low"
+  },
+  "baseline": "harness-default",
+  "protocol_status": "valid",
+  "method": "Executed live with 6 independent subagents via invoke_subagent on Gemini Flash Lite (low effort). 3 WITH-SKILL sessions (eval_guided_worker_threat_modeling) and 3 BASELINE sessions (eval_baseline_worker) run in parallel across all 3 cases. Assertions graded against actual returned subagent transcripts.",
+  "skills": [
+    {
+      "skill_name": "threat-modeling",
+      "skill_commit": "22f91d9",
+      "cases": [
+        {
+          "id": 1,
+          "kind": "matching",
+          "assertions_total": 4,
+          "skill_pass": 4,
+          "baseline_pass": 3,
+          "better": true
+        },
+        {
+          "id": 2,
+          "kind": "neighboring",
+          "assertions_total": 2,
+          "skill_pass": 1,
+          "baseline_pass": 1,
+          "better": false
+        },
+        {
+          "id": 3,
+          "kind": "ambiguous",
+          "assertions_total": 3,
+          "skill_pass": 0,
+          "baseline_pass": 0,
+          "better": false
+        }
+      ],
+      "overall_better": true,
+      "measurement_status": "discriminating",
+      "decision": "KEEP_PROVISIONAL"
+    }
+  ]
+}
