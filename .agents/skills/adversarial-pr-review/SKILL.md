@@ -1,21 +1,22 @@
 ---
 name: adversarial-pr-review
 description: >-
-  Parent-orchestrated adaptive adversarial PR review — partitions a PR diff
-  into bounded read-only reviewer tracks by file ownership and risk, validates
-  findings in the parent, and re-reviews only affected tracks until
-  convergence. Use when the user explicitly requests an adversarial or
-  multi-agent review, or when the target repository policy explicitly requires
-  adversarial review before publication.
+  Parent-validated adaptive adversarial PR review — requires a fresh,
+  independent read-only subagent, partitions larger diffs into bounded tracks,
+  and re-reviews affected tracks until convergence. Use when the user
+  explicitly requests an adversarial or multi-agent review, or when the target
+  repository policy explicitly requires adversarial review before publication.
 ---
 
 # Adversarial PR Review
 
 A routeable, opt-in review workflow. The portable kit does not automatically
-require a multi-agent review for every PR — use this skill only when the
-request or the adopting repository's own policy says to do so. Adopting
-projects may make it mandatory locally by documenting that policy and invoking
-this skill from their `git-github-workflow` or `AGENTS.md`.
+require this review for every PR — use this skill only when the request or the
+adopting repository's own policy says to do so. Whenever invoked, it requires
+at least one fresh, independent read-only subagent; parent-only self-review is
+not a valid substitute. Adopting projects may make it mandatory locally by
+documenting that policy and invoking this skill from their
+`git-github-workflow` or `AGENTS.md`.
 
 ## When to use this skill
 
@@ -36,10 +37,16 @@ opening one, skip unless explicitly requested.
 
 ## Core operating model
 
-- **Parent owns the whole review.** Workers are bounded, read-only reviewers
-  with disjoint file ownership — not editors, mergers, or publishers.
+- **Parent owns integration and validation.** Workers are bounded, read-only
+  reviewers with disjoint file ownership — not editors, mergers, or publishers.
+- **Fresh-context independence.** At least one reviewer must run in a newly
+  initialized subagent context with no parent conclusions or prior review
+  output. The parent must launch that reviewer; the reviewer is not expected
+  or permitted to recursively launch another reviewer. If the parent cannot
+  provide that capability, the review is blocked.
 - **Adaptive and convergent.** Only tracks with findings are re-reviewed after
-  fixes; unchanged tracks are not revisited.
+  authorized fixes, using a fresh subagent context each time. The gate is not
+  complete until the final pass reports no additional findings.
 - **Read-only workers, parent-owned integration.** Workers return findings;
   the parent validates, de-duplicates, ranks, and integrates.
 - **No external publication.** Workers do not push, merge, approve, or post
@@ -48,9 +55,11 @@ opening one, skip unless explicitly requested.
 
 ## Track matrix
 
-Build the smallest useful set of tracks for the PR (usually 2–6, max 8).
-Partition by ownership or risk, not one-per-file. Reserve a coupled track
-when files must be reasoned about together.
+Build the smallest useful set of tracks for the PR (usually 2–6, max 8); a
+small change may use one coupled track. Partition by ownership or risk, not
+one-per-file. Reserve a coupled track when files must be reasoned about
+together. Every track must be assigned to the fresh read-only subagent; the
+parent cannot substitute for the review.
 
 | Track | Owns (files or dirs) | Risk | Depends on |
 | :---- | :------------------- | :--- | :--------- |
@@ -81,25 +90,35 @@ When delegating track scopes, assign each worker a concrete adversarial lens bas
 2. **Partition.** Assign disjoint scopes to workers. Ensure no write scope
    overlaps; read-only workers may share a file only with distinct evidence
    questions.
-3. **Delegate bounded review.** Each worker reviews only its assigned paths
-   and minimum dependencies, grounding every finding in a path and line,
-   failing check, contract, or reproducible risk.
+3. **Delegate bounded review in fresh context.** Each worker reviews only its
+   assigned paths and minimum dependencies, grounding every finding in a path
+   and line, failing check, contract, or reproducible risk. Do not provide the
+   worker with the parent's suspected findings or conclusions.
 4. **Parent validation and deduplication.** Before reporting, the parent independently verifies each candidate finding against the diff and codebase:
    - *Line anchor check:* Verify that the referenced line and code snippet match HEAD/merge-base diff.
    - *Reachability check:* Verify whether caller context, type definitions, or upstream middleware already neutralize the alleged defect.
    - *Contract verification:* Reject findings based on personal style or ungrounded assumptions; require a concrete failing scenario or violated invariant.
    - *Deduplication:* Merge duplicate findings across track boundaries into a single anchored item with primary ownership.
-5. **Report and stop (Review Phase).** Return review scope, track matrix, per-track verdicts, and ranked findings anchored to `path:line` with severity and concrete impact. Stop and wait for explicit user approval before applying any fixes.
+5. **Report and stop (Review Phase).** Return review scope, track matrix,
+   per-track verdicts, and ranked findings anchored to `path:line` with
+   severity and concrete impact. Stop and wait for explicit user approval
+   before applying any fixes. Do not publish until the fresh-context gate has
+   converged.
 6. **Iterative fix and re-review (when authorized).** If and only if the user explicitly authorizes applying corrections:
    - Apply minimal safe fixes in the parent workspace for authorized findings.
-   - Re-dispatch only the specific worker tracks whose assigned files or direct dependencies were modified. Unaffected tracks are not re-run.
-   - Enforce an iteration cap (default: maximum 3 cycles). If unresolved findings persist after 3 cycles, stop and report the remaining delta.
+   - Re-dispatch only the specific worker tracks whose assigned files or direct dependencies were modified, using a newly initialized context. Unaffected tracks are not re-run.
+   - Enforce an iteration cap (default: maximum 3 cycles). The final pass must report no additional findings; if findings persist, stop and report the remaining delta rather than publishing.
 
 ## Boundaries and stop conditions
 
-- Keep work in the parent when the change touches one hot file, is too small
-  to justify delegation, or track ownership cannot be made disjoint.
+- Keep integration and validation in the parent when the change touches one
+  hot file, is too small for multiple tracks, or track ownership cannot be made
+  disjoint; do not use that as permission to replace the required fresh
+  subagent review.
 - Do not edit, commit, push, merge, or publish from workers.
+- Parent-only self-review is invalid. Stop and report a blocked review when a
+  fresh read-only subagent cannot be launched or cannot return an independent
+  verdict.
 - Stop and report when evidence is insufficient, when a proposed fix would
   change architecture or behavior beyond the review request, or when the next
   step needs credentials or external access.
