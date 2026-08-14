@@ -50,7 +50,7 @@ The gate requires a development environment. If `markdownlint` or
 python scripts/setup_dev.py
 ```
 
-This builds `.venv` (Python 3.14) with the declared dev dependencies. Do not
+This builds `.venv` (Python 3.11+) with the declared dev dependencies. Do not
 bypass the gate.
 
 ## How to cut a release
