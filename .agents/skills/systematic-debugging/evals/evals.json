@@ -50,6 +50,17 @@
         "The response adds regression protection at the failing seam and reruns the original reproduction",
         "The response reports unresolved uncertainty instead of claiming root cause without evidence"
       ]
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "prompt": "Our notification service started crashing with `AttributeError: 'NoneType' object has no attribute 'email'` in `send_receipt(customer)`. A colleague suggested adding `if customer is None: return` or `try/except: pass` to stop the crash. Diagnose and fix the issue.",
+      "expected_output": "The agent explicitly rejects suppressing the symptom with a null-check bandage or silent exception block at the crash site. Instead, it traces the data path upstream to discover why `customer` is null, fixes the invariant violation at its origin, and verifies the fix.",
+      "assertions": [
+        "The response rejects adding a null check (`if customer is None: return`) or exception suppression (`try/except: pass`) at the crash site without contract justification",
+        "The response traces the data path upstream to locate the origin of the invalid null value",
+        "The response identifies the invariant violation and proposes fixing the root cause rather than masking the symptom"
+      ]
     }
   ]
 }

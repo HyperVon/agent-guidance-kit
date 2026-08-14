@@ -48,6 +48,8 @@ When an advisory affects a transitive dependency and no parent package update is
 - **Cargo:** Use `[patch.crates-io]` or run `cargo update -p <package_name> --precise <version>`.
 - **Go:** Use `go mod edit -replace` or specify the minimal required transitive version in `go.mod`.
 - **Python:** Use `constraints.txt` or pinned transitive requirements in lockfile generators (e.g. `uv pip compile`, `poetry.lock`).
+- **Maven:** Use `<dependencyManagement>` in the parent POM to pin the transitive dependency version without adding it as a direct dependency.
+- **Gradle:** Use `constraints {}` in the `dependencies` block (e.g. `constraints { implementation("vulnerable-pkg:1.2.3") }`) or `resolutionStrategy.force` in `configurations.all`.
 
 Never add an internal transitive library as a direct top-level runtime dependency unless the project explicitly imports it.
 

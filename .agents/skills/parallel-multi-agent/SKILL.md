@@ -142,8 +142,9 @@ directories. Do not allow concurrent editing workers to execute tests that bind 
 When a worker hangs, times out, hits a context/iteration limit, or returns a broken patch:
 
 1. **Isolate the failure:** Check whether the failed worker's write scope is strictly disjoint from other completed tracks. Never discard independent successful tracks due to an isolated sibling failure.
-2. **Integrate green tracks first:** Apply and verify the results of all successful disjoint tracks following normal verification gates.
-3. **Triage the failed track:** Choose one explicit recovery strategy:
+2. **Verify partial state is clean:** Before integrating any results, confirm that `PARTIAL` or `FAILED` workers' modifications are fully reverted, stashed, or isolated in a separate branch or worktree. Do not integrate green tracks on top of uncommitted partial changes from a failed sibling.
+3. **Integrate green tracks:** Apply and verify the results of all successful disjoint tracks following normal verification gates.
+4. **Triage the failed track:** Choose one explicit recovery strategy:
    - *Re-brief with tighter scope:* If the failure was due to context overflow or ambiguous instructions, re-launch a single worker with a narrower boundary and explicit stop condition.
    - *Fall back to serial parent execution:* If the track requires sensitive context, complex integration, or debugging, execute the remaining track directly in the parent.
    - *Roll back cleanly:* If the failed track represents a blocking hard dependency for other tracks, revert temporary changes created for that track and document the blocker.

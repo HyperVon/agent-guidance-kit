@@ -101,6 +101,31 @@
         "The response gives a bounded recommendation rather than declaring the checkout universally accessible or production-ready",
         "The response remains report-only and does not make unapproved edits"
       ]
+    },
+    {
+      "id": 6,
+      "kind": "edge",
+      "prompt": "Audit the checkout form implementation specifically for accessibility compliance and async form submission protection before we enable live transactions. Report all findings with severity levels; do not edit files.",
+      "expected_output": "The agent reviews the checkout form against accessibility and interaction checklists, flags unassociated form labels (<div class=\"field-label\">), missing dynamic announcements (aria-live/alert on status and error summary), missing focus management or aria-invalid attributes during error recovery, evaluates async submission button protection against duplicate payments, and ranks findings with P0-P3 severities without editing files.",
+      "files": [
+        "evals/files/checkout-ui/README.md",
+        "evals/files/checkout-ui/checkout.html",
+        "evals/files/checkout-ui/checkout.css",
+        "evals/files/checkout-ui/checkout.js",
+        "evals/files/checkout-ui/payment-client.js",
+        "evals/files/checkout-ui/package.json",
+        "evals/files/checkout-ui/Makefile",
+        "evals/files/checkout-ui/tests/checkout.test.js",
+        "evals/files/checkout-ui/tests/fixtures/order.json"
+      ],
+      "assertions": [
+        "The response flags form inputs using non-semantic div labels instead of programmatic labels (<label for=\"...\">, aria-label, or aria-labelledby)",
+        "The response checks live state announcements and notes missing aria-live or alert roles on the dynamic status message and error summary",
+        "The response identifies missing form error recovery behavior, such as moving focus to the error summary or first invalid field and setting aria-invalid",
+        "The response verifies async form protection to ensure submit buttons disable during in-flight requests and prevent duplicate submission",
+        "The response classifies findings using the P0-P3 severity rubric and remains report-only without modifying files"
+      ]
     }
   ]
 }
+

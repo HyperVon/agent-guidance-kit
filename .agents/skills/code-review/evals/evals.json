@@ -62,6 +62,18 @@
         "The response separates contract findings from style or standards observations and checks test independence",
         "The response gives a disposition for findings and uncovered scope without applying edits"
       ]
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "prompt": "Review this PR diff that adds concurrent background batch processing and database synchronization. Inspect for high-risk defects in concurrency, lifecycle, persistence, and error handling without raising style nitpicks or phantom verification claims.",
+      "expected_output": "The agent inspects concrete concurrency and lifecycle risks (such as unlocked mutexes on error paths, task/goroutine leaks, and check-then-act races), checks multi-step persistence writes for transaction rollback and connection release in defer/finally blocks, detects swallowed exceptions or synthetic defaults, and avoids reviewer anti-patterns like style nitpicking, speculative vulnerabilities, and phantom verification claims.",
+      "assertions": [
+        "The response checks concurrency and atomicity risks including unlocked mutexes on early returns, goroutine or thread leaks, and check-then-act races",
+        "The response checks state transitions and persistence for missing transaction rollback and connection release in defer or finally blocks",
+        "The response checks error propagation paths for swallowed exceptions or synthetic defaults masquerading as success",
+        "The response avoids reviewer anti-patterns by refraining from style nitpicks, speculative vulnerabilities, scope creep, and phantom verification"
+      ]
     }
   ]
 }

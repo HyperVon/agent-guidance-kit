@@ -49,6 +49,7 @@ description: >-
    - Verify parsing and injection boundaries using benign sentinel values (e.g. `' OR '1'='1`, `../etc/passwd` path normalization assertions, `<script>alert(1)</script>` escaping tests in isolated units).
    - Never execute destructive payloads (e.g. `rm -rf`, DROP TABLE, credential exfiltration) even against local test environments.
    - Mock the execution sink (e.g., intercept the generated SQL string or shell command) to verify unescaped characters without executing them.
+   - *Note:* The sentinel examples above are test-design guidance, not executable payloads. If the reviewed project uses content scanning tools, recommend placing test fixtures in a scanner-excluded directory.
 6. Try to disprove each candidate finding with a minimal safe local check.
    Record the precondition, evidence for and against it, confidence, and any
    missing deployment context. Distinguish a confirmed defect from a question,

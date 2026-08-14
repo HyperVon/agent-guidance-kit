@@ -33,6 +33,18 @@
         "The response identifies missing context that materially affects threat ranking",
         "The response does not claim a secure verdict from an underspecified request"
       ]
+    },
+    {
+      "id": 4,
+      "kind": "edge",
+      "prompt": "We are deploying an autonomous AI support agent that ingests user support tickets, fetches external URLs mentioned in tickets, and invokes internal database and billing tools to resolve inquiries. Create a design-time threat model for this agent workflow.",
+      "expected_output": "The agent constructs a structured threat model using the 4-section report template, applies STRIDE systematically across identified trust boundaries, and explicitly assesses AI/agent-specific threat vectors including indirect prompt injection, tool privilege escalation (confused deputy), and data exfiltration.",
+      "assertions": [
+        "The response formats the threat model using the 4-section template (System decomposition, Attacker profiles, Prioritized abuse paths, and Residual risks)",
+        "The response categorizes identified threats using STRIDE across trust boundaries",
+        "The response explicitly analyzes AI/agent-specific vectors such as indirect prompt injection and tool privilege escalation or confused deputy",
+        "The response separates existing mitigations from recommended controls and remains report-only"
+      ]
     }
   ]
 }
