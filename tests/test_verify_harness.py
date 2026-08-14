@@ -232,6 +232,35 @@ class VerifyHarnessTest(unittest.TestCase):
             self.assertIn("no exact harness row", payload["update_error"])
             self.assertEqual(before, doc.read_text(encoding="utf-8"))
 
+    def test_json_missing_evidence_file_is_machine_readable_and_nonzero(self) -> None:
+        module = load()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = root / "harness-compatibility.md"
+            self.write_doc(doc, ["Muse Code"])
+            missing_evidence_path = root / "does_not_exist.json"
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                rc = module.main(
+                    [
+                        "--json",
+                        "--evidence",
+                        str(missing_evidence_path),
+                        "--update",
+                        "--doc",
+                        str(doc),
+                    ]
+                )
+
+            payload = json.loads(output.getvalue())
+            self.assertEqual(1, rc)
+            self.assertFalse(payload["evidence_valid"])
+            self.assertFalse(payload["command_succeeded"])
+            self.assertTrue(
+                any("invalid evidence JSON" in note for note in payload["notes"])
+            )
+
     def test_json_update_encoding_failure_is_machine_readable(self) -> None:
         module = load()
         with tempfile.TemporaryDirectory() as tmp:

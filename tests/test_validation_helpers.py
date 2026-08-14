@@ -31,6 +31,10 @@ guidance_inventory = load(
     "guidance_inventory",
     ROOT / ".agents/skills/skill-optimizer/scripts/guidance_inventory.py",
 )
+validate_adoption = load(
+    "validate_adoption",
+    ROOT / ".agents/skills/agent-guidance-maintenance/scripts/validate_adoption.py",
+)
 
 
 class ValidationHelpersTest(unittest.TestCase):
@@ -390,6 +394,66 @@ class ValidationHelpersTest(unittest.TestCase):
                 self.assertFalse(any("build" in p.parts for p in rel_paths))
             finally:
                 public_hygiene.subprocess.run = original_git
+
+    def test_public_hygiene_candidate_files_scopes_to_custom_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "custom_repo"
+            root.mkdir()
+            subprocess.run(
+                ["git", "init", "--quiet", str(root)],
+                check=True,
+                capture_output=True,
+            )
+            (root / "custom.py").write_text("print('test')\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "-C", str(root), "add", "custom.py"],
+                check=True,
+                capture_output=True,
+            )
+            files = public_hygiene.candidate_files(root)
+            self.assertIn(root / "custom.py", files)
+            self.assertTrue(all(str(f).startswith(str(root)) for f in files))
+
+    def test_validate_adoption_handles_non_utf8_files_safely(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "target"
+            root.mkdir()
+            agents = root / "AGENTS.md"
+            agents.write_bytes(b"\xff\xfe\x00\x00")
+            errors = validate_adoption.validate_target(root)
+            self.assertTrue(
+                any("missing or duplicated" in e or "malformed" in e for e in errors)
+            )
+
+            # Test invalid UTF-8 in SKILL.md and nested markdown files
+            agents.write_text(
+                "<!-- agent-guidance-kit:routes:start -->\n"
+                "| Task | Skill |\n| :--- | :--- |\n"
+                "| Test | [test-skill](.agents/skills/test-skill/SKILL.md) |\n"
+                "<!-- agent-guidance-kit:routes:end -->\n",
+                encoding="utf-8",
+            )
+            receipt_dir = root / ".agents/.agent-guidance-kit/receipts"
+            receipt_dir.mkdir(parents=True)
+            (receipt_dir / "test.json").write_text(
+                '{"skills": [{"name": "test-skill"}]}', encoding="utf-8"
+            )
+            skill_dir = root / ".agents/skills/test-skill"
+            skill_dir.mkdir(parents=True)
+            skill_md = skill_dir / "SKILL.md"
+            skill_md.write_bytes(b"\xff\xfe\x00\x00")
+            errors_skill = validate_adoption.validate_target(root)
+            self.assertTrue(any("unreadable SKILL.md" in e for e in errors_skill))
+
+            # Test invalid UTF-8 in secondary markdown file
+            skill_md.write_text(
+                "---\nname: test-skill\ndescription: Test skill description.\n---\n# Test\n",
+                encoding="utf-8",
+            )
+            nested_md = skill_dir / "extra.md"
+            nested_md.write_bytes(b"\xff\xfe\x00\x00")
+            errors_nested = validate_adoption.validate_target(root)
+            self.assertTrue(any("unreadable Markdown" in e for e in errors_nested))
 
 
 if __name__ == "__main__":

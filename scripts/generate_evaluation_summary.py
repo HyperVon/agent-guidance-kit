@@ -28,11 +28,17 @@ HEADER_MARKER = (
 
 
 def parse_timestamp(value: str) -> datetime:
-    # ISO-8601, tolerate trailing Z
+    # ISO-8601, tolerate trailing Z and normalize to UTC
     try:
         if value.endswith("Z"):
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
-        return datetime.fromisoformat(value)
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        else:
+            dt = datetime.fromisoformat(value)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+        return dt
     except ValueError:
         return datetime.min.replace(tzinfo=timezone.utc)
 
@@ -46,8 +52,9 @@ def load_results() -> list[dict]:
             continue
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
             continue
+
         if not isinstance(data, dict):
             continue
         run_id = data.get("run_id", "")
@@ -326,7 +333,11 @@ def generate_summary_text() -> str:
         for path in sorted(results_files):
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+                lines.append(f"| `{path.name}` | _invalid_ | – | – | – | – | – |")
+                continue
+
+            if not isinstance(data, dict):
                 lines.append(f"| `{path.name}` | _invalid_ | – | – | – | – | – |")
                 continue
             run_id = data.get("run_id", "")

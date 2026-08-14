@@ -298,14 +298,14 @@ def main(argv: list[str] | None = None) -> int:
     evidence: dict | None = None
     evidence_errors: list[str] = []
     if args.evidence:
-        raw = (
-            sys.stdin.read()
-            if args.evidence == "-"
-            else Path(args.evidence).read_text(encoding="utf-8")
-        )
         try:
+            raw = (
+                sys.stdin.read()
+                if args.evidence == "-"
+                else Path(args.evidence).read_text(encoding="utf-8")
+            )
             value = json.loads(raw)
-        except (json.JSONDecodeError, OSError) as error:
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError) as error:
             evidence_errors.append(f"invalid evidence JSON: {error}")
         else:
             evidence, evidence_errors = validate_evidence(value)
