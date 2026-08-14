@@ -79,18 +79,15 @@ Use these as investigation prompts, then verify them against the relevant
 source of truth. Do not report a pattern merely because it is common in
 generated artifacts:
 
-- invented imports, APIs, flags, configuration, dependencies, or test claims;
+- **Invented References:** Imports, APIs, flags, configuration, dependencies, or test claims that do not exist in the current source or upstream contracts;
 - **Tautological and Mirror Tests:** Tests that assert mock return values against mocks (`expect(mock).toHaveBeenCalled()`) without validating system state transformations, or assertions that pass unconditionally (e.g., asserting `is not None` on a non-nullable return type);
 - **Swallowed Exceptions and Phantom Fallbacks:** Blanket `try ... catch: pass` or returning empty dictionaries/null upon exceptions, concealing network or database failures and causing data corruption downstream;
 - **Ghost Configuration and Phantom CLI Flags:** Configuration keys, environment variables, or CLI arguments parsed into options objects but never referenced or evaluated in execution logic;
 - **Hallucinated Kwargs and Method Signatures:** Invoking standard library or third-party methods with non-existent keyword arguments that are silently absorbed by `**kwargs` without effect;
 - **Circular / Duplicate Type Definitions:** Redundant parallel type declarations across multiple modules instead of consuming the canonical schema;
-- dead or placeholder branches, duplicate helpers, and abstractions without a demonstrated consumer or outcome-level verification;
-- comments and documentation that narrate obvious code, conceal uncertainty,
-  or state behavior not established by source and checks;
-- UI changes with no product/user/job intent, missing loading/empty/error/
-  success/disabled/permission states, broken focus or keyboard behavior,
-  inaccessible contrast, or unverified responsive and reduced-motion behavior.
+- **Dead Code and Phantom Abstractions:** Dead or placeholder branches, duplicate helpers, and abstractions without a demonstrated consumer or outcome-level verification;
+- **Narrative Documentation:** Comments and documentation that narrate obvious code, conceal uncertainty, or state behavior not established by source and checks;
+- **Ungrounded UI Changes:** UI changes with no product/user/job intent, missing loading/empty/error/success/disabled/permission states, broken focus or keyboard behavior, inaccessible contrast, or unverified responsive and reduced-motion behavior.
 
 For UI findings, distinguish a product or interaction defect from an optional
 visual preference. Route a dedicated frontend/accessibility review to

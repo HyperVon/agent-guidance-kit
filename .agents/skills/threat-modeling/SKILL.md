@@ -75,27 +75,28 @@ For **AI and Agentic Workflows**, explicitly evaluate:
 
 ## Threat model report template
 
-Format the report using this structure:
+Format the report with the following sections and tables. Use the exact
+heading structure; populate each table with findings from the analysis:
 
-```markdown
-# Threat model: [System / Workflow Name]
+### 1. System decomposition & trust boundaries
 
-## 1. System decomposition & trust boundaries
 | Boundary ID | Source Component | Target Component | Protocol / Transport | Auth / Trust Level |
 | :--- | :--- | :--- | :--- | :--- |
 
-## 2. Attacker profiles & capabilities
+### 2. Attacker profiles & capabilities
+
 | Persona | Access Level | Motive & Capabilities | Explicit Non-Capabilities |
 | :--- | :--- | :--- | :--- |
 
-## 3. Prioritized abuse paths
+### 3. Prioritized abuse paths
+
 | Threat ID | STRIDE Category | Trust Boundary | Preconditions | Abuse Path & Impact | Likelihood | Existing Control | Recommended Mitigation |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 
-## 4. Residual risks, assumptions, & unverified areas
-- **Assumptions:** [List critical deployment/environmental assumptions]
-- **Coverage gaps:** [List uninspected components or missing documentation]
-```
+### 4. Residual risks, assumptions, & unverified areas
+
+- **Assumptions:** List critical deployment/environmental assumptions.
+- **Coverage gaps:** List uninspected components or missing documentation.
 
 ## Routing boundaries
 

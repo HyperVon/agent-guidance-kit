@@ -118,11 +118,11 @@ When a repository contains multiple harness entrypoints:
 
 ### Rule vs skill projection strategy
 
-| Harness capability | Guidance type | Recommended projection |
-| :--- | :--- | :--- |
-| Native skill discovery (e.g. Gemini CLI, Claude Code) | Canonical skills (`.agents/skills/`) | Native directory discovery without file duplication |
-| On-demand rule matching (e.g. Cursor `.mdc` with globs) | File-scoped guidance | Thin `.mdc` pointer with glob triggers pointing to canonical skill |
-| Static always-injected prompt (e.g. Copilot instructions) | Invariants & routing | Compact table index of available skills, loaded only on task match |
+| Harness capability | Guidance type | Recommended projection | In-repo example |
+| :--- | :--- | :--- | :--- |
+| Native skill discovery (e.g. Gemini CLI, Claude Code) | Canonical skills (`.agents/skills/`) | Native directory discovery without file duplication | `GEMINI.md`, `CLAUDE.md` |
+| On-demand rule matching (e.g. Cursor `.mdc` with globs) | File-scoped guidance | Thin `.mdc` pointer with glob triggers pointing to canonical skill | — |
+| Static always-injected prompt (e.g. Copilot instructions) | Invariants & routing | Compact table index of available skills, loaded only on task match | `.github/copilot-instructions.md` |
 
 Prefer one physical skill owner. Use a supported link only when its behavior is
 documented and portable enough for the target; otherwise propose a generated

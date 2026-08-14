@@ -62,6 +62,17 @@
         "The response uses additive compatibility phases and isolates destructive schema steps when required",
         "The response verifies focused and full gates plus rollback or down-path evidence"
       ]
+    },
+    {
+      "id": 6,
+      "kind": "edge",
+      "prompt": "We have an open security advisory for a vulnerable transitive dependency in our npm project, but the parent package has no new release available yet. Remediate this vulnerability to resolve the alert.",
+      "expected_output": "The agent uses the package manager's transitive override mechanism (`overrides` in `package.json` for npm) to pin the patched transitive dependency version instead of adding it as a direct top-level dependency, regenerates the lockfile using package manager tooling, and inspects the lockfile diff to verify targeted changes.",
+      "assertions": [
+        "The response uses the ecosystem-specific transitive override mechanism (such as `overrides` in `package.json` for npm) rather than adding the transitive package as a direct top-level dependency",
+        "The response explicitly avoids adding the transitive library to direct top-level runtime dependencies",
+        "The response regenerates the lockfile using package manager commands and inspects the lockfile diff to verify that only targeted packages changed"
+      ]
     }
   ]
 }

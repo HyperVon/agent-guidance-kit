@@ -60,6 +60,17 @@
         "The response distinguishes confirmed vulnerabilities from informational supply-chain signals",
         "The response routes explicit design-time threat modeling to threat-modeling"
       ]
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "prompt": "A scanner flagged a critical command injection on subprocess.run and an SQL injection on raw query execution in our admin tools. Review whether these are exploitable vulnerabilities, trace source-to-sink reachability, and recommend safe verification steps.",
+      "expected_output": "The agent checks source-to-sink reachability from untrusted inputs to sensitive sinks, disproves findings or classifies static/constrained inputs as non-vulnerabilities, and proposes safe local verification using mocked execution sinks and benign sentinels without executing destructive payloads.",
+      "assertions": [
+        "The response requires proving an untrusted source reaches the sensitive sink before reporting a confirmed vulnerability",
+        "The response does not classify sensitive sinks with strictly static, internal, or constrained inputs as active vulnerabilities",
+        "The response proposes safe verification using mocked sinks or benign sentinel values and avoids destructive payloads"
+      ]
     }
   ]
 }
