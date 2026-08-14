@@ -31,6 +31,10 @@ guidance_inventory = load(
     "guidance_inventory",
     ROOT / ".agents/skills/skill-optimizer/scripts/guidance_inventory.py",
 )
+validate_adoption = load(
+    "validate_adoption",
+    ROOT / ".agents/skills/agent-guidance-maintenance/scripts/validate_adoption.py",
+)
 
 
 class ValidationHelpersTest(unittest.TestCase):
@@ -390,6 +394,36 @@ class ValidationHelpersTest(unittest.TestCase):
                 self.assertFalse(any("build" in p.parts for p in rel_paths))
             finally:
                 public_hygiene.subprocess.run = original_git
+
+    def test_public_hygiene_candidate_files_scopes_to_custom_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "custom_repo"
+            root.mkdir()
+            subprocess.run(
+                ["git", "init", "--quiet", str(root)],
+                check=True,
+                capture_output=True,
+            )
+            (root / "custom.py").write_text("print('test')\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "-C", str(root), "add", "custom.py"],
+                check=True,
+                capture_output=True,
+            )
+            files = public_hygiene.candidate_files(root)
+            self.assertIn(root / "custom.py", files)
+            self.assertTrue(all(str(f).startswith(str(root)) for f in files))
+
+    def test_validate_adoption_handles_non_utf8_files_safely(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "target"
+            root.mkdir()
+            agents = root / "AGENTS.md"
+            agents.write_bytes(b"\xff\xfe\x00\x00")
+            errors = validate_adoption.validate_target(root)
+            self.assertTrue(
+                any("missing or duplicated" in e or "malformed" in e for e in errors)
+            )
 
 
 if __name__ == "__main__":

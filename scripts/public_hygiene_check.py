@@ -45,7 +45,7 @@ def candidate_files(root: Path = ROOT) -> list[Path]:
             [
                 "git",
                 "-C",
-                str(ROOT),
+                str(root),
                 "ls-files",
                 "--cached",
                 "--others",
@@ -85,7 +85,7 @@ def candidate_files(root: Path = ROOT) -> list[Path]:
             paths.extend(Path(directory) / name for name in sorted(filenames))
         return paths
     return [
-        ROOT / value.decode("utf-8") for value in result.stdout.split(b"\0") if value
+        root / value.decode("utf-8") for value in result.stdout.split(b"\0") if value
     ]
 
 
