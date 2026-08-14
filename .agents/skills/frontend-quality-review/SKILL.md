@@ -38,6 +38,14 @@ description: >-
 3. **Review behavior and states.** Check loading, empty, error, success,
    disabled, permission, validation, focus, keyboard, navigation, and recovery
    states. Trace the primary task through normal, boundary, and failure paths.
+
+   **Core interaction & accessibility checklist:**
+   - *Keyboard navigation:* Focus traps in modals/dialogs (missing `Escape` listener, missing focus restore on close); interactive elements reachable and operable via `Tab`/`Enter`/`Space`.
+   - *Form controls:* Every input/select/textarea must have a programmatic label (`<label for="...">`, `aria-label`, or `aria-labelledby`); placeholder text is not an accessible label.
+   - *Dynamic state & alerts:* Async status, error banners, and toast notifications must announce via `aria-live="polite"` or `role="alert"`.
+   - *Semantic interactive elements:* Buttons and links must use `<button>` and `<a>` (or explicit `role="button"` with `tabIndex="0"` and keyboard handlers); do not use bare `<div onClick=...>` without keyboard equivalents.
+   - *Async form protection:* Submit buttons must disable or indicate pending state during in-flight async requests to prevent duplicate submission or double charging.
+   - *Form error recovery:* On validation failure, focus must be programmatically moved to the error summary or first invalid field, and invalid inputs must declare `aria-invalid="true"`.
 4. **Review responsive and accessible behavior.** Check semantic controls,
    labels, focus visibility and order, keyboard reachability, contrast, zoom or
    text resizing, reduced motion, touch targets, responsive overflow, and
@@ -51,6 +59,12 @@ description: >-
    evidence, user impact, smallest correction, and verification probe. State
    missing references, untested states, and unresolved assumptions. Stop in
    report-only mode unless the user separately authorizes changes.
+
+   **Severity rubric and report format:**
+   - **P0:** Critical blocker preventing task completion (e.g. broken checkout submit, keyboard trap preventing navigation, fatal render crash).
+   - **P1:** Material interaction or accessibility defect (e.g. double submission vulnerability, missing form label, error recovery state broken, contrast failure on key action).
+   - **P2:** Responsive clipping, missing loading skeleton/state, visual misalignment against tokens, or minor focus indicator flaw.
+   - **P3:** Minor visual consistency or micro-interaction polish.
 
 ## Routing boundaries
 

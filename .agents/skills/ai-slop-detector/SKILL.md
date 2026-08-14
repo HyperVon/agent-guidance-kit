@@ -80,11 +80,12 @@ source of truth. Do not report a pattern merely because it is common in
 generated artifacts:
 
 - invented imports, APIs, flags, configuration, dependencies, or test claims;
-- swallowed exceptions, hidden fallbacks, unsafe casts, dead or placeholder
-  branches, duplicate helpers, and abstractions without a demonstrated
-  consumer or outcome-level verification;
-- tests that only mirror implementation details or assertions that cannot fail
-  for a plausible wrong behavior;
+- **Tautological and Mirror Tests:** Tests that assert mock return values against mocks (`expect(mock).toHaveBeenCalled()`) without validating system state transformations, or assertions that pass unconditionally (e.g., asserting `is not None` on a non-nullable return type);
+- **Swallowed Exceptions and Phantom Fallbacks:** Blanket `try ... catch: pass` or returning empty dictionaries/null upon exceptions, concealing network or database failures and causing data corruption downstream;
+- **Ghost Configuration and Phantom CLI Flags:** Configuration keys, environment variables, or CLI arguments parsed into options objects but never referenced or evaluated in execution logic;
+- **Hallucinated Kwargs and Method Signatures:** Invoking standard library or third-party methods with non-existent keyword arguments that are silently absorbed by `**kwargs` without effect;
+- **Circular / Duplicate Type Definitions:** Redundant parallel type declarations across multiple modules instead of consuming the canonical schema;
+- dead or placeholder branches, duplicate helpers, and abstractions without a demonstrated consumer or outcome-level verification;
 - comments and documentation that narrate obvious code, conceal uncertainty,
   or state behavior not established by source and checks;
 - UI changes with no product/user/job intent, missing loading/empty/error/
@@ -118,8 +119,10 @@ visual preference. Route a dedicated frontend/accessibility review to
 5. **Report findings.** Prefer a short list of concrete findings over a
    list of suspicions. Include strengths or explicit non-issues when they
    prevent unnecessary churn.
-6. **If cleanup was explicitly requested,** apply only validated corrections,
-   preserve unrelated work, and rerun checks that cover each correction.
+6. **If cleanup was explicitly requested:**
+   - Make atomic, minimal corrections isolated by defect category (e.g., remove dead branches in one edit; fix swallowed exceptions in another).
+   - Never bundle functional enhancements, stylistic reformatting, or architectural renames into a de-slopping cleanup.
+   - Run the repository's relevant test suite after each atomic correction to prove zero behavioral regressions.
 
 ## Severity
 

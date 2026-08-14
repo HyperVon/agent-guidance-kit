@@ -93,7 +93,7 @@ applied.
 
 ## Workflow
 
-1. Read target-local guidance and the latest adoption receipts under
+1. Inspect target working tree status (`git status --porcelain`). If the target repository has uncommitted modifications in `.agents/` or root guidance files, warn the user and recommend committing or stashing WIP before applying maintenance updates. Read target-local guidance and the latest adoption receipts under
    `.agents/.agent-guidance-kit/receipts/`. Treat local policy as authoritative.
 2. Resolve and validate the kit source. If the user requested the latest source,
    run the optional source-checkout refresh procedure first. Record how the
@@ -130,6 +130,21 @@ applied.
    disposition. A locally modified adopted skill, routing conflict, source
    drift, target drift, or unresolved canonical-guidance finding is a stop
    condition.
+
+   **Resolving target divergence:**
+   When an adopted skill's digest differs from upstream kit source and previous receipts:
+   1. *Report the exact diff:* Display a unified diff comparing upstream kit version, previous receipt digest, and current target-modified content.
+   2. *Present explicit resolution options to the user:*
+      - **Option A (Keep Local / Unmanage):** Retain target modifications permanently. Remove the skill from future receipt updates and move its route outside the managed AGK block into the project-owned index table.
+      - **Option B (Upstream Contribution):** If the local modification is generic and reusable, propose upstream contribution via `upstream-contribution`.
+      - **Option C (Manual 3-Way Merge):** Synthesize upstream improvements into the target-local skill while preserving project-specific customizations, then update the local receipt with explicit approval.
+      - **Option D (Overwrite / Reset):** Discard local divergence and reset to upstream canonical version (requires explicit user confirmation).
+
+   **Upstream deprecation and retirement:**
+   When an upstream kit release renames, consolidates, or removes an adopted skill:
+   - The maintenance plan must explicitly list the retired skill as `RETIRE` rather than silently deleting it.
+   - If the skill directory contains target-created files (e.g., custom evals, scripts, or notes), preserve the directory and warn the user.
+   - Upon approved application, remove the retired skill from `.agents/.agent-guidance-kit/receipts/` and update the managed AGENTS route block.
 7. Apply the unchanged plan with `--approve`. Receipt-backed unmodified content
    may be refreshed atomically; new content is create-only; local divergence is
    never overwritten.

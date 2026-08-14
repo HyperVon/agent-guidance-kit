@@ -26,6 +26,24 @@ description: >-
 - **Side effects:** read-only by default; do not contact external systems,
   access credentials, or modify files without separate explicit authority.
 
+## Threat categorization and AI vectors
+
+Apply **STRIDE** systematically across every identified trust boundary:
+
+- **S**poofing: Impersonating users, services, webhook senders, or agent identities.
+- **T**ampering: Modifying payloads in transit, poisoning cache/persistence, or tampering with model context and prompt templates.
+- **R**epudiation: Performing sensitive or destructive actions without immutable audit logs.
+- **I**nformation Disclosure: Exposing credentials, PII, cross-tenant data, internal stack traces, or system prompts.
+- **D**enial of Service: Exhausting API rate limits, computational budgets, worker memory, or token context windows.
+- **E**levation of Privilege: Escaping container/sandbox boundaries, escalating API roles, or executing unauthorized agent tools.
+
+For **AI and Agentic Workflows**, explicitly evaluate:
+
+1. *Indirect Prompt Injection:* Untrusted inputs (user tickets, scraped web pages, third-party files) overriding agent instructions.
+2. *Tool Privilege Escalation & Confused Deputy:* Agent executing destructive tools (file writes, shell execution, database mutations) on behalf of unauthenticated or unauthorized inputs.
+3. *Data Exfiltration via Rendered Output:* Leaking sensitive context via markdown image URLs, webhooks, or automated outbound network requests.
+4. *Context & Skill Poisoning:* Malicious external skills, untrusted repository rules, or poisoned prompt fixtures compromising agent invariants.
+
 ## Workflow
 
 1. **Confirm the explicit trigger and scope.** Identify the requested path,
@@ -54,6 +72,30 @@ description: >-
    evidence, mitigations, and residual risk. Stop before live probing,
    credentialed testing, destructive activity, or implementation unless the
    user separately authorizes it.
+
+## Threat model report template
+
+Format the report using this structure:
+
+```markdown
+# Threat model: [System / Workflow Name]
+
+## 1. System decomposition & trust boundaries
+| Boundary ID | Source Component | Target Component | Protocol / Transport | Auth / Trust Level |
+| :--- | :--- | :--- | :--- | :--- |
+
+## 2. Attacker profiles & capabilities
+| Persona | Access Level | Motive & Capabilities | Explicit Non-Capabilities |
+| :--- | :--- | :--- | :--- |
+
+## 3. Prioritized abuse paths
+| Threat ID | STRIDE Category | Trust Boundary | Preconditions | Abuse Path & Impact | Likelihood | Existing Control | Recommended Mitigation |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+
+## 4. Residual risks, assumptions, & unverified areas
+- **Assumptions:** [List critical deployment/environmental assumptions]
+- **Coverage gaps:** [List uninspected components or missing documentation]
+```
 
 ## Routing boundaries
 

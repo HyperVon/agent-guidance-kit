@@ -45,6 +45,12 @@ scope unless the user explicitly authorizes a safe, bounded check.
    combinations when applicable. Prefer one sharp assertion over snapshot soup.
    Test public seams with an independent oracle; avoid assertions that merely
    restate the implementation or pass for a plausible wrong result.
+
+   **Mock contract fidelity:**
+   Prefer testing against real public seams and in-memory fakes over deep mock hierarchies:
+   - Never mock the unit under test or its immediate contract boundary to make a regression test pass.
+   - Do not assert only that a mock method was called (`mock.assert_called_once()`); assert the observable state, returned value, or protocol side effect.
+   - When mocking external boundaries (e.g. HTTP APIs, cloud storage, payment gateways), ensure the mock accurately reproduces error codes, headers, and failure payloads observed in production.
 3. **Classify.** Give every finding a stable ID, severity, size, affected path,
    expected behavior, observed behavior, and evidence anchor.
 4. **Test first.** For a defect or missing guarantee, add a deterministic
@@ -55,11 +61,25 @@ scope unless the user explicitly authorizes a safe, bounded check.
    coverage for behavior that must remain stable. Consider property-based or
    mutation testing when example tests could remain tautological; choose the
    cheapest probe that can distinguish the likely wrong behavior.
+
+   **Flakiness and timing anti-patterns:**
+   Never resolve a flaky test or race condition by adding arbitrary `sleep()` delays, bumping timeout thresholds, or reordering tests until they happen to pass. Harden timing and concurrency defects deterministically:
+   - Use condition-based polling with bounded timeout intervals rather than fixed sleep delays.
+   - Use explicit synchronization primitives (events, latches, promises, channels) instead of timing assumptions.
+   - Inject deterministic clocks/schedulers or mock timers when testing time-dependent logic.
+   - Isolate test state (databases, directories, ports) so tests do not interfere when executed concurrently or out of order.
+
+   **Surgical fix boundary:**
+   Keep the production fix surgical: The fix must be the smallest necessary change that makes the deterministic regression test pass. Do not entangle bug fixes with stylistic cleanup, signature refactoring, or unrelated optimizations in the same hardening slice.
 5. **Verify.** Re-run the focused test, then the relevant repository gates. If
    caching could hide the change, force re-execution. Check test-result files,
    counts, failures, skips, coverage, generated contracts, and other artifacts
    that the gate claims to validate. Run manual or visual checks when the
    changed behavior cannot be established by automation.
+
+   **Test isolation verification:**
+   Verify that a newly added test passes both in isolation AND when executed as part of the full test suite (or in randomized test order). Confirm that fixtures cleanly tear down modified environment variables, monkeypatches, database state, and open file descriptors.
+
    Record confidence per meaningful behavior, not only a global percentage;
    fresh evidence must include the original reproduction and the relevant
    changed boundary.

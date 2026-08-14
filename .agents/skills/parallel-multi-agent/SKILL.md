@@ -36,6 +36,7 @@ Delegate only when all are true:
    evidence question.
 4. The parent can continue useful non-overlapping work while workers run.
 5. The parent can inspect and verify every returned change.
+6. Workers must not recursively delegate or spawn child subagents unless the parent brief explicitly assigns a hierarchical coordinator role.
 
 Keep work in the parent when it is the next blocking decision, touches one hot
 file, depends on an unfinished contract, is too small to justify handoff, or
@@ -75,6 +76,19 @@ Every brief must include:
 - relevant project invariants and matching skill paths;
 - whether the worker may edit, run tests, browse, or contact external systems;
 - a compact response shape, iteration/context bound, and stop condition.
+
+### Compact handoff contract
+
+Instruct workers to return only a compact handoff structure (never full file contents, raw logs, or giant tool traces):
+
+```text
+Track: <Track ID/Name>
+Status: SUCCESS | FAILED | PARTIAL
+Modified files: <list of exact repo-relative paths>
+Summary: <2-3 sentence summary of changes made>
+Self-verification: <commands executed and PASS/FAIL status with counts>
+Risks/Blockers: <any residual risk or deferred work, or "none">
+```
 
 For delegated evaluation workers, keep the task blind: pass only the natural
 user task and allowed fixtures, never the expected output, assertions, scoring
@@ -119,9 +133,20 @@ result.
 For editing workers in build-heavy repositories, either give each an isolated
 worktree or make the parent the sole owner of builds. Never trust final evidence
 from overlapping builds that share caches, locks, ports, databases, or output
-directories.
+directories. Do not allow concurrent editing workers to execute tests that bind to fixed singleton resources (e.g., fixed localhost ports `:8080`, hardcoded temporary database paths in `/tmp`, fixed Docker container names, or shared `.coverage` files). Configure ephemeral resources with unique per-track IDs/randomized ports or restrict test execution to the serial parent integration phase.
 
 ## 6. Integrate and verify
+
+### Worker failure and partial triage
+
+When a worker hangs, times out, hits a context/iteration limit, or returns a broken patch:
+
+1. **Isolate the failure:** Check whether the failed worker's write scope is strictly disjoint from other completed tracks. Never discard independent successful tracks due to an isolated sibling failure.
+2. **Integrate green tracks first:** Apply and verify the results of all successful disjoint tracks following normal verification gates.
+3. **Triage the failed track:** Choose one explicit recovery strategy:
+   - *Re-brief with tighter scope:* If the failure was due to context overflow or ambiguous instructions, re-launch a single worker with a narrower boundary and explicit stop condition.
+   - *Fall back to serial parent execution:* If the track requires sensitive context, complex integration, or debugging, execute the remaining track directly in the parent.
+   - *Roll back cleanly:* If the failed track represents a blocking hard dependency for other tracks, revert temporary changes created for that track and document the blocker.
 
 For every result:
 

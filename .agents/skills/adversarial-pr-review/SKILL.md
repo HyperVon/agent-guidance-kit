@@ -64,6 +64,15 @@ track matrix is proposal-first per `.agents/OPERATING.md` — a routine PR does
 not implicitly require this extra approval unless the repository has adopted
 the policy above.
 
+## Adversarial inspection lenses
+
+When delegating track scopes, assign each worker a concrete adversarial lens based on track risk:
+
+- **Boundary & Exploit Lens:** Test for unvalidated input boundaries, path traversal, injection, unauthorized state mutation, missing rate limits, and unauthenticated side-effects.
+- **Failure & Silent Corruption Lens:** Hunt for swallowed exceptions, fallback defaults that mask upstream errors, unlogged catch blocks, and missing rollback logic on partial failures.
+- **State & Concurrency Lens:** Inspect shared mutable state, race conditions, TOCTOU vulnerabilities, unhandled async task cancellations, and database transaction isolation leaks.
+- **False-Confidence & Slop Lens:** Challenge tests that assert only mock interactions, tautological assertions, tests missing assertion statements, or tests that pass regardless of broken contract logic.
+
 ## Workflow
 
 1. **Establish review truth.** Inspect `git status`, the complete diff,
@@ -75,14 +84,16 @@ the policy above.
 3. **Delegate bounded review.** Each worker reviews only its assigned paths
    and minimum dependencies, grounding every finding in a path and line,
    failing check, contract, or reproducible risk.
-4. **Parent validation.** De-duplicate, reject ungrounded claims, and rank
-   by impact (security/data-loss > correctness/contract > test/maintainability).
-5. **Fix and re-review.** Apply approved corrections, then re-run only the
-   affected tracks. Repeat until all tracks report no actionable findings or
-   the iteration cap is reached.
-6. **Report.** Return scope, matrix, per-track verdicts, ranked findings
-   with anchors, strengths, verification gaps, and deferred questions. Stop
-   unless the user explicitly authorizes applying selected findings.
+4. **Parent validation and deduplication.** Before reporting, the parent independently verifies each candidate finding against the diff and codebase:
+   - *Line anchor check:* Verify that the referenced line and code snippet match HEAD/merge-base diff.
+   - *Reachability check:* Verify whether caller context, type definitions, or upstream middleware already neutralize the alleged defect.
+   - *Contract verification:* Reject findings based on personal style or ungrounded assumptions; require a concrete failing scenario or violated invariant.
+   - *Deduplication:* Merge duplicate findings across track boundaries into a single anchored item with primary ownership.
+5. **Report and stop (Review Phase).** Return review scope, track matrix, per-track verdicts, and ranked findings anchored to `path:line` with severity and concrete impact. Stop and wait for explicit user approval before applying any fixes.
+6. **Iterative fix and re-review (when authorized).** If and only if the user explicitly authorizes applying corrections:
+   - Apply minimal safe fixes in the parent workspace for authorized findings.
+   - Re-dispatch only the specific worker tracks whose assigned files or direct dependencies were modified. Unaffected tracks are not re-run.
+   - Enforce an iteration cap (default: maximum 3 cycles). If unresolved findings persist after 3 cycles, stop and report the remaining delta.
 
 ## Boundaries and stop conditions
 

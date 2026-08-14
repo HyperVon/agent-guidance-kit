@@ -58,10 +58,24 @@ its decision impact, and the smallest validation that would close the gap.
    against at least one unrelated target: references are evidence and fixtures,
    not the platform's default taxonomy or ontology. Skip dimensions with no
    evidence of a relevant issue.
-4. **Compare alternatives.** For each real problem, compare a credible
-   **Keep current** option with **Evolve**, **Replace**, or **Greenfield** only
-   when warranted. State impact, evidence, cost, reversibility, migration
-   hazards, and a validation signal for each serious option.
+4. **Compare alternatives.** Evaluate viable candidates (at minimum **Keep Current** and one alternative) using a structured comparison matrix:
+
+   | Dimension | Keep Current | Evolve (Iterative) | Replace (Targeted) | Greenfield (Rewrite) |
+   | :--- | :--- | :--- | :--- | :--- |
+   | **Operational Complexity** | Baseline | Low/Medium increase | Medium/High increase | High (new stack/ops) |
+   | **Migration Risk & Downtime** | None | Low (in-place) | Medium (dual-write/cutover) | High (big-bang/data backfill) |
+   | **Reversibility / Rollback** | N/A | High (feature flag) | Medium (strangler fig) | Low / Hard escape hatch |
+   | **Blast Radius of Failure** | Known failure modes | Scoped to modified module | Service boundary | Entire subsystem |
+   | **State & Data Consistency** | Existing schema | Backward-compatible schema | Dual-write sync hazards | Complex data migration |
+   | **Cognitive Load & Churn** | Familiar | Minimal delta | Moderate onboarding | Full team retraining |
+
+   Before recommending an **Evolve** or **Replace** path, evaluate:
+
+   - *Dual-write split-brain:* Are there race conditions or partial failure scenarios where legacy and new stores diverge during transition?
+   - *Strangler Fig stall risk:* Can the migration be completed in bounded phases, or does it risk a permanent two-system maintenance burden?
+   - *Data-at-rest migration:* Does the plan require lossy schema transformation or offline table locking?
+   - *Network boundary inflation:* Does the proposal convert fast in-process method calls into distributed RPCs without latency/circuit-breaker justification?
+
 5. **Filter and deliver.** Drop taste-only churn, fashionable technology
    swaps, and proposals unsupported by a concrete quality, security,
    operability, correctness, or maintainability delta. Prefer fewer, sharper
