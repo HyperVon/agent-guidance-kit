@@ -425,6 +425,36 @@ class ValidationHelpersTest(unittest.TestCase):
                 any("missing or duplicated" in e or "malformed" in e for e in errors)
             )
 
+            # Test invalid UTF-8 in SKILL.md and nested markdown files
+            agents.write_text(
+                "<!-- agent-guidance-kit:routes:start -->\n"
+                "| Task | Skill |\n| :--- | :--- |\n"
+                "| Test | [test-skill](.agents/skills/test-skill/SKILL.md) |\n"
+                "<!-- agent-guidance-kit:routes:end -->\n",
+                encoding="utf-8",
+            )
+            receipt_dir = root / ".agents/.agent-guidance-kit/receipts"
+            receipt_dir.mkdir(parents=True)
+            (receipt_dir / "test.json").write_text(
+                '{"skills": [{"name": "test-skill"}]}', encoding="utf-8"
+            )
+            skill_dir = root / ".agents/skills/test-skill"
+            skill_dir.mkdir(parents=True)
+            skill_md = skill_dir / "SKILL.md"
+            skill_md.write_bytes(b"\xff\xfe\x00\x00")
+            errors_skill = validate_adoption.validate_target(root)
+            self.assertTrue(any("unreadable SKILL.md" in e for e in errors_skill))
+
+            # Test invalid UTF-8 in secondary markdown file
+            skill_md.write_text(
+                "---\nname: test-skill\ndescription: Test skill description.\n---\n# Test\n",
+                encoding="utf-8",
+            )
+            nested_md = skill_dir / "extra.md"
+            nested_md.write_bytes(b"\xff\xfe\x00\x00")
+            errors_nested = validate_adoption.validate_target(root)
+            self.assertTrue(any("unreadable Markdown" in e for e in errors_nested))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -27,17 +27,20 @@ class GenerateEvaluationSummaryTest(unittest.TestCase):
         ts_naive = module.parse_timestamp("2026-08-12T10:00:00")
         ts_z = module.parse_timestamp("2026-08-12T10:00:00Z")
         ts_offset = module.parse_timestamp("2026-08-12T10:00:00+00:00")
+        ts_non_zero_offset = module.parse_timestamp("2026-08-12T14:00:00+04:00")
         ts_invalid = module.parse_timestamp("invalid-date")
 
-        # None of them should be naive (tzinfo must not be None)
-        self.assertIsNotNone(ts_naive.tzinfo)
-        self.assertIsNotNone(ts_z.tzinfo)
-        self.assertIsNotNone(ts_offset.tzinfo)
-        self.assertIsNotNone(ts_invalid.tzinfo)
+        # All of them should be UTC-aware
+        self.assertEqual(timezone.utc, ts_naive.tzinfo)
+        self.assertEqual(timezone.utc, ts_z.tzinfo)
+        self.assertEqual(timezone.utc, ts_offset.tzinfo)
+        self.assertEqual(timezone.utc, ts_non_zero_offset.tzinfo)
+        self.assertEqual(timezone.utc, ts_invalid.tzinfo)
 
         # Comparing timestamps parsed from naive vs aware strings must not raise TypeError
         self.assertEqual(ts_naive, ts_z)
         self.assertEqual(ts_z, ts_offset)
+        self.assertEqual(ts_z, ts_non_zero_offset)
         self.assertTrue(ts_naive > ts_invalid)
 
     def test_latest_per_key_deduplication(self) -> None:
@@ -84,21 +87,25 @@ class GenerateEvaluationSummaryTest(unittest.TestCase):
             skills_dir = tmp_root / ".agents/skills"
             skills_dir.mkdir(parents=True)
 
-            # Create a non-dict JSON file and a malformed JSON file
+            # Create a non-dict JSON file, a malformed JSON file, and a non-UTF8 file
             (results_dir / "invalid.json").write_text("not json", encoding="utf-8")
             (results_dir / "list.json").write_text("[1, 2, 3]", encoding="utf-8")
+            (results_dir / "non_utf8.json").write_bytes(b"\xff\xfe\x00\x00")
 
             with (
                 patch.object(module, "RESULTS_ROOT", results_dir),
                 patch.object(module, "SKILLS_ROOT", skills_dir),
                 patch.object(module, "ROOT", tmp_root),
             ):
+                records = module.load_results()
+                self.assertEqual([], records)
                 summary = module.generate_summary_text()
 
             self.assertIn("# Evaluation Summary", summary)
             self.assertIn("No executed results yet.", summary)
             self.assertIn("`list.json` | _invalid_", summary)
             self.assertIn("`invalid.json` | _invalid_", summary)
+            self.assertIn("`non_utf8.json` | _invalid_", summary)
 
     def test_cli_write_and_check_modes(self) -> None:
         module = load()
