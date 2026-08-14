@@ -7,8 +7,9 @@
 
 List the exact commands, evaluations, or manual checks run and their results.
 Mark any required check that was not run as blocked or skipped with a reason.
-For the required adversarial review, record the final-diff scope, verdict,
-findings, and any user decisions or authorized reruns.
+For the required adversarial review, record the fresh subagent context,
+final-diff scope, verdict, findings, convergence pass, and any user decisions
+or authorized reruns.
 
 ## Scope and safety
 
@@ -16,6 +17,6 @@ findings, and any user decisions or authorized reruns.
 - [ ] I updated the existing owner of this behavior instead of duplicating it.
 - [ ] I kept examples free of secrets, personal paths, and private project data.
 - [ ] I preserved proposal-first approval and fail-closed conflict behavior.
-- [ ] I completed `adversarial-pr-review` against the final diff before the initial PR push or latest update push.
+- [ ] I completed `adversarial-pr-review` in a fresh independent subagent context against the final diff before the initial PR push or latest update push, and the final pass reported no additional findings.
 - [ ] I updated tests and documentation where the observable contract changed.
 - [ ] I ran the complete repository check, or explained why it was not run.

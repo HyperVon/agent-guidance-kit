@@ -4,12 +4,12 @@
     {
       "id": 1,
       "kind": "matching",
-      "prompt": "This repository requires adversarial-pr-review before pushing any branch that opens or updates a PR. Create a branch, commit these changes with a conventional message, and open a PR using the template.",
-      "expected_output": "The agent checks git status/base, plans an atomic conventional commit, completes adversarial-pr-review against the final diff before the initial PR push and any later update push, drafts a PR with scope/safety and verification, and asks for push approval before publishing.",
+      "prompt": "This repository requires adversarial-pr-review in a fresh independent subagent context before pushing any branch that opens or updates a PR. Create a branch, commit these changes with a conventional message, and open a PR using the template.",
+      "expected_output": "The agent checks git status/base, plans an atomic conventional commit, completes fresh-context adversarial-pr-review against the final diff before the initial PR push and any later update push, repeats the review after authorized fixes until no additional findings remain, drafts a PR with scope/safety and verification, and asks for push approval before publishing.",
       "assertions": [
         "The response checks git status and base branch before branching",
         "The response proposes atomic conventional commits without force-push",
-        "The response requires adversarial review evidence for the final diff before the PR push, includes it in verification, and still requests approval to push"
+        "The response requires fresh-context adversarial review and convergence evidence for the final diff before the PR push, includes it in verification, and still requests approval to push"
       ]
     },
     {
