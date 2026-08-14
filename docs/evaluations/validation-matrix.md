@@ -45,10 +45,32 @@ screen as statistical evidence.
 
 ## Additional model-specific screening
 
-| Skill | `gpt-5.4-mini` / Codex CLI (`high`) |
-| :--- | :--- |
-| `ai-slop-detector` | [✓](results/2026-08-13-ai-slop-detector-gpt-5.4-mini-codex-high-contained.json) · [human](results/2026-08-13-ai-slop-detector-gpt-5.4-mini-codex-high-contained.md) |
-| `frontend-quality-review` | [?](results/2026-08-13-frontend-quality-review-gpt-5.4-mini-codex-high-contained.json) · [human](results/2026-08-13-frontend-quality-review-gpt-5.4-mini-codex-high-contained.md) |
+| Skill | `gpt-5.4-mini` / Codex CLI (`high`) | `gemini-flash-lite` / Antigravity (`low`) |
+| :--- | :--- | :--- |
+| `adversarial-pr-review` | – | [✓](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `agent-guidance-maintenance` | – | [✓](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `ai-slop-detector` | [✓](results/2026-08-13-ai-slop-detector-gpt-5.4-mini-codex-high-contained.json) · [human](results/2026-08-13-ai-slop-detector-gpt-5.4-mini-codex-high-contained.md) | [✓](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `architecture-review` | – | [✓](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `bootstrap-project` | – | [✓](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `catalog-discovery` | – | [=](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `code-review` | – | [✓](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `dependency-upgrade` | – | [=](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `documentation-review` | – | [✓](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `frontend-quality-review` | [?](results/2026-08-13-frontend-quality-review-gpt-5.4-mini-codex-high-contained.json) · [human](results/2026-08-13-frontend-quality-review-gpt-5.4-mini-codex-high-contained.md) | [✓](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `git-github-workflow` | – | [✓](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `harness-adaptation` | – | [✓](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `parallel-multi-agent` | – | [✓](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `quality-hardening` | – | [✓](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `reduce-code-size` | – | [✓](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `rules-and-skills-audit` | – | [✓](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `security-review` | – | [=](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `skill-authoring` | – | [✓](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `skill-evaluation` | – | [=](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `skill-optimizer` | – | [✓](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `skill-reviewer` | – | [✓](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `systematic-debugging` | – | [✓](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `threat-modeling` | – | [✓](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
+| `upstream-contribution` | – | [=](results/2026-08-14-gemini-flash-lite-antigravity.json) · [human](results/2026-08-14-gemini-flash-lite-antigravity.md) |
 
 † `systematic-debugging` fixture evaluation (order-recovery) passed 4/4 in both conditions for `luna` and `sol` on Codex — no discriminating advantage, decision `KEEP_PROVISIONAL`. See [2026-08-11-systematic-debugging-fixture.md](2026-08-11-systematic-debugging-fixture.md).
 
@@ -70,8 +92,9 @@ The human interface is conversation only — ask the agent to follow `skill-eval
 
 ## Current coverage
 
-* `24` skills have `evals/evals.json` definitions; `23` have executed results so far (the remaining newly added skill remains `–` until a clean-context run is recorded).
+* `24` skills have `evals/evals.json` definitions; `24` have executed results (`threat-modeling` evaluated live with 6 independent subagents under Antigravity / `gemini-flash-lite`, filling the last unmeasured catalog cell).
 * Historical runs: `2026-08-10` (`gpt-5.6-luna` low, 4 skills), `2026-08-10` external intake (`gpt-5.6-luna` low, `skill-reviewer`), `2026-08-11` fixture (`gpt-5.6-luna` low + `gpt-5.6-sol` xhigh, `systematic-debugging`), `2026-08-11` (`muse-spark-1.2-contributor` `xhigh` / `muse code` 0.1.0, 17 skills), `2026-08-12` (`muse-spark-1.2-contributor` `xhigh` / `muse code` 0.1.0, 3 skills).
-* Latest historical runs `2026-08-11-muse-spark-1.2-contributor-muse-code.json` (17 skills), `2026-08-12-muse-spark-1.2-contributor-muse-code.json` (3 skills), and `2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-3.json` (2 skills) record all 22 previously evaluated skills as outperforming baseline on their assertion sets. A full historical `Kilo` / `tencent/hy3:free` run records the same for 20 skills. These files document isolated workspaces but do not, from committed metadata alone, prove that the two conditions used different fresh workers; treat them as provisional and rerun under the independent-worker protocol before relying on the claims. One run per condition per model is not a statistical benchmark; effort level (`low` vs `xhigh`) can change results dramatically.
+* Latest multi-skill runs `2026-08-11-muse-spark-1.2-contributor-muse-code.json` (17 skills), `2026-08-12-muse-spark-1.2-contributor-muse-code.json` (3 skills), and `2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-3.json` (2 skills) record all 22 previously evaluated skills as outperforming baseline on their assertion sets. A full historical `Kilo` / `tencent/hy3:free` run records the same for 20 skills.
+* The 2026-08-14 `gemini-flash-lite` / Antigravity (`low`) live evaluation of `threat-modeling` scored 5/9 vs 4/9 across 3 cases with 6 live subagents. Case 1 demonstrated a clear win (4/4 vs 3/4) on explicit documentation of assumptions and unknowns. It is marked `✓` under `KEEP_PROVISIONAL`.
 * The 2026-08-13 `gpt-5.6-luna` / Codex CLI (`max`) full canaries were protocol-valid but non-discriminating: `frontend-quality-review` scored 6/9 vs 6/9; the diagnostic controls scored `code-review` 11/13 vs 11/13 and `security-review` 9/11 vs 9/11. They are marked `?`; no skill efficacy decision is claimed. A subsequent frontend pilot using the first revised matching case scored 5/5 vs 4/5, but remains `?` because the other four cases and repetitions are not yet run.
 * The 2026-08-13 `gpt-5.4-mini` / Codex CLI (`high`) `ai-slop-detector` full pack was protocol-valid and modestly discriminating: 25/30 vs 24/30, with the guided condition passing the post-cleanup verification assertion that the baseline missed. It is marked `✓` under `KEEP_PROVISIONAL`; the one-repetition margin is not universal or statistical evidence.

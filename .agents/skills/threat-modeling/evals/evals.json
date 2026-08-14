@@ -4,7 +4,7 @@
     {
       "id": 1,
       "kind": "matching",
-      "prompt": "Threat-model this repository's public API. Map components, entrypoints, assets, trust boundaries, attacker capabilities and non-capabilities, realistic abuse paths, likelihood and impact, existing mitigations, and recommended mitigations. Keep the work report-only and repository-grounded.",
+      "prompt": "We are designing our public API and need a design-time threat model before we finalize the architecture. Please identify realistic abuse paths and recommend concrete mitigations.",
       "expected_output": "The agent builds a scoped threat model from repository evidence, separates runtime from CI/dev/test, identifies boundaries and assets, calibrates attackers, prioritizes abuse paths, and checks coverage before reporting.",
       "assertions": [
         "The response maps concrete components, entrypoints, assets, and trust boundaries from evidence",
