@@ -27,7 +27,8 @@ canonical source.
    - overlapping triggers or broad workflows that subsume narrow ones;
    - contradictory commands, thresholds, or approval rules;
    - stale, broken, unreachable, or orphaned references;
-   - missing boundaries between always-on rules and conditional procedures.
+   - missing boundaries between always-on rules and conditional procedures;
+   - *Harness projection drift:* Check whether harness-specific entrypoints (`CLAUDE.md`, `GEMINI.md`, `.cursorrules`) have accumulated standalone instructions rather than acting as thin adapters pointing to canonical `.agents/` guidance. Projections must not become divergent second sources of truth.
 4. Classify each finding as `duplicate`, `merge candidate`, `scope/trigger issue`,
    `stale/inaccurate`, `conflict`, or `improvement`. Cite the exact path and
    heading or line, explain the evidence, and rank impact and risk.
@@ -35,6 +36,17 @@ canonical source.
    map, affected links, and validation required. Do not call word-frequency
    similarity semantic equivalence, and ignore illustrative fenced examples when
    checking links.
+
+## Always-on vs on-demand separation
+
+Do not classify shared concepts between root rules and skills as duplicates:
+
+- **Root guidance (`AGENTS.md`, `OPERATING.md`):** Must remain thin, universal, and always-on. It owns invariant product boundaries, security guardrails, and routing pointers.
+- **Skills (`.agents/skills/<name>/SKILL.md`):** Loaded on demand when triggered. They own deep operational procedures, domain checklists, and tool execution workflows.
+
+Reject proposals to merge on-demand skill bodies into root instructions or to delete skill procedures on the grounds that root rules "already mention the topic."
+
+Respect directory scoping: Nested guidance files (e.g., `frontend/AGENTS.md`, `scripts/AGENTS.md`) apply specifically to their subdirectory tree. Do not consolidate them into the repository root if they contain stack-specific conventions that would pollute context for unrelated tasks.
 
 ## Report shape
 

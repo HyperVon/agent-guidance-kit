@@ -39,17 +39,21 @@ are the primary outcome, route the task to `rules-and-skills-audit`. Do not use
 Do not make a content review into a cosmetic description rewrite. Treat an
 explicit request to review as permission to inspect, not permission to edit.
 
+## Boundaries and anti-patterns
+
+- **No editing during review:** Treat review authorization strictly as inspection authority. Never edit guidance files during a review pass.
+- **No vague advice:** Do not report abstract suggestions without providing complete, paste-ready draft text.
+- **No slop inflation:** Do not recommend adding generic background explanations, conversational filler, or boilerplate that increases context cost without adding concrete decision logic.
+- **Ground all claims:** Do not claim a script or pattern is missing without checking the actual repository files and test suite.
+
 ## Review workflow
 
 1. Define the mode, bounded paths, and any skipped candidates.
-2. Read the actual rules, skill bodies, references, tests, and source files that
-   the guidance claims to govern. Do not infer a gap from filenames alone.
-3. Ask: what would a capable engineer still get wrong after following only this
-   guidance? Look for boundaries, correctness, security, concurrency,
-   persistence, testing, operability, and readability traps that matter here.
-4. Draft paste-ready additions: a decision rule, anti-pattern, example,
-   checklist, or short reference section. Prefer teachable specifics over
-   generic best practices. Keep always-loaded skills concise.
+2. **Ground in implementation truth:** Read the actual rules, skill bodies, references, tests, scripts, and codebase files the guidance governs. Verify that every referenced script, command flag, directory path, and tool action exists and works in the current repository. Do not review guidance in an abstract vacuum.
+3. **Probe for domain and agent failure modes:** Ask what a capable engineer *or* an AI agent will still get wrong after following only this guidance:
+   - *Agent failure traps:* Does the skill prevent sycophantic agreement, premature stopping after one green test, defensive exception suppression (`try/except: pass`), speculative trial-and-error editing, tool hallucination, or unverified claims?
+   - *Domain traps:* Look for missing boundaries, concurrency races, state persistence errors, transaction rollbacks, secret leaks, missing edge cases, and omitted cleanup procedures.
+4. **Draft paste-ready additions:** Author complete, concrete additions: exact decision rules, anti-pattern entries, checklists, or reference sections with exact target headings and severities (P0–P3). Every finding must be paste-ready so `skill-authoring` can apply it directly without further drafting. Reject vague meta-recommendations (e.g., "should improve error handling").
 5. In `meta` or `full` mode, check weak triggers, broken links, orphaned entries,
    duplicate workflows, and stale projections as secondary findings.
 6. Stop after the report. If the user selects findings, name the exact approved

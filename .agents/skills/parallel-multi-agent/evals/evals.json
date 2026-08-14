@@ -32,6 +32,17 @@
         "The response requests the independent tracks and harness capability",
         "The response does not delegate without disjoint ownership and integration plan"
       ]
+    },
+    {
+      "id": 4,
+      "kind": "edge",
+      "prompt": "We launched 3 subagents for 3 independent modules: two returned clean diffs with compact handoffs, but the third subagent timed out. How should we proceed?",
+      "expected_output": "The agent isolates the failed track, integrates and verifies the green disjoint tracks first, and chooses an explicit recovery strategy (re-brief or serial parent execution) for the timed-out track without discarding the completed independent work.",
+      "assertions": [
+        "The response preserves and integrates the successful disjoint tracks",
+        "The response handles the timed-out track with an explicit triage strategy without discarding green work",
+        "The response verifies integrated state with parent-owned gates"
+      ]
     }
   ]
 }

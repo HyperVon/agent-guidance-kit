@@ -51,6 +51,21 @@ named skill does not authorize unrelated guidance, index, or runtime changes.
    lines, and move rare detail to a directly linked sibling reference. Include
    trigger phrases and a neighboring-task tie-breaker in the description or
    body; do not rely on a global name or a long index to route the skill.
+
+   **Description and routing formula:**
+   Draft the YAML frontmatter `description` using this 3-part structure (100–300 characters recommended; must be 40–1024 characters):
+   1. *Action & Scope:* Active verb stating what the skill does (e.g., "Harden correctness through a bounded QA loop...").
+   2. *Positive Triggers:* Explicit user query phrases and situations where this skill must activate (e.g., "Use when asked to investigate flaky tests, coverage gaps, or edge cases...").
+   3. *Negative Boundary:* Explicit tie-breaker routing adjacent requests away (e.g., "Do not use for general code review (use code-review) or architectural redesign (use architecture-review).").
+   Avoid generic filler phrases ("Helps with tasks", "Manages files", "Improves code") that match indiscriminately.
+
+   **Reference file conventions:**
+   When moving low-frequency detail or deep specifications into sibling references:
+   - Place reference files under `.agents/skills/<name>/references/<topic>.md`.
+   - Keep the common-path decision tree, core contract, and primary checklist in the main `SKILL.md` (< 500 lines).
+   - Link references using relative paths (e.g., `[topic title]` targeting `references/<topic>.md`).
+   - Ensure each reference is a self-contained deep dive with clear headings, not an orphaned fragment or a duplicate copy of the main workflow.
+
 4. Preserve portability. Use repository-relative examples and generic tool
    language. Do not add credentials, private data, personal paths, provider
    catalogs, vendor metadata, or network-dependent behavior.
@@ -61,6 +76,17 @@ named skill does not authorize unrelated guidance, index, or runtime changes.
    the consumer project. Confirm that the canonical skill remains the sole
    source of truth and that no harness projection or sibling name collision
    creates a second authority.
+
+   **Companion script hygiene:**
+   When a skill includes deterministic helper scripts (under `scripts/`):
+   - Write scripts in standard-library Python (or zero-dependency POSIX shell) without undeclared external package requirements.
+   - Ensure scripts are completely network-free and execute deterministically.
+   - Implement explicit guards against path traversal, symlink escapes, and unauthorized file writes outside the repository root.
+   - Provide comprehensive automated unit tests in `tests/` covering both success paths and error conditions.
+
+   **Harness-neutral syntax:**
+   Canonical `SKILL.md` files must use pure, standard Markdown. Never include harness-specific syntax (such as `@`-mentions, XML tool execution blocks, or proprietary IDE metadata tags) in canonical skill bodies. Harness adaptations belong strictly in thin adapter projections managed by `harness-adaptation`.
+
 5. Apply only the explicitly approved files and findings. Do not overwrite
    unrelated guidance, create duplicate skill bodies, add unrequested harness
    projections, commit, publish, or send external messages unless separately

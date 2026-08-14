@@ -58,6 +58,12 @@ itself.
    compatibility, and data-loss behavior as applicable. Trace changed symbols
    through callers, removed behavior, sibling implementations, and the
    canonical source of truth; do not assume a local diff is the whole contract.
+
+   **High-risk defect categories:**
+   - *Concurrency & atomicity:* unlocked mutexes/locks on early return or exception paths; check-then-act (TOCTOU) races; goroutine/thread/task leaks without lifecycle termination; unhandled promise/async task rejections.
+   - *State transitions & persistence:* partial multi-step persistence writes lacking transaction rollback; missing database connection/file handle release in `finally`/`defer` blocks; idempotency failures during retries.
+   - *Input & boundary validation:* missing bounds, size, or type checks on untrusted payloads; unescaped inputs reaching regex/SQL/shell parsers; sensitive data leaked into log lines.
+   - *Error propagation:* swallowed exceptions returning synthetic default values that masquerade as success; missing error wrapping that loses operational root cause.
 4. **Inspect tests and evidence.** Each changed test should protect a distinct
    defect class and derive expected values from a contract or independent
    oracle. Ask whether a plausible wrong implementation would fail. Run the
@@ -86,6 +92,13 @@ finding should include a severity and precise evidence anchor.
   issue.
 - **P3:** low-risk improvement without demonstrated correctness or safety
   impact.
+
+### Reviewer anti-patterns to avoid
+
+- **Style nitpicking:** Do not report formatting, identifier casing, or subjective syntax preferences if automated linters pass and the code matches local codebase conventions.
+- **Speculative vulnerabilities:** Do not report security flaws without demonstrating a concrete untrusted data flow, unverified input, or reachable abuse path.
+- **Scope creep & unsolicited redesign:** Do not demand an architectural rewrite when reviewing a localized bug fix or narrow feature addition.
+- **Phantom verification:** Never claim tests passed or code is verified without running the exact test command and inspecting output.
 
 Do not call a check passed when it was not run. Do not claim merge readiness,
 approval, or external completion from this review alone.

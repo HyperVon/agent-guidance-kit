@@ -126,6 +126,15 @@ Identify the target's canonical owners for:
 - task-specific procedures;
 - harness entrypoints and projections.
 
+**Target-local custom skills vs. managed routes:**
+
+Target repositories may define project-specific skills alongside adopted kit skills:
+
+- *Receipt-owned skills:* Indexed exclusively inside the deterministic managed route block:
+  `<!-- agent-guidance-kit:routes:start -->` ... `<!-- agent-guidance-kit:routes:end -->`
+- *Target-local custom skills:* MUST be indexed in a separate, unmanaged table (e.g., `## Project Skills` or `## Repository Skills`) outside the AGK markers.
+- *Validation rule:* Never manually insert target-local skills into the AGK managed route block; `validate_adoption.py` will fail with an unreceipted skill error.
+
 Before finalizing skill selection, perform a source-canonical drift check. The
 kit's `.agents/AGENTS.md` and `.agents/OPERATING.md` are source-owned reference
 guidance, while a target's copies remain target-owned and may contain stronger
@@ -255,7 +264,8 @@ integration. Apply only the approved additional edits needed to:
 - keep always-on rules compact;
 - preserve existing precedence and nested scope;
 - add thin harness pointers only where useful;
-- record public source provenance without machine-specific paths.
+- record public source provenance without machine-specific paths;
+- maintain target-local custom skills in a separate project-owned table outside the AGK managed route block.
 
 Use `skill-authoring` for material skill edits. Keep copied generic skills
 generic unless the approved plan explicitly makes them project-specific.
@@ -279,6 +289,7 @@ it. Confirm:
 - no unfinished placeholders, personal paths, credentials, or private state
   entered tracked files;
 - neighboring task prompts route predictably;
+- confirm harness discovery by invoking a non-destructive harness discovery check (e.g., listing registered skills or asking the harness to summarize the trigger for an adopted skill);
 - all checks are reported as pass, fail, or not run with reason.
 
 Report the approved decisions, receipt path, created/edited files, preserved

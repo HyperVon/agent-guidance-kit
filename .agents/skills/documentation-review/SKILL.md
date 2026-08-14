@@ -47,6 +47,12 @@ or defer it. Never broaden a guarantee beyond what the evidence supports.
    the project; move detailed exclusions, trust models, and internal rationale
    to design or security documentation unless users need them to avoid an
    immediate misuse.
+
+   **Code snippet and flag verification:**
+   For every code snippet, configuration sample, or CLI command in documentation:
+   - *Export & signature match:* Verify that imported symbols, class names, method signatures, and parameter names match current source exports exactly.
+   - *CLI flag validation:* Compare flags against CLI help output (`--help`) or CLI argument parser definitions. Mark flags that no longer exist or changed default values as `WRONG` or `STALE`.
+   - *Config syntax validation:* Parse configuration examples (YAML, JSON, TOML) against the current parser schema or configuration models in the repository.
 3. **Report before broad edits.** For each finding, give the document location,
    claim, evidence anchor, impact, smallest correction, and size. Preserve
    unrelated work and do not invent new documentation scope.
@@ -59,6 +65,11 @@ or defer it. Never broaden a guarantee beyond what the evidence supports.
    tooling, and run the repository's documented documentation checks. A stale
    visual asset is a separate finding; changing its caption is not visual
    verification.
+
+   **Link and anchor verification:**
+   - Verify that every relative file link (e.g., `[link text]` targeting `docs/guide.md`) resolves to a tracked file in the repository from the source document's directory.
+   - Verify that heading anchors (e.g., `[link text]` targeting `#section-name`) match the exact slugified header text in the target document.
+   - Report any link pointing to an untracked, moved, or deleted file as `BROKEN`.
 
 ## Incremental sync after a change set
 
@@ -92,6 +103,12 @@ Use the repository's size labels when they exist; otherwise use these defaults:
   compatibility guarantees, operational commands, or claims that could cause
   costly action. Stop for explicit approval, even if the diff is small, and
   include focused evidence and compensating verification.
+
+### Documentation review anti-patterns
+
+- **Narrative bloat:** Do not add conversational fluff, promotional adjectives, or tutorial walkthroughs to technical reference documents.
+- **Internal leak:** Do not copy internal test fixtures, private developer paths, or internal-only helper functions into public API guides.
+- **Duplicate truth:** Do not copy full policy or procedural text across multiple documents; link to the canonical owner instead.
 
 Do not treat a request to review as permission to edit. Do not create or modify
 issues, pull requests, releases, shared infrastructure, or other remote state

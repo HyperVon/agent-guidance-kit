@@ -36,11 +36,18 @@ Size alone is an investigation trigger, not evidence that code is defective.
    cases, generated or contract-owned files, and behavior that must remain
    unchanged. Write a scope allowlist and behavior-parity checklist, and stop
    if the request would require a semantic change.
+
+   **Verify dynamic usage before removal:**
+   - Check serialization schemas (e.g., Pydantic models, dataclasses, ORM entities, protobuf/JSON serializers) where fields are accessed dynamically.
+   - Check kwargs forwarding (`**kwargs`), dependency injection containers, and reflection/metaclass lookups (`getattr`, `__dict__`).
+   - Check public plugin or event handler entrypoints registered via string names or decorators.
 2. **Apply the ladder in order.** Prefer deleting proven dead code, removing
    duplicate local logic, reusing an existing helper, and using established
    language idioms. Extract a helper only for multiple genuine uses and a
-   cohesive reason. Change dependencies only when the verified net cost is
-   lower.
+   cohesive reason.
+
+   **Avoid the cross-domain DRY trap:**
+   Do not unify superficially similar code if the components belong to different business domains or have different reasons to change. Extract a shared helper only when the logic represents a genuinely reusable, cohesive utility with a single clear owner. Change dependencies only when the verified net cost is lower.
 3. **Split selectively.** Split a large file only by a cohesive reason to
    change and an ownership boundary that makes future work clearer. Do not
    split mechanically or move code merely to change a line count.
@@ -56,11 +63,24 @@ Size alone is an investigation trigger, not evidence that code is defective.
 
 ## Safety and stop conditions
 
+### Reject code golfing and false compression
+
+Never reduce line count at the expense of readability, maintainability, or error clarity. Specifically reject:
+
+- Replacing clean `if/else` control flow with deeply nested ternary expressions or boolean short-circuit hacks.
+- Replacing readable data manipulation with impenetrable regexes or multi-stage chained lambdas.
+- Collapsing explicit error checks or distinct error messages into a single generic handler just to save lines.
+- Omitting type annotations, docstrings, or clarifying comments to artificially deflate file size.
+
+True size reduction removes dead code, eliminates duplicate implementations, simplifies bloated abstractions, and leverages standard language features—it never obfuscates logic.
+
 Never delete a distinct test, weaken an assertion, widen an exclusion, collapse
 a trust boundary, or hide a warning or failure to obtain a smaller diff. A
 reduction that changes error handling, retry behavior, cancellation,
 idempotency, persistence, or protocol output is a behavior change: stop and
 return it to the appropriate owner instead.
+
+Preserve git blame hygiene: Avoid purely cosmetic reordering of functions or moving files across directories unless the split aligns with an established ownership boundary. Keep changes targeted to minimize merge friction on active branches.
 
 Do not resolve a size-only review finding by citing a line-count reduction.
 Each retained slice needs behavior-parity evidence, and an explicit waiver is

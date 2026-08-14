@@ -27,17 +27,28 @@ history or publish without authority.
 
 ## Workflow
 
-1. **Establish state and authority.** Read `git status`, `git branch --show-current`,
+1. **Establish state and authority.** Read `git status --porcelain`, `git branch --show-current`,
    `git log --oneline -5`, remote, and protection rules. Confirm the canonical
    base is `main` and whether a clean worktree is required. Confirm the user has
    authorized any `push`, `publish`, or `PR` creation; otherwise stop after the
    draft.
+
+   **Worktree safety and pre-flight checklist:**
+   - Run `git status --porcelain` to identify untracked, modified, and staged files.
+   - If uncommitted changes exist that do not belong to the current task:
+     - Ask the user whether to commit, stash (`git stash -u` to include untracked files), or discard.
+     - Never run destructive commands (`git checkout -- .`, `git clean -fd`, `git reset --hard`) without explicit approval.
+   - Confirm the target branch does not already exist locally or remotely (`git branch --list <name>`, `git ls-remote --heads origin <name>`).
 2. **Plan the branch and commits.** Use trunk-based branches (`feat/`, `fix/`,
    `docs/`) from `main`. Keep commits atomic and conventional
    (`feat:`, `fix:`, `docs:`, `chore:`). Never use `reset --hard`,
    `filter-branch`, `rebase --force`, or history rewriting on shared branches
-   without explicit approval. Verify author identity is the intended public
-   identity before committing.
+   without explicit approval.
+
+   **Author identity verification:**
+   - Inspect `git config user.name` and `git config user.email` (or `git var GIT_AUTHOR_IDENT`).
+   - Confirm the email matches the user's intended public identity or GitHub privacy email (e.g. `<id>+<username>@users.noreply.github.com`).
+   - If identity is unconfigured or misconfigured, propose the appropriate local config command (`git config user.name "..." && git config user.email "..."`) and wait for confirmation. Never commit with an auto-generated local hostname email.
 3. **Draft the change.** Keep PRs small, describe user-visible change,
    motivation, scope/safety checklist, and verification (`make check`,
    `gh pr checks`). Use `.github/pull_request_template.md` and
@@ -65,6 +76,9 @@ history or publish without authority.
 
 ## Boundaries and gotchas
 
+- Never run `git add .` or `git add -A` from repository root. Explicitly stage only the files owned by the task (`git add path/to/file1 path/to/file2`).
+- Check `git diff --cached` before committing to verify zero unintended files, debug logs, or credentials are staged.
+- Use explicit issue closing keywords in PR bodies (`Fixes #123`, `Closes #456`) rather than vague issue references.
 - Do not `push --force`, `push --force-with-lease` on `main`, or rewrite
   published history without explicit approval and a backup branch.
 - Do not commit secrets, `.env`, `id_rsa`, `*.pem`, or personal filesystem

@@ -33,6 +33,17 @@
         "The response distinguishes structural audit from content enrichment",
         "The response records files read and candidates skipped"
       ]
+    },
+    {
+      "id": 4,
+      "kind": "edge",
+      "prompt": "Our root AGENTS.md and our security-review skill both talk about authentication boundaries, and we have a frontend/AGENTS.md with React rules. Should we merge them all into root AGENTS.md to eliminate duplication?",
+      "expected_output": "The agent rejects consolidating them into root AGENTS.md: it explains that root guidance is thin/always-on, skills are deep/on-demand procedures, and nested files provide directory-scoped boundaries that should not pollute global context.",
+      "assertions": [
+        "The response preserves the distinction between thin always-on root rules and deep on-demand skills",
+        "The response preserves directory scoping for frontend/AGENTS.md",
+        "The response rejects consolidating all rules into root AGENTS.md"
+      ]
     }
   ]
 }
