@@ -42,6 +42,9 @@ request unless the repository owner explicitly asks.
 
 For faster inner loop, use `python scripts/check.py --quick` (skips
 markdownlint and `agentskills` validate). Prefer the full `make check` before
-push. If you use pre-commit, `pre-commit install` mirrors the same gates
+push. Before every push that opens or updates a pull request, also complete
+the required `adversarial-pr-review` workflow against the final diff; the full
+`make check` does not substitute for that review. If you use pre-commit,
+`pre-commit install` mirrors the format and hygiene gates
 locally (`ruff`, `validate_repository.py`, `public_hygiene_check.py`,
 `markdownlint`).

@@ -66,6 +66,11 @@ plan.
   source-project policy into the portable core.
 - Do not create a remote, publish, push, or open a pull request unless the user
   explicitly authorizes that external action.
+- Before any push to a branch intended to open or update a pull request,
+  complete the `adversarial-pr-review` workflow against the final diff. This
+  applies to the initial PR push and every later update push; review evidence
+  and any user decisions on findings belong in the PR verification, and this
+  gate does not replace the separate user authorization to push.
 - Repository visibility and public-release timing are user-owned decisions.
   Do not make publication, tagging, or release preparation the automatic next
   phase merely because a candidate is ready; discuss them only when the user

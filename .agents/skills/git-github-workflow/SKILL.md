@@ -70,7 +70,14 @@ history or publish without authority.
    threshold from the source project or from another repository. If no
    complete gate is available, report the exact checks that were run and the
    limitation rather than inventing or importing one.
-6. **Publish only with approval.** Push to the approved remote/branch, set
+6. **Apply repository-required adversarial review gates.** Inspect local
+   policy before pushing a branch that will open or update a pull request. When
+   that policy requires `adversarial-pr-review`, invoke it on the final diff
+   before the initial PR push and every later update push. If authorized fixes
+   change the diff, rerun only the affected tracks until convergence. Record
+   the review verdict, findings, and any user decisions in the PR verification.
+   This gate does not replace the separate user authorization to push.
+7. **Publish only with approval.** Push to the approved remote/branch, set
    upstream only when requested, and open the PR with `gh pr create` using the
    approved body. Report branch, commit, remote, and checks.
 
@@ -85,6 +92,9 @@ history or publish without authority.
   paths. Redact examples.
 - Do not create a remote, tag, or release (`git tag`/`gh release`) without
   separate explicit authorization per `docs/release.md`.
+- When local policy requires adversarial review, do not push a branch intended
+  to open or update a PR without a completed review of its final diff; a prior
+  review does not cover later changes.
 - Prefer `AGENTS.md` hierarchy over adding duplicate harness entrypoints.
 - Keep commits focused: one logical change per commit, no bundled refactors.
 
