@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
-from agent_runtime_router import CapabilityEvidence, HarnessProfile, HarnessStateNamespace
+from agent_runtime_router import (
+    CapabilityEvidence,
+    HarnessProfile,
+    HarnessStateNamespace,
+)
 from agent_runtime_router.harnesses.contracts import EvidenceStatus
 
 # Kilo patch releases in this series retain the command shape verified by this
@@ -48,7 +50,10 @@ def _is_supported_kilo_version(version: str) -> bool:
     if match is None:
         return False
     major, minor, patch = (int(part) for part in match.groups())
-    return (major, minor) == SUPPORTED_KILO_MAJOR_MINOR and patch >= MINIMUM_SUPPORTED_KILO_PATCH
+    return (
+        major,
+        minor,
+    ) == SUPPORTED_KILO_MAJOR_MINOR and patch >= MINIMUM_SUPPORTED_KILO_PATCH
 
 
 def _version(kilo: Path) -> str:
@@ -67,11 +72,17 @@ def _version(kilo: Path) -> str:
         raise SystemExit("kilo version check failed")
     text = result.stdout[:4096].decode("utf-8", "replace")
     version = next(
-        (token.lstrip("v") for token in text.split() if _SEMVER.fullmatch(token.lstrip("v"))),
+        (
+            token.lstrip("v")
+            for token in text.split()
+            if _SEMVER.fullmatch(token.lstrip("v"))
+        ),
         "",
     )
     if not _is_supported_kilo_version(version):
-        raise SystemExit("unsupported Kilo major/minor version; review the target adapter first")
+        raise SystemExit(
+            "unsupported Kilo major/minor version; review the target adapter first"
+        )
     return version
 
 
@@ -102,10 +113,14 @@ def _verify_help_contract(kilo: Path) -> None:
             raise SystemExit("Kilo help contract check failed")
         output = result.stdout[:16_384].decode("utf-8", "replace")
         if not all(token in output for token in required_tokens):
-            raise SystemExit("Kilo help contract is unsupported; review the target adapter first")
+            raise SystemExit(
+                "Kilo help contract is unsupported; review the target adapter first"
+            )
 
 
-def _existing_relative_paths(target: Path, paths: tuple[str, ...], *, directory: bool) -> tuple[str, ...]:
+def _existing_relative_paths(
+    target: Path, paths: tuple[str, ...], *, directory: bool
+) -> tuple[str, ...]:
     """Return only regular, target-local guidance/skill paths as profile evidence."""
 
     result: list[str] = []
@@ -113,7 +128,7 @@ def _existing_relative_paths(target: Path, paths: tuple[str, ...], *, directory:
         path = target / relative
         if path.is_symlink():
             continue
-        if (path.is_dir() if directory else path.is_file()):
+        if path.is_dir() if directory else path.is_file():
             result.append(relative)
     return tuple(result)
 
@@ -147,7 +162,12 @@ def _profile_mapping(target: Path, version: str) -> dict[str, object]:
         version_source="kilo-cli",
         instruction_paths=_existing_relative_paths(
             target,
-            ("AGENTS.md", ".agents/AGENTS.md", ".agents/OPERATING.md", ".kilo/operating.md"),
+            (
+                "AGENTS.md",
+                ".agents/AGENTS.md",
+                ".agents/OPERATING.md",
+                ".kilo/operating.md",
+            ),
             directory=False,
         ),
         skill_paths=_existing_relative_paths(
@@ -183,7 +203,13 @@ def main(argv: list[str] | None = None) -> int:
         "kind": "subprocess",
         "adapter_id": "kilo",
         "probe_id": "kilo-models",
-        "command": [str(runtime.resolve()), "--python", str(wrapper.resolve()), "--kilo", str(kilo)],
+        "command": [
+            str(runtime.resolve()),
+            "--python",
+            str(wrapper.resolve()),
+            "--kilo",
+            str(kilo),
+        ],
         "cwd": str(target.resolve()),
         # Model listings may cold-start or contact several provider backends.
         # Keep this bounded but long enough for a real refresh; the adapter
@@ -199,7 +225,9 @@ def main(argv: list[str] | None = None) -> int:
             {
                 "kilo_executable": str(kilo),
                 "kilo_version": version,
-                "supported_major_minor": ".".join(str(part) for part in SUPPORTED_KILO_MAJOR_MINOR),
+                "supported_major_minor": ".".join(
+                    str(part) for part in SUPPORTED_KILO_MAJOR_MINOR
+                ),
                 "minimum_supported_patch": MINIMUM_SUPPORTED_KILO_PATCH,
                 "help_contract_verified": True,
             },
@@ -209,12 +237,16 @@ def main(argv: list[str] | None = None) -> int:
         + "\n",
         encoding="utf-8",
     )
-    print(json.dumps({
-        "adapter_id": "kilo",
-        "kilo_version": version,
-        "discovery": str(adapter_dir / "discovery.json"),
-        "profile": namespace.relative_root + "/profile.json",
-    }))
+    print(
+        json.dumps(
+            {
+                "adapter_id": "kilo",
+                "kilo_version": version,
+                "discovery": str(adapter_dir / "discovery.json"),
+                "profile": namespace.relative_root + "/profile.json",
+            }
+        )
+    )
     return 0
 
 

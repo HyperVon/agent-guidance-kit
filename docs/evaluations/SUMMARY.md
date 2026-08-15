@@ -11,7 +11,7 @@ Human interface: ask the agent to “run evals” or “update the eval summary�
 
 ## Current coverage
 
-* Validated skills: `24` (`24/24` with at least one executed result in the latest set).
+* Validated skills: `26` (`24/26` with at least one executed result in the latest set).
 * Result files: `12` JSON + companions in `docs/evaluations/results/`.
 * Files: `2026-08-11-muse-spark-1.2-contributor-muse-code.json`, `2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-2.json`, `2026-08-12-muse-spark-1.2-contributor-muse-code-eval-rerun-3.json`, `2026-08-12-muse-spark-1.2-contributor-muse-code.json`, `2026-08-12-tencent-hy3-free-kilo.json`, `2026-08-13-ai-slop-detector-gpt-5.4-mini-codex-high-contained.json`, `2026-08-13-controls-gpt-5.6-luna-codex-max.json`, `2026-08-13-frontend-quality-review-gpt-5.4-mini-codex-high-contained.json`, `2026-08-13-frontend-quality-review-gpt-5.6-luna-codex-max-pilot.json`, `2026-08-13-frontend-quality-review-gpt-5.6-luna-codex-max.json`, `2026-08-14-gemini-flash-lite-antigravity.json`, `2026-08-14-threat-modeling-gemini-flash-lite-antigravity.json`
 * Latest window: `2026-08-11T23:50:00+00:00` → `2026-08-14T01:38:00+00:00`.

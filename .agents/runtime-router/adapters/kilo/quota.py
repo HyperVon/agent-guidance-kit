@@ -34,13 +34,18 @@ def _number(value: Any) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     value = float(value)
-    return value if value == value and value not in (float("inf"), float("-inf")) else None
+    return (
+        value if value == value and value not in (float("inf"), float("-inf")) else None
+    )
 
 
 def _command_from_env(name: str) -> list[str] | None:
     raw = os.environ.get(name, "").strip()
     if not raw:
-        default_plugin = Path.home() / ".config/kilo/node_modules/@slkiser/opencode-quota/dist/bin/opencode-quota.js"
+        default_plugin = (
+            Path.home()
+            / ".config/kilo/node_modules/@slkiser/opencode-quota/dist/bin/opencode-quota.js"
+        )
         node_bin = Path("/opt/homebrew/bin/node")
         if default_plugin.is_file() and node_bin.is_file():
             return [str(node_bin), str(default_plugin), "show", "--json"]
@@ -83,7 +88,9 @@ def _run_plugin(command: Sequence[str], *, timeout_seconds: float) -> Mapping[st
     return value
 
 
-def _provider_record(payload: Mapping[str, Any], provider: str) -> Mapping[str, Any] | None:
+def _provider_record(
+    payload: Mapping[str, Any], provider: str
+) -> Mapping[str, Any] | None:
     providers = payload.get("providers")
     if isinstance(providers, Mapping) and isinstance(providers.get(provider), Mapping):
         return providers[provider]
@@ -95,32 +102,58 @@ def _provider_record(payload: Mapping[str, Any], provider: str) -> Mapping[str, 
     return None
 
 
-def _evidence_for(candidate: Candidate, raw: Mapping[str, Any], *, now: float, max_age_seconds: float, minimum_percent: float, harness_id: str) -> QuotaEvidence:
-    observed = _number(raw.get("observedAt", raw.get("fetchedAt", raw.get("timestamp")))) or now
+def _evidence_for(
+    candidate: Candidate,
+    raw: Mapping[str, Any],
+    *,
+    now: float,
+    max_age_seconds: float,
+    minimum_percent: float,
+    harness_id: str,
+) -> QuotaEvidence:
+    observed = (
+        _number(raw.get("observedAt", raw.get("fetchedAt", raw.get("timestamp"))))
+        or now
+    )
     if observed > now + 1:
         observed = now
     expires = observed + max_age_seconds
-    percent = _number(raw.get("remainingPercent", raw.get("quotaPercent", raw.get("remaining_percent"))))
-    balance = _number(raw.get("remainingBalance", raw.get("balance", raw.get("credits"))))
-    currency = str(raw.get("currency"))[:12] if raw.get("currency") else None
+    percent = _number(
+        raw.get(
+            "remainingPercent", raw.get("quotaPercent", raw.get("remaining_percent"))
+        )
+    )
+    balance = _number(
+        raw.get("remainingBalance", raw.get("balance", raw.get("credits")))
+    )
+    str(raw.get("currency"))[:12] if raw.get("currency") else None
     entries = raw.get("entries")
     if isinstance(entries, list) and entries:
         for entry in entries:
             if not isinstance(entry, Mapping):
                 continue
-            entry_pct = _number(entry.get("percentRemaining", entry.get("remainingPercent")))
+            entry_pct = _number(
+                entry.get("percentRemaining", entry.get("remainingPercent"))
+            )
             if entry_pct is not None:
                 percent = entry_pct if percent is None else min(percent, entry_pct)
             entry_val = entry.get("value")
             if isinstance(entry_val, str) and entry_val.startswith("$"):
                 try:
-                    parsed_val = float(entry_val.replace("$", "").replace(",", "").strip())
-                    balance = parsed_val if balance is None else min(balance, parsed_val)
-                    currency = "USD"
+                    parsed_val = float(
+                        entry_val.replace("$", "").replace(",", "").strip()
+                    )
+                    balance = (
+                        parsed_val if balance is None else min(balance, parsed_val)
+                    )
                 except ValueError:
                     pass
             elif isinstance(entry_val, (int, float)):
-                balance = float(entry_val) if balance is None else min(balance, float(entry_val))
+                balance = (
+                    float(entry_val)
+                    if balance is None
+                    else min(balance, float(entry_val))
+                )
 
     if percent is not None and percent <= minimum_percent:
         quota_status = QuotaStatus.EXHAUSTED
@@ -130,12 +163,18 @@ def _evidence_for(candidate: Candidate, raw: Mapping[str, Any], *, now: float, m
         quota_status = QuotaStatus.AVAILABLE
     else:
         quota_status = QuotaStatus.UNKNOWN
-    if raw.get("blocked") is True or str(raw.get("status", "")).lower() in {"blocked", "rate_limited"}:
+    if raw.get("blocked") is True or str(raw.get("status", "")).lower() in {
+        "blocked",
+        "rate_limited",
+    }:
         quota_status = QuotaStatus.BLOCKED
     return QuotaEvidence(
         candidate_id=candidate.candidate_id,
         provider=candidate.provider,
-        account_scope=str(raw.get("account", raw.get("accountScope", candidate.provider)))[:120] or candidate.provider,
+        account_scope=str(
+            raw.get("account", raw.get("accountScope", candidate.provider))
+        )[:120]
+        or candidate.provider,
         source="opencode-quota-plugin",
         observed_at_epoch_seconds=observed,
         expires_at_epoch_seconds=expires,
@@ -162,13 +201,22 @@ def collect_quota_evidence(
     """Collect optional account quota after explicit approval or load fresh cached evidence."""
 
     current = time.time() if now is None else float(now)
-    settings = provider_policy.get("quota", {}) if isinstance(provider_policy, Mapping) else {}
+    settings = (
+        provider_policy.get("quota", {}) if isinstance(provider_policy, Mapping) else {}
+    )
     plugin = settings.get("plugin", {}) if isinstance(settings, Mapping) else {}
     if not isinstance(plugin, Mapping) or not plugin.get("enabled", True):
         return {}
 
     if cache_path is None:
-        cache_path = Path.cwd() / ".agents" / "runtime-router" / "harnesses" / harness_id / "quota.json"
+        cache_path = (
+            Path.cwd()
+            / ".agents"
+            / "runtime-router"
+            / "harnesses"
+            / harness_id
+            / "quota.json"
+        )
 
     max_age = max(1.0, min(float(plugin.get("maxAgeSeconds", 300)), 86_400.0))
     plan_max_age = 86_400.0 if not approve else max_age
@@ -203,7 +251,9 @@ def collect_quota_evidence(
     if command is None:
         return {}
     try:
-        payload = _run_plugin(command, timeout_seconds=float(plugin.get("timeoutSeconds", 45)))
+        payload = _run_plugin(
+            command, timeout_seconds=float(plugin.get("timeoutSeconds", 45))
+        )
     except QuotaAdapterError:
         return {}
 

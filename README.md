@@ -1,7 +1,7 @@
 # Agent Guidance Kit
 
 [![Check](https://github.com/HyperVon/agent-guidance-kit/actions/workflows/check.yml/badge.svg)](https://github.com/HyperVon/agent-guidance-kit/actions/workflows/check.yml)
-[![Validated skills: 24](https://img.shields.io/badge/Validated%20skills-24-brightgreen)](.agents/AGENTS.md) [![Evaluated: 24/24](https://img.shields.io/badge/Evaluated-24%2F24-blue)](docs/evaluations/validation-matrix.md) [![Harness: DOCUMENTED (muse)](https://img.shields.io/badge/Harness-DOCUMENTED%20(muse)-blue)](docs/harness-compatibility.md)
+[![Validated skills: 26](https://img.shields.io/badge/Validated%20skills-26-brightgreen)](.agents/AGENTS.md) [![Evaluated: 24/26](https://img.shields.io/badge/Evaluated-24%2F26-blue)](docs/evaluations/validation-matrix.md) [![Harness: DOCUMENTED (muse)](https://img.shields.io/badge/Harness-DOCUMENTED%20(muse)-blue)](docs/harness-compatibility.md)
 
 Agent Guidance Kit helps a coding agent add curated, project-local guidance to
 an existing software repository without replacing that repository's own rules.
@@ -11,7 +11,7 @@ skills, and waits for approval. A deterministic installer then adds the kit's
 maintenance entrypoint, closes required dependencies, updates managed routing,
 and installs the approved skills without overwriting local divergence.
 
-> Status: v1.1.0 (2026-08-12) — 24 catalog skills, 24/24 evaluated, harness DOCUMENTED (muse). The catalog and integration workflow may evolve
+> Status: v1.1.0 (2026-08-12) — 26 catalog skills, 24/26 evaluated, harness DOCUMENTED (muse). The catalog and integration workflow may evolve
 > in backward-compatible releases.
 
 ## Why use it
