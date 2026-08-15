@@ -98,6 +98,80 @@ def without_fenced_code(text: str) -> str:
     return "\n".join(output)
 
 
+def extract_markdown_link_targets(text: str) -> list[str]:
+    """Extract raw markdown link targets handling nested parentheses.
+
+    Handles `[text](target)` including targets with nested parentheses
+    like `path/with_(parens)/file.md` and angle-bracket form `<target>`.
+    Image links `![alt](...)` are excluded, matching LINK_RE semantics.
+    Fenced code should already be stripped via `without_fenced_code`.
+    """
+    targets: list[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        idx = text.find("](", i)
+        if idx == -1:
+            break
+        # Find the matching '[' for this ']'
+        lb = text.rfind("[", 0, idx + 1)
+        if lb == -1:
+            i = idx + 2
+            continue
+        # Exclude image links ![...](
+        if lb > 0 and text[lb - 1] == "!":
+            i = idx + 2
+            continue
+        # Ensure there is a matching ']' at idx (already)
+        start = idx + 2
+        # Scan for matching closing ')' with depth tracking
+        depth = 1
+        pos = start
+        # Handle angle-bracket URL: <url> may contain parentheses
+        if pos < n and text[pos] == "<":
+            end_angle = text.find(">", pos + 1)
+            if end_angle != -1:
+                # Include everything up to '>' in raw, then find outer ')'
+                # Continue scanning after '>'
+                pos = end_angle + 1
+                # Find the outer closing ')'
+                # If title follows, it will be before outer ')'
+                # Search for final ')'
+                # Use depth tracking from after start
+                # Reset scanning to find outer ')' from pos
+                # Simpler: find next ')' that closes outer
+                remaining = text[pos:].find(")")
+                if remaining != -1:
+                    raw_end = pos + remaining
+                    targets.append(text[start:raw_end])
+                    i = raw_end + 1
+                    continue
+            i = start + 1
+            continue
+        raw_end = -1
+        while pos < n:
+            ch = text[pos]
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0:
+                    raw_end = pos
+                    break
+            elif ch == "\n":
+                # Markdown link targets do not span blank lines in practice;
+                # break to avoid runaway scan across paragraphs
+                # but allow single newline? Treat as not found
+                pass
+            pos += 1
+        if raw_end == -1:
+            i = start + 1
+            continue
+        targets.append(text[start:raw_end])
+        i = raw_end + 1
+    return targets
+
+
 def validate_links(errors: list[str]) -> None:
     for path in sorted(ROOT.rglob("*")):
         if (
@@ -109,7 +183,7 @@ def validate_links(errors: list[str]) -> None:
         if not is_project_path(path):
             continue
         text = without_fenced_code(path.read_text(encoding="utf-8"))
-        for raw_target in LINK_RE.findall(text):
+        for raw_target in extract_markdown_link_targets(text):
             target = raw_target.strip()
             if target.startswith("<") and target.endswith(">"):
                 target = target[1:-1]
@@ -478,7 +552,9 @@ def validate_skill_dependencies(skill_names: set[str], errors: list[str]) -> Non
         for markdown in sorted(skill_directory.rglob("*.md")):
             if markdown.is_symlink():
                 continue
-            for raw_target in LINK_RE.findall(markdown.read_text(encoding="utf-8")):
+            for raw_target in extract_markdown_link_targets(
+                without_fenced_code(markdown.read_text(encoding="utf-8"))
+            ):
                 target = raw_target.strip()
                 if target.startswith("<") and target.endswith(">"):
                     target = target[1:-1]
@@ -571,6 +647,18 @@ def validate_evaluation_results(skill_names: set[str], errors: list[str]) -> Non
         for key in ("run_id", "timestamp", "baseline"):
             if not isinstance(value.get(key), str) or not value[key].strip():
                 errors.append(f"{label}: {key} must be a non-empty string")
+        # Validate timestamp is ISO-8601
+        timestamp_value = value.get("timestamp")
+        if isinstance(timestamp_value, str) and timestamp_value.strip():
+            try:
+                from datetime import datetime as _dt
+
+                raw_ts = timestamp_value.strip()
+                _dt.fromisoformat(
+                    raw_ts.replace("Z", "+00:00") if raw_ts.endswith("Z") else raw_ts
+                )
+            except ValueError as exc:
+                errors.append(f"{label}: timestamp must be ISO-8601: {exc}")
         baseline = value.get("baseline")
         if isinstance(baseline, str) and baseline not in allowed_baselines:
             errors.append(
@@ -772,8 +860,8 @@ def validate_evaluation_results(skill_names: set[str], errors: list[str]) -> Non
     # Validate matrix links resolve to existing result files
     matrix = ROOT / "docs/evaluations/validation-matrix.md"
     if matrix.is_file() and not matrix.is_symlink():
-        text = matrix.read_text(encoding="utf-8")
-        for raw in LINK_RE.findall(text):
+        text = without_fenced_code(matrix.read_text(encoding="utf-8"))
+        for raw in extract_markdown_link_targets(text):
             target = raw.strip()
             if target.startswith("<") and target.endswith(">"):
                 target = target[1:-1]
@@ -895,9 +983,9 @@ def validate_related_links(skill_names: set[str], errors: list[str]) -> None:
                 continue
             if not is_project_path(markdown):
                 continue
-            text = markdown.read_text(encoding="utf-8")
+            text = without_fenced_code(markdown.read_text(encoding="utf-8"))
             # Check file links that resolve to a sibling skill
-            for raw_target in LINK_RE.findall(text):
+            for raw_target in extract_markdown_link_targets(text):
                 target = raw_target.strip()
                 if target.startswith("<") and target.endswith(">"):
                     target = target[1:-1]

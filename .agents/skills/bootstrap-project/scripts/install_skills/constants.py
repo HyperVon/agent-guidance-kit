@@ -8,7 +8,7 @@ from pathlib import Path
 SCHEMA_VERSION = 2
 SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
-MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
+MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]*(?:\([^)]*\)[^)]*)*)\)")
 SOURCE_SKILLS = Path(".agents/skills")
 TARGET_SKILLS = Path(".agents/skills")
 DEPENDENCIES = Path(".agents/skill-dependencies.json")

@@ -21,9 +21,24 @@ def venv_python(venv_dir: Path = VENV, platform: str = sys.platform) -> Path:
 
 def ensure_venv(venv_dir: Path = VENV) -> Path:
     python = venv_python(venv_dir)
-    if python.is_file():
+    if python.is_file() and not python.is_symlink():
+        # Extra guard: ensure the python binary is not a symlink outside
+        # the venv tree (defensive, though venv typically uses real files)
+        try:
+            python.resolve().relative_to(venv_dir.resolve())
+        except ValueError:
+            raise RuntimeError(
+                f"{venv_dir} python binary escapes virtual environment: {python}"
+            ) from None
         return python
+    if venv_dir.is_symlink():
+        raise RuntimeError(f"{venv_dir} is a symlink; remove it and run setup again")
     if venv_dir.exists():
+        if venv_dir.is_file():
+            raise RuntimeError(
+                f"{venv_dir} exists as a file, not a directory; "
+                "move or remove it, then run setup again"
+            )
         raise RuntimeError(
             f"{venv_dir} exists but is not a complete virtual environment; "
             "move or remove it, then run setup again"

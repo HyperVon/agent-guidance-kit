@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
 
-from .constants import DEPENDENCIES, MARKDOWN_LINK, SOURCE_SKILLS
-from .utils import without_fenced_code
+from .constants import DEPENDENCIES, SOURCE_SKILLS
+from .utils import extract_markdown_link_targets, without_fenced_code
 from .validation import AdoptionError
 
 
@@ -153,7 +153,7 @@ def validate_declared_links(
         if path.is_symlink():
             raise AdoptionError(f"symlinked Markdown is not allowed: {path}")
         text = path.read_text(encoding="utf-8")
-        for raw_target in MARKDOWN_LINK.findall(without_fenced_code(text)):
+        for raw_target in extract_markdown_link_targets(without_fenced_code(text)):
             target = raw_target.strip()
             if target.startswith("<") and target.endswith(">"):
                 target = target[1:-1]

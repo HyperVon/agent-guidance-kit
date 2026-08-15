@@ -51,14 +51,19 @@ def read_text_safe(path: Path) -> str | None:
 
 
 def is_thin_root_agents(text: str) -> bool:
-    # Thin root AGENTS.md should reference .agents/AGENTS.md and be short
+    """Return True when root AGENTS.md is a thin pointer.
+
+    Thin means: references canonical `.agents/AGENTS.md` (or the managed
+    routing block) and does not duplicate canonical invariants.  Line count
+    is not authoritative - a thin file that legitimately contains project
+    notes may be longer - so the check relies on invariant absence, not an
+    arbitrary 40-line threshold.
+    """
     has_ref = ROUTE_START in text or ".agents/AGENTS.md" in text
-    # Thick file contains canonical invariants duplicated
+    # Thick file contains canonical invariants duplicated verbatim
     thick_markers = ["Product boundary", "Repository invariants", "Skill index"]
     thick_count = sum(1 for m in thick_markers if m in text)
-    # Thin if has ref and not thick, and < 40 lines
-    lines = text.splitlines()
-    return has_ref and thick_count == 0 and len(lines) < 40
+    return has_ref and thick_count == 0
 
 
 def expected_root_agents() -> str:

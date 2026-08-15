@@ -192,6 +192,15 @@ def write_routing(
     from .validation import validate_relative
 
     validate_relative(relative, "routing path")
+    from .validation import ensure_safe_ancestors
+
+    # Ensure ancestor chain contains no symlinks before creating parents.
+    if relative.parent != Path("."):
+        ensure_safe_ancestors(target_root, relative.parent, create=True)
+    else:
+        # For root-level routing file (AGENTS.md) the parent is the target root
+        # itself; validation of the root was already done via validate_root.
+        pass
     path = target_root / relative
     before = path.read_bytes() if path.exists() else None
     before_digest = digest_bytes(before) if before is not None else None
@@ -204,7 +213,6 @@ def write_routing(
     desired = render_routing(current, str(routing.get("block", "")))
     if digest_bytes(desired.encode("utf-8")) != routing.get("after_digest"):
         raise AdoptionError("managed AGENTS route does not match the approved plan")
-    path.parent.mkdir(parents=True, exist_ok=True)
     if before is None:
         with path.open("xb") as handle:
             handle.write(desired.encode("utf-8"))

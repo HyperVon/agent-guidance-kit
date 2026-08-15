@@ -78,14 +78,27 @@ def _parse_frontmatter(text: str) -> tuple[Optional[dict], Optional[str]]:
         return values, None
     values: dict[str, object] = {}
     for line in body.splitlines():
-        if line.startswith("name:"):
-            values["name"] = line.split(":", 1)[1].strip()
-        elif line.startswith("description:"):
-            values["description"] = line.split(":", 1)[1].strip()
-        elif line.startswith("source_only:"):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("name:"):
+            values["name"] = stripped.split(":", 1)[1].strip()
+        elif stripped.startswith("description:"):
+            values["description"] = stripped.split(":", 1)[1].strip()
+        elif re.match(r"source_only\s*:", stripped):
             # Mirror the installer's flag detection when PyYAML is unavailable, so
             # a flag-only SOURCE_ONLY skill is still omitted from candidates.
-            flag = line.split(":", 1)[1].strip().lower()
+            # Tolerate surrounding whitespace, quotes, and inline comments.
+            raw = (
+                re.split(r"source_only\s*:\s*", stripped, maxsplit=1)[1]
+                if re.search(r"source_only\s*:", stripped)
+                else ""
+            )
+            if "#" in raw:
+                raw = raw.split("#", 1)[0].strip()
+            if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in {"'", '"'}:
+                raw = raw[1:-1].strip()
+            flag = raw.strip().lower()
             values["source_only"] = flag in {"true", "yes", "1", "on"}
     return values, None
 
