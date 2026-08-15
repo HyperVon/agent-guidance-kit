@@ -106,10 +106,13 @@ applied.
 
 ## Workflow
 
-1. **Working tree pre-flight.** Inspect target working tree status
-   (`git status --porcelain`). If the target repository has uncommitted
-   modifications in `.agents/` or root guidance files, warn the user and
-   recommend committing or stashing WIP before applying maintenance updates.
+ 1. **Working tree pre-flight.** Inspect target working tree status
+    (`git status --porcelain`). If the target repository has uncommitted
+    modifications in `.agents/` or root guidance files, warn the user and
+    recommend committing or stashing WIP **before applying maintenance updates**.
+    This gate concerns only the *apply* steps below (refresh/add/update/ADAPT),
+    not the **read-only adoption audit** — a pure "run the audit" request must
+    complete regardless of working-tree state (see *Recurring adoption audit*).
 2. **Read local policy and receipts.** Read target-local guidance and the latest
    adoption receipts under `.agents/.agent-guidance-kit/receipts/`. Treat local
    policy as authoritative.
@@ -178,15 +181,21 @@ before each maintenance cycle, on a recurring reminder, or when the target's
 stack changes) so the target keeps discovering useful guidance instead of
 freezing at its first adoption.
 
- 1. Resolve the kit source (see *Resolve the source*) and record the target root.
-    If you are unsure whether the resolved checkout is current, check it against
-    `origin/main` and, with the user's go-ahead, run the *Optionally refresh the
-    source checkout* procedure first so the audit reflects the latest catalog. A
-    single request such as "update the kit and run the audit" folds both steps
-    into one conversational turn. The audit always executes the **canonical kit
-    script** at `<kit-root>/.agents/skills/agent-guidance-maintenance/scripts/adoption_audit.py`, never the target's copied
-    copy, so an older adopted copy of this skill does not change audit behavior
-    or output — even a stale target copy still drives the current kit logic.
+  1. Resolve the kit source (see *Resolve the source*) and record the target root.
+     If you are unsure whether the resolved checkout is current, check it against
+     `origin/main` and, with the user's go-ahead, run the *Optionally refresh the
+     source checkout* procedure first so the audit reflects the latest catalog. A
+     single request such as "update the kit and run the audit" folds both steps
+     into one conversational turn. The audit always executes the **canonical kit
+     script** at `<kit-root>/.agents/skills/agent-guidance-maintenance/scripts/adoption_audit.py`, never the target's copied
+     copy, so an older adopted copy of this skill does not change audit behavior
+     or output — even a stale target copy still drives the current kit logic.
+
+     **The audit is read-only and must complete regardless of working-tree state.**
+     Do not block, warn-and-halt, or ask about uncommitted changes for the audit
+     itself; the workflow pre-flight warning applies only to *applying* changes.
+     If the target has uncommitted WIP, note it once in the report as informational
+     and continue straight to producing the audit output.
  2. Run the deterministic, read-only audit helper:
 
     ```text
