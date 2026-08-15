@@ -31,9 +31,15 @@ from agent_runtime_router import (
 )
 from agent_runtime_router.harnesses.target import (
     TargetPolicyConfig,
+    load_target_policy,
     route_with_target_policy,
 )
-from agent_runtime_router.throughput import TpsMeasurement, TpsStatus
+from agent_runtime_router.throughput import (
+    TpsCache,
+    TpsCacheKey,
+    TpsMeasurement,
+    TpsStatus,
+)
 from agent_runtime_router.quota import apply_quota_evidence
 
 from adapter import build_adapter
@@ -46,6 +52,7 @@ from catalog import (
 from gen_discovery import _is_supported_kilo_version, _profile_mapping
 from quota import collect_quota_evidence
 from run_arr_task import (
+    KILO_TPS_SOURCE,
     TARGET as RUNNER_TARGET,
     _apply_profile_quality,
     _load_or_discover,
@@ -365,12 +372,11 @@ class KrakenKiloAdapterTests(unittest.TestCase):
             "architecture-review",
             "continuous-quality",
             "continuous-improvement",
-            "autonomous-code-optimizer",
-            "ai-slop-detector",
-            "complex-code-comments",
-            "dependency-upgrade",
-            "rules-and-skills-audit",
             "skill-reviewer",
+            "rules-and-skills-audit",
+            "ai-slop-detector",
+            "dependency-upgrade",
+            "agent-guidance-maintenance",
         }
         self.assertTrue(expected.issubset(workflows))
 
@@ -1171,31 +1177,135 @@ class KrakenKiloAdapterTests(unittest.TestCase):
         env["PYTHONPATH"] = os.pathsep.join(
             item for item in (env.get("PYTHONPATH", ""), str(ADAPTER_DIR)) if item
         )
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(runner),
-                "--target",
-                str(ROOT),
-                "--workflow",
-                "comprehensive-quality-overhaul",
-                "--free-only",
-                "--allow-route-reuse",
-                "Test plan",
-            ],
-            capture_output=True,
-            text=True,
-            env=env,
-            timeout=15,
-        )
-        self.assertEqual(result.returncode, 0)
-        payload = json.loads(result.stdout)
-        self.assertEqual(payload["status"], "PLAN")
-        self.assertIn("cost_report", payload)
-        cost_report = payload["cost_report"]
-        self.assertTrue(cost_report["all_free"])
-        self.assertEqual(cost_report["total_estimated_cost"], 0.0)
-        self.assertEqual(len(cost_report["task_summaries"]), 5)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_target = Path(temp_dir)
+            arr_dir = temp_target / ".agents" / "runtime-router"
+            arr_dir.mkdir(parents=True, exist_ok=True)
+            kilo_dir = arr_dir / "adapters" / "kilo"
+            kilo_dir.mkdir(parents=True, exist_ok=True)
+            harness_dir = arr_dir / "harnesses" / "kilo"
+            harness_dir.mkdir(parents=True, exist_ok=True)
+
+            shutil.copy2(
+                ROOT / ".agents" / "runtime-router" / "policy.json",
+                arr_dir / "policy.json",
+            )
+            shutil.copy2(
+                ADAPTER_DIR / "provider-policy.json", kilo_dir / "provider-policy.json"
+            )
+            shutil.copy2(ADAPTER_DIR / "workflows.json", kilo_dir / "workflows.json")
+            shutil.copy2(ADAPTER_DIR / "profiles.json", kilo_dir / "profiles.json")
+
+            policy = load_target_policy(arr_dir / "policy.json")
+            executable = str(Path(shutil.which("kilo") or "/usr/bin/kilo").resolve())
+
+            now = time.time()
+            candidate = Candidate(
+                provider="kilo",
+                model="free-model",
+                capabilities=frozenset(
+                    {"code", "completion", "tool_call", "reasoning"}
+                ),
+                availability=Availability.AVAILABLE,
+                cost_class=CostClass.FREE,
+                quota_status=QuotaStatus.AVAILABLE,
+                context_window=256000,
+                quality=95.0,
+                effective_cost=0.0,
+                billing="free",
+                tool_call=True,
+                reasoning=True,
+                max_output_tokens=16384,
+            )
+            catalog_digest = "c" * 64
+
+            cache_data = {
+                "adapter_id": "kilo",
+                "discovery": {
+                    "adapter_id": "kilo",
+                    "candidate_count": 1,
+                    "candidates": [candidate.to_dict()],
+                    "schema_version": 1,
+                    "secrets_redacted": True,
+                    "status": "best_effort",
+                },
+                "expires_at_epoch_seconds": now + 3600,
+                "observed_at_epoch_seconds": now,
+                "schema_version": 1,
+                "source_digest": catalog_digest,
+            }
+            (arr_dir / "catalog-cache.json").write_text(json.dumps(cache_data))
+
+            readiness_measurements = []
+            for effort in (None, EffortLevel.LOW, EffortLevel.MEDIUM, EffortLevel.HIGH):
+                r_digest = _readiness_digest(
+                    catalog_digest=catalog_digest,
+                    candidate=candidate,
+                    effort=effort,
+                    variant=None,
+                    executable=executable,
+                )
+                readiness_measurements.append(
+                    ReadinessMeasurement(
+                        candidate.candidate_id,
+                        KILO_READINESS_SOURCE,
+                        "kilo",
+                        r_digest,
+                        ReadinessStatus.READY,
+                        now,
+                        now + 3600,
+                        1.0,
+                        True,
+                        True,
+                    )
+                )
+            ReadinessCache(tuple(readiness_measurements)).write(
+                harness_dir / "readiness.json", now=now
+            )
+
+            tps_digest = _tps_evidence_digest(policy, executable)
+            tps = TpsMeasurement(
+                candidate.candidate_id,
+                KILO_TPS_SOURCE,
+                "kilo",
+                tps_digest,
+                TpsStatus.MEASURED,
+                now,
+                now + 3600,
+                30.0,
+            )
+            tps_cache = TpsCache()
+            tps_key = TpsCacheKey(
+                "kilo", KILO_TPS_SOURCE, candidate.candidate_id, tps_digest
+            )
+            tps_cache.put(tps_key, tps)
+            tps_cache.write(harness_dir / "tps.json", now=now)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(runner),
+                    "--target",
+                    str(temp_target),
+                    "--workflow",
+                    "comprehensive-quality-overhaul",
+                    "--free-only",
+                    "--allow-route-reuse",
+                    "Test plan",
+                ],
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=15,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["status"], "PLAN")
+            self.assertIn("cost_report", payload)
+            cost_report = payload["cost_report"]
+            self.assertTrue(cost_report["all_free"])
+            self.assertEqual(cost_report["total_estimated_cost"], 0.0)
+            self.assertEqual(len(cost_report["task_summaries"]), 5)
 
 
 if __name__ == "__main__":
