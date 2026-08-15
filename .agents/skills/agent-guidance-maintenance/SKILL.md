@@ -175,19 +175,23 @@ freezing at its first adoption.
      --target <target-root> --kit-root <kit-root> --format markdown
    ```
 
-   The helper is a **plain index**, not a filter. It lists **every adoptable**
-   catalog skill the target has not already adopted (per receipts), each with
-   the path to its `SKILL.md`. Skills reserved for kit maintainers (marked
-   `SOURCE_ONLY`, such as `catalog-discovery`) are intentionally **omitted**
-   from the list and **refused by the installer**, so they can never be adopted
-   into a target by mistake.
-3. **Decide applicability yourself by reading the skills.** For each candidate,
-   read `<kit-root>/<skill_path>` (the `SKILL.md`) and judge whether to adopt it
-   as a straight copy, integrate it into existing guidance, or skip it. Many
-   skills apply to most software repositories regardless of detected language
-   or framework — for example `code-review`, `ai-slop-detector`,
-   `reduce-code-size`, `architecture-review`, `systematic-debugging`, and
-   `documentation-review`. Record the reasoning for each candidate.
+    The helper is a **plain index**, not a filter. It lists **every adoptable**
+    catalog skill the target has not already adopted (per receipts), each with
+    the path to its `SKILL.md`. Skills reserved for kit maintainers (marked
+    `SOURCE_ONLY`, such as `catalog-discovery`) are intentionally **omitted**
+    from the list and **refused by the installer**, so they can never be adopted
+    into a target by mistake.
+ 3. **Decide applicability yourself by reading the skills.** For each candidate,
+    read `<kit-root>/<skill_path>` (the `SKILL.md`) and judge whether to adopt it
+    as a straight copy, integrate it into existing guidance, or skip it. Many
+    skills apply to most software repositories regardless of detected language
+    or framework — for example `code-review`, `ai-slop-detector`,
+    `reduce-code-size`, `architecture-review`, `systematic-debugging`, and
+    `documentation-review`. Record the reasoning for each candidate. **A
+    candidate whose name already exists as a project-local skill is reported as
+    a *collision*, not excluded** — still read its `SKILL.md` and choose
+    `KEEP_LOCAL`, `ADAPT`, or `REPLACE`. Never drop a candidate solely because a
+    same-named local skill exists.
 4. For each applicable skill the user approves, follow the normal *Workflow*
    `add` path: choose the smallest useful set, generate and review the plan,
    obtain explicit approval, then apply with `--approve`. The audit only

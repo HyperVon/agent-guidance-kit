@@ -32,6 +32,17 @@ class RunAuditTest(unittest.TestCase):
         # catalog-discovery is SOURCE_ONLY, so it must NOT be surfaced.
         self.assertNotIn("catalog-discovery", candidate_names)
 
+    def test_collisions_are_candidates_not_exclusions(self):
+        report = adoption_audit.run_audit(_ROOT, _ROOT)
+        candidate_names = {c["name"] for c in report["candidates"]}
+        collisions = report.get("collisions", [])
+        self.assertIsInstance(collisions, list)
+        # Collisions are a subset of candidates: a same-name local skill is an
+        # evaluate-don't-drop signal, never removed from consideration.
+        self.assertLessEqual(set(collisions), candidate_names)
+        for name in collisions:
+            self.assertNotIn(name, report["adopted"])
+
     def test_partition_is_consistent(self):
         report = adoption_audit.run_audit(_ROOT, _ROOT)
         catalog = adoption_audit.read_catalog(_ROOT)

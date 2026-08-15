@@ -115,6 +115,31 @@ def read_catalog(kit_root: Path) -> list[dict]:
     return catalog
 
 
+def local_skill_names(target: Path) -> set[str]:
+    """Names of skills already present in the target as project-local skills.
+
+    These live under ``.agents/skills/`` or ``.kilo/skills/`` (not the kit
+    catalog). A catalog candidate that shares a name with a local skill is a
+    *collision to evaluate* (KEEP_LOCAL / ADAPT / REPLACE), never an
+    applicability exclusion — the agent must still read it and decide.
+    """
+    names: set[str] = set()
+    for root in (
+        Path(target) / ".agents" / "skills",
+        Path(target) / ".kilo" / "skills",
+    ):
+        if not root.is_dir() or root.is_symlink():
+            continue
+        for directory in root.iterdir():
+            if directory.name.startswith(".") or directory.is_symlink():
+                continue
+            if not directory.is_dir():
+                continue
+            if (directory / "SKILL.md").is_file():
+                names.add(directory.name)
+    return names
+
+
 def read_adopted(target: Path) -> set[str]:
     names: set[str] = set()
     directory = Path(target) / RECEIPTS
@@ -193,6 +218,12 @@ def run_audit(kit_root: Path, target: Path) -> dict:
     ]
     candidates.sort(key=lambda item: item["name"])
 
+    # Same-name local skills are collisions to evaluate, not exclusions. Surface
+    # them explicitly so the agent judges KEEP_LOCAL / ADAPT / REPLACE instead of
+    # silently dropping an otherwise-applicable skill.
+    local_skills = local_skill_names(target_path)
+    collisions = sorted({c["name"] for c in candidates if c["name"] in local_skills})
+
     return {
         "schema_version": 4,
         "kit_root": str(kit_root),
@@ -202,6 +233,7 @@ def run_audit(kit_root: Path, target: Path) -> dict:
         "adopted": sorted(adopted),
         "adopted_count": len(adopted),
         "candidates": candidates,
+        "collisions": collisions,
         "repo_signals": {
             "languages": inventory.get("languages_by_file_count", {}),
             "build_files": inventory.get("build_files", []),
@@ -240,7 +272,9 @@ def markdown_report(report: dict) -> str:
         "example code-review, ai-slop-detector, reduce-code-size, "
         "architecture-review, systematic-debugging, documentation-review) "
         "apply to most software repositories regardless of detected language "
-        "or framework.",
+        "or framework. A candidate that shares a name with a skill already in "
+        "the target is listed under **Name collisions** below — it is still a "
+        "candidate to evaluate, not an exclusion.",
         "",
     ]
     for skill in report["candidates"]:
@@ -248,6 +282,27 @@ def markdown_report(report: dict) -> str:
             f"- **{skill['name']}** — {_first_sentence(skill['description'])} "
             f"(`{skill['skill_path']}`)"
         )
+    if report.get("collisions"):
+        lines.extend(
+            [
+                "",
+                "## Name collisions (evaluate, do not drop)",
+                "",
+                "These candidates share a name with a skill already present in "
+                "the target (under `.agents/skills/` or `.kilo/skills/`). They "
+                "are **not** excluded — read the catalog `SKILL.md` and decide: "
+                "keep the local version (`KEEP_LOCAL`), merge kit improvements "
+                "into it (`ADAPT`), or replace it with the kit version "
+                "(`REPLACE`). A same name does not imply inapplicability.",
+                "",
+            ]
+        )
+        for name in report["collisions"]:
+            lines.append(
+                f"- **{name}** — collision with an existing local skill; "
+                f"evaluate KEEP_LOCAL / ADAPT / REPLACE"
+            )
+
     lines.extend(
         [
             "",
