@@ -4,8 +4,10 @@ description: >-
   Adopt, add, audit, refresh, or update Agent Guidance Kit content in an
   existing target repository. Use after initial adoption so the user does not
   need to remember the kit checkout path. Resolve the source portably, inspect
-  receipts and local guidance, plan first, obtain explicit approval, and never
-  overwrite locally modified adopted content.
+  receipts and local guidance, run a recurring adoption audit to surface kit
+  catalog skills and canonical guidance the target has not yet adopted, plan
+  first, obtain explicit approval, and never overwrite locally modified adopted
+  content.
 ---
 
 # Agent Guidance Maintenance
@@ -155,6 +157,49 @@ applied.
    never overwritten.
 9. Run the bundled target validator plus the target repository's relevant
    guidance and project gates. Report every pass, failure, skip, and conflict.
+
+## Recurring adoption audit
+
+The most common failure after initial adoption is a target that only refreshes
+the skills it already copied and never considers net-new catalog skills or
+canonical guidance it could adopt. Run this audit on a schedule (for example
+before each maintenance cycle, on a recurring reminder, or when the target's
+stack changes) so the target keeps discovering useful guidance instead of
+freezing at its first adoption.
+
+1. Resolve the kit source (see *Resolve the source*) and record the target root.
+2. Run the deterministic, read-only audit helper:
+
+   ```text
+   python <kit-root>/scripts/adoption_audit.py \
+     --target <target-root> --kit-root <kit-root> --format markdown
+   ```
+
+    The helper is a **plain index**, not a filter. It lists **every adoptable**
+    catalog skill the target has not already adopted (per receipts), each with
+    the path to its `SKILL.md`. Skills reserved for kit maintainers (marked
+    `SOURCE_ONLY`, such as `catalog-discovery`) are intentionally **omitted**
+    from the list and **refused by the installer**, so they can never be adopted
+    into a target by mistake.
+ 3. **Decide applicability yourself by reading the skills.** For each candidate,
+    read `<kit-root>/<skill_path>` (the `SKILL.md`) and judge whether to adopt it
+    as a straight copy, integrate it into existing guidance, or skip it. Many
+    skills apply to most software repositories regardless of detected language
+    or framework — for example `code-review`, `ai-slop-detector`,
+    `reduce-code-size`, `architecture-review`, `systematic-debugging`, and
+    `documentation-review`. Record the reasoning for each candidate. **A
+    candidate whose name already exists as a project-local skill is reported as
+    a *collision*, not excluded** — still read its `SKILL.md` and choose
+    `KEEP_LOCAL`, `ADAPT`, or `REPLACE`. Never drop a candidate solely because a
+    same-named local skill exists.
+4. For each applicable skill the user approves, follow the normal *Workflow*
+   `add` path: choose the smallest useful set, generate and review the plan,
+   obtain explicit approval, then apply with `--approve`. The audit only
+   proposes; adoption still requires the plan/approval gate.
+5. Report the adopted-vs-catalog totals (for example "adopted 8 of 24; 16
+   candidates reviewed, 6 applicable") so the user sees the gap at a glance.
+
+The audit proposes only; it never writes to the target.
 
 ## Stop condition
 

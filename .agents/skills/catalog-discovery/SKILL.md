@@ -6,6 +6,7 @@ description: >-
   catalog expansion in this repository; do not use for target adoption or
   automatic installation. Output is a provenance-tracked evidence table for
   skill-reviewer intake.
+source_only: true
 ---
 
 # Catalog Discovery
