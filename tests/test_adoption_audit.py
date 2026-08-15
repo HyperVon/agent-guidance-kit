@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -121,6 +122,65 @@ class CliTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Candidate skills to evaluate", result.stdout)
         self.assertIn("you decide applicability", result.stdout)
+
+
+class SourceOnlyAndIdentityTest(unittest.TestCase):
+    def test_read_catalog_detects_structured_source_only_marker(self):
+        # A skill whose frontmatter declares `source_only: true` must be flagged
+        # even when its prose never mentions the term (the structured marker is
+        # the authoritative signal, not phrasing).
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skill_dir = root / ".agents" / "skills" / "maintainer-tool"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text(
+                "---\n"
+                "name: maintainer-tool\n"
+                "description: A maintainer-only tool that must never ship to targets.\n"
+                "source_only: true\n"
+                "---\n",
+                encoding="utf-8",
+            )
+            catalog = adoption_audit.read_catalog(root)
+            self.assertEqual(len(catalog), 1)
+            self.assertTrue(catalog[0]["source_only"])
+            self.assertEqual(catalog[0]["directory"], "maintainer-tool")
+
+    def test_select_candidates_excludes_by_directory_identity(self):
+        # Adoption is recorded by directory name in receipts; a skill whose
+        # frontmatter name differs from its directory must still be excluded when
+        # its directory is in the adopted set (issue #3).
+        catalog = [
+            {
+                "name": "bar",
+                "description": "d",
+                "path": "p",
+                "directory": "foo",
+                "source_only": False,
+            },
+            {
+                "name": "baz",
+                "description": "d",
+                "path": "p",
+                "directory": "baz",
+                "source_only": False,
+            },
+            {
+                "name": "hidden",
+                "description": "d",
+                "path": "p",
+                "directory": "hidden",
+                "source_only": True,
+            },
+        ]
+        candidates, collisions = adoption_audit.select_candidates(
+            catalog, adopted={"foo"}, local_skills={"baz"}
+        )
+        names = {c["name"] for c in candidates}
+        self.assertNotIn("bar", names)  # adopted via directory "foo"
+        self.assertIn("baz", names)
+        self.assertIn("baz", collisions)
+        self.assertNotIn("hidden", names)  # SOURCE_ONLY dropped
 
 
 if __name__ == "__main__":

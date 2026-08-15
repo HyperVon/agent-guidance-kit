@@ -51,8 +51,10 @@ except ImportError:  # pragma: no cover - PyYAML is a declared dev dependency
 CATALOG_SKILLS = Path(".agents/skills")
 RECEIPTS = Path(".agents/.agent-guidance-kit/receipts")
 
-# A skill is SOURCE_ONLY when it describes itself that way (catalog-discovery),
-# not merely when it mentions the term while referring to another skill.
+# Fallback matcher only. The authoritative SOURCE_ONLY signal is the frontmatter
+# `source_only: true` flag (see read_catalog). This regex remains as a backstop
+# for skills whose prose says "is `SOURCE_ONLY`" but predate the structured flag,
+# and must not be the sole gate — the installer shares an equivalent backstop.
 SOURCE_ONLY_RE = re.compile(r"(?:is|this skill) `SOURCE_ONLY`")
 
 
@@ -107,12 +109,22 @@ def read_catalog(kit_root: Path) -> list[dict]:
         description = values.get("description", "")
         if not isinstance(name, str) or not isinstance(description, str):
             continue
+        # A skill is SOURCE_ONLY when its frontmatter declares `source_only: true`
+        # (the structured, authoritative marker) or, as a fallback for skills that
+        # predate it, when its prose describes itself that way. The structured
+        # marker is the source of truth so the audit no longer depends on phrasing.
+        raw_source_only = values.get("source_only")
+        structured_source_only = raw_source_only is True or str(
+            raw_source_only
+        ).strip().lower() in {"true", "yes", "1"}
         catalog.append(
             {
                 "name": name,
                 "description": description,
                 "path": f".agents/skills/{directory.name}/SKILL.md",
-                "source_only": bool(SOURCE_ONLY_RE.search(text)),
+                "directory": directory.name,
+                "source_only": structured_source_only
+                or bool(SOURCE_ONLY_RE.search(text)),
             }
         )
     catalog.sort(key=lambda item: item["name"])
@@ -184,6 +196,35 @@ def read_adopted(target: Path) -> set[str]:
     return names
 
 
+def select_candidates(
+    catalog: list[dict], adopted: set[str], local_skills: set[str]
+) -> tuple[list[dict], list[str]]:
+    """Split the catalog into adoptable candidates and name collisions.
+
+    ``catalog`` entries are the shape produced by :func:`read_catalog` (including
+    ``directory`` and ``source_only``). ``adopted`` holds receipt skill names,
+    which are directory names. A skill is excluded when it is ``SOURCE_ONLY`` or
+    already adopted, matched by either its directory name (the receipt key) or its
+    frontmatter ``name`` (an alias), so adoption is never keyed on a divergent
+    display name. Same-name local skills become *collisions to evaluate*, never
+    exclusions.
+    """
+    candidates = [
+        {
+            "name": skill["name"],
+            "description": skill["description"],
+            "skill_path": skill["path"],
+        }
+        for skill in catalog
+        if not skill["source_only"]
+        and skill["directory"] not in adopted
+        and skill["name"] not in adopted
+    ]
+    candidates.sort(key=lambda item: item["name"])
+    collisions = sorted({c["name"] for c in candidates if c["name"] in local_skills})
+    return candidates, collisions
+
+
 # --------------------------------------------------------------------------- #
 # Report assembly
 # --------------------------------------------------------------------------- #
@@ -222,27 +263,13 @@ def run_audit(kit_root: Path, target: Path) -> dict:
     adopted = read_adopted(target_path)
     inventory = inventory_project.inventory(target_path, 50_000)
 
-    # Plain index of adoptable skills: every catalog skill not already adopted
-    # and not reserved for kit maintainers (SOURCE_ONLY). SOURCE_ONLY skills are
-    # intentionally omitted so a target is never even aware of them, and the
-    # installer refuses them regardless. The agent decides applicability for
-    # everything that remains after reading each SKILL.md.
-    candidates = [
-        {
-            "name": skill["name"],
-            "description": skill["description"],
-            "skill_path": skill["path"],
-        }
-        for skill in catalog
-        if not skill["source_only"] and skill["name"] not in adopted
-    ]
-    candidates.sort(key=lambda item: item["name"])
-
-    # Same-name local skills are collisions to evaluate, not exclusions. Surface
-    # them explicitly so the agent judges KEEP_LOCAL / ADAPT / REPLACE instead of
-    # silently dropping an otherwise-applicable skill.
-    local_skills = local_skill_names(target_path)
-    collisions = sorted({c["name"] for c in candidates if c["name"] in local_skills})
+    # Adoption is keyed by the skill *directory* name in receipts (the install
+    # identity used by install_skills), not the frontmatter `name`. Match on both
+    # so an adopted skill is never re-suggested even if its frontmatter name ever
+    # diverges from its directory name.
+    candidates, collisions = select_candidates(
+        catalog, adopted, local_skill_names(target_path)
+    )
 
     return {
         "schema_version": 4,

@@ -17,7 +17,7 @@ SKILLS_ROOT = ROOT / ".agents/skills"
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 REQUIRED_FRONTMATTER_KEYS = frozenset({"name", "description"})
 OPTIONAL_FRONTMATTER_KEYS = frozenset(
-    {"license", "compatibility", "metadata", "allowed-tools"}
+    {"license", "compatibility", "metadata", "allowed-tools", "source_only"}
 )
 FRONTMATTER_RE = re.compile(r"\A---\n(?P<body>.*?)\n---\n", re.DOTALL)
 LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
@@ -70,6 +70,9 @@ def simple_frontmatter(text: str) -> tuple[dict[str, object], str | None]:
                 for metadata_key, metadata_value in value.items()
             ):
                 return {}, "frontmatter metadata must map strings to strings"
+        elif key == "source_only":
+            if not isinstance(value, bool):
+                return {}, "frontmatter 'source_only' must be a boolean"
         elif not isinstance(value, str):
             return {}, f"frontmatter {key!r} must be a string value"
     return values, None

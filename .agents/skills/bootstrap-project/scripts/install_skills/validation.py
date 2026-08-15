@@ -7,9 +7,24 @@ import re
 from pathlib import Path
 from typing import Iterable
 
-# A skill is SOURCE_ONLY when it describes itself that way (catalog-discovery),
-# not merely when it mentions the term while referring to another skill.
+# Fallback matcher only. The authoritative SOURCE_ONLY signal is the frontmatter
+# `source_only: true` flag, which assert_not_source_only reads from the skill's
+# frontmatter below. This regex is a backstop for skills whose prose says
+# "is `SOURCE_ONLY`" but predate the structured flag; it must not be the sole
+# gate. The audit shares an equivalent backstop.
 SOURCE_ONLY_RE = re.compile(r"(?:is|this skill) `SOURCE_ONLY`")
+
+
+def frontmatter_source_only(text: str) -> bool:
+    """Return True when the SKILL.md frontmatter declares `source_only: true`."""
+    match = re.match(r"\A---\n(.*?)\n---\n", text, re.DOTALL)
+    if not match:
+        return False
+    for line in match.group(1).splitlines():
+        if line.startswith("source_only:"):
+            value = line.split(":", 1)[1].strip().lower()
+            return value in {"true", "yes", "1", "on"}
+    return False
 
 
 class AdoptionError(RuntimeError):
@@ -33,7 +48,7 @@ def assert_not_source_only(kit_root: Path, skill_names: Iterable[str]) -> None:
             text = skill_md.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        if SOURCE_ONLY_RE.search(text):
+        if frontmatter_source_only(text) or SOURCE_ONLY_RE.search(text):
             blocked.append(name)
     if blocked:
         raise AdoptionError(
