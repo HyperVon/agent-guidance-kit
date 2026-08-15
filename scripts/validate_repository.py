@@ -19,7 +19,7 @@ REQUIRED_FRONTMATTER_KEYS = frozenset({"name", "description"})
 OPTIONAL_FRONTMATTER_KEYS = frozenset(
     {"license", "compatibility", "metadata", "allowed-tools", "source_only"}
 )
-FRONTMATTER_RE = re.compile(r"\A---\n(?P<body>.*?)\n---\n", re.DOTALL)
+FRONTMATTER_RE = re.compile(r"\A---\r?\n(?P<body>.*?)\r?\n---\r?\n", re.DOTALL)
 LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 INDEX_RE = re.compile(r"\]\(skills/([^/]+)/SKILL\.md\)")
 IMPORT_RE = re.compile(r"(?m)^@(?P<path>\S+)\s*$")
@@ -149,20 +149,25 @@ def extract_markdown_link_targets(text: str) -> list[str]:
             i = start + 1
             continue
         raw_end = -1
+        consecutive_newlines = 0
         while pos < n:
             ch = text[pos]
             if ch == "(":
                 depth += 1
+                consecutive_newlines = 0
             elif ch == ")":
                 depth -= 1
+                consecutive_newlines = 0
                 if depth == 0:
                     raw_end = pos
                     break
             elif ch == "\n":
-                # Markdown link targets do not span blank lines in practice;
-                # break to avoid runaway scan across paragraphs
-                # but allow single newline? Treat as not found
-                pass
+                consecutive_newlines += 1
+                if consecutive_newlines >= 2:
+                    # Markdown link targets do not span blank lines / paragraphs
+                    break
+            elif not ch.isspace():
+                consecutive_newlines = 0
             pos += 1
         if raw_end == -1:
             i = start + 1
@@ -182,7 +187,13 @@ def validate_links(errors: list[str]) -> None:
             continue
         if not is_project_path(path):
             continue
-        text = without_fenced_code(path.read_text(encoding="utf-8"))
+        try:
+            text = without_fenced_code(path.read_text(encoding="utf-8"))
+        except (UnicodeDecodeError, OSError) as error:
+            errors.append(
+                f"{path.relative_to(ROOT)}: unreadable markdown file ({error})"
+            )
+            continue
         for raw_target in extract_markdown_link_targets(text):
             target = raw_target.strip()
             if target.startswith("<") and target.endswith(">"):

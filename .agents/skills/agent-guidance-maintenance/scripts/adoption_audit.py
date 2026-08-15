@@ -134,7 +134,7 @@ def read_catalog(kit_root: Path) -> list[dict]:
         raw_source_only = values.get("source_only")
         structured_source_only = raw_source_only is True or str(
             raw_source_only
-        ).strip().lower() in {"true", "yes", "1"}
+        ).strip().lower() in {"true", "yes", "1", "on"}
         catalog.append(
             {
                 "name": name,
@@ -274,9 +274,10 @@ def git_revision(root: Path) -> str:
 
 def run_audit(kit_root: Path, target: Path) -> dict:
     kit_root = resolve_source.validate_kit_root(Path(kit_root))
-    target_path = Path(target).expanduser().resolve()
-    if target_path.is_symlink() or not target_path.is_dir():
-        raise ValueError(f"target must be a real directory: {target_path}")
+    target_expanded = Path(target).expanduser()
+    if target_expanded.is_symlink() or not target_expanded.is_dir():
+        raise ValueError(f"target must be a real directory: {target_expanded}")
+    target_path = target_expanded.resolve()
     catalog = read_catalog(kit_root)
     adopted = read_adopted(target_path)
     inventory = inventory_project.inventory(target_path, 50_000)

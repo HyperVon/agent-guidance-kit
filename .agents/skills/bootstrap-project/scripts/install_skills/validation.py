@@ -22,7 +22,7 @@ def frontmatter_source_only(text: str) -> bool:
     trailing comments consistently with `scripts/validate_repository.py`.
     Falls back to a stripped line check when PyYAML is unavailable.
     """
-    match = re.match(r"\A---\n(.*?)\n---\n", text, re.DOTALL)
+    match = re.match(r"\A---\r?\n(.*?)\r?\n---\r?\n", text, re.DOTALL)
     if not match:
         return False
     body = match.group(1)

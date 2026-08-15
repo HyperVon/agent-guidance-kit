@@ -391,9 +391,14 @@ def generate_summary_text() -> str:
                 if isinstance(harness, dict)
                 else ""
             )
-            m = f"{model.get('name', '')}"
-            if isinstance(model, dict) and model.get("reasoning_effort"):
-                m += f" ({model.get('reasoning_effort')})"
+            if isinstance(model, dict):
+                m = f"{model.get('name', '')}".strip()
+                if model.get("reasoning_effort"):
+                    m += f" ({model.get('reasoning_effort')})"
+            elif isinstance(model, str):
+                m = model.strip()
+            else:
+                m = ""
             skills_list = data.get("skills", [])
             lines.append(
                 f"| `{path.name}` | `{run_id}` | {ts} | {h or '–'} | {m or '–'} | {baseline or '–'} | {len(skills_list) if isinstance(skills_list, list) else '–'} |"

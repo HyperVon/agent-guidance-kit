@@ -121,7 +121,10 @@ def recommendation_for_file(
                 "action": "Replace with thin pointer; move project-specific invariants to .agents/AGENTS.md via harness-adaptation",
             }
         # Has reference but also thick
-        if any(m in text for m in ["Product boundary", "Repository invariants"]):
+        if any(
+            m in text
+            for m in ["Product boundary", "Repository invariants", "Skill index"]
+        ):
             return {
                 "file": relative,
                 "status": "RECOMMEND",

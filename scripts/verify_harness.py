@@ -258,12 +258,26 @@ def apply_evidence_to_compatibility(evidence: dict, doc_path: Path) -> tuple[boo
     line_ending = raw_line[len(line_without_ending) :]
     # Preserve original whitespace and column padding; only replace last cell's
     # trimmed content so the diff touches just the status column.
-    last_pipe = line_without_ending.rfind("|")
-    second_last_pipe = line_without_ending.rfind("|", 0, last_pipe)
-    if last_pipe != -1 and second_last_pipe != -1:
-        prefix = line_without_ending[: second_last_pipe + 1]
-        suffix = line_without_ending[last_pipe:]
-        middle = line_without_ending[second_last_pipe + 1 : last_pipe]
+    has_trailing_pipe = line_without_ending.endswith("|")
+    if has_trailing_pipe:
+        last_pipe = line_without_ending.rfind("|")
+        penultimate_pipe = line_without_ending.rfind("|", 0, last_pipe)
+        if penultimate_pipe != -1:
+            prefix = line_without_ending[: penultimate_pipe + 1]
+            suffix = line_without_ending[last_pipe:]
+            middle = line_without_ending[penultimate_pipe + 1 : last_pipe]
+        else:
+            prefix = None
+    else:
+        last_pipe = line_without_ending.rfind("|")
+        if last_pipe != -1:
+            prefix = line_without_ending[: last_pipe + 1]
+            suffix = ""
+            middle = line_without_ending[last_pipe + 1 :]
+        else:
+            prefix = None
+
+    if prefix is not None:
         import re as _re
 
         mo = _re.match(r"(\s*)(.*?)(\s*)\Z", middle, _re.DOTALL)
@@ -272,16 +286,16 @@ def apply_evidence_to_compatibility(evidence: dict, doc_path: Path) -> tuple[boo
             # If original cell had no surrounding spaces, use single spaces for readability;
             # otherwise preserve exactly.
             if not leading and not trailing:
-                new_middle = " VERIFIED "
+                new_middle = " VERIFIED " if has_trailing_pipe else " VERIFIED"
             else:
                 # Preserve original padding; ensure at least one space if none
                 if not leading:
                     leading = " "
-                if not trailing:
+                if not trailing and has_trailing_pipe:
                     trailing = " "
                 new_middle = f"{leading}VERIFIED{trailing}"
         else:
-            new_middle = " VERIFIED "
+            new_middle = " VERIFIED " if has_trailing_pipe else " VERIFIED"
         replacement = prefix + new_middle + suffix
     else:
         cells[-1] = "VERIFIED"

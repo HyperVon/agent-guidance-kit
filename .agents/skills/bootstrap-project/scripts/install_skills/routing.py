@@ -14,17 +14,28 @@ from .validation import AdoptionError
 
 
 def managed_route_names(text: str) -> set[str]:
-    if text.count(ROUTE_START) != 1 or text.count(ROUTE_END) != 1:
+    start_idx = text.find(ROUTE_START)
+    end_idx = text.find(ROUTE_END)
+    if (
+        text.count(ROUTE_START) != 1
+        or text.count(ROUTE_END) != 1
+        or start_idx >= end_idx
+    ):
         return set()
-    block = text.split(ROUTE_START, 1)[1].split(ROUTE_END, 1)[0]
+    block = text[start_idx + len(ROUTE_START) : end_idx]
     return set(re.findall(r"skills/([a-z0-9-]+)/SKILL\.md", block))
 
 
 def managed_route_block(text: str) -> str | None:
-    if text.count(ROUTE_START) != 1 or text.count(ROUTE_END) != 1:
+    start_idx = text.find(ROUTE_START)
+    end_idx = text.find(ROUTE_END)
+    if (
+        text.count(ROUTE_START) != 1
+        or text.count(ROUTE_END) != 1
+        or start_idx >= end_idx
+    ):
         return None
-    body = text.split(ROUTE_START, 1)[1].split(ROUTE_END, 1)[0]
-    return f"{ROUTE_START}{body}{ROUTE_END}"
+    return text[start_idx : end_idx + len(ROUTE_END)]
 
 
 def newline_sequence(text: str) -> str:
@@ -102,10 +113,12 @@ def render_routing(current: str, block: str) -> str:
             else newline * 2
         )
         return f"{current}{separator}{block}"
-    if start_count != 1 or end_count != 1:
+    start_idx = current.find(ROUTE_START)
+    end_idx = current.find(ROUTE_END)
+    if start_count != 1 or end_count != 1 or start_idx >= end_idx:
         raise AdoptionError("managed Agent Guidance Kit route block is malformed")
-    before, remainder = current.split(ROUTE_START, 1)
-    _, after = remainder.split(ROUTE_END, 1)
+    before = current[:start_idx]
+    after = current[end_idx + len(ROUTE_END) :]
     return f"{before}{block.rstrip()}{after}"
 
 
