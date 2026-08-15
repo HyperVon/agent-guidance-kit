@@ -145,12 +145,18 @@ def local_skill_names(target: Path) -> set[str]:
                     text = skill_md.read_text(encoding="utf-8")
                 except (OSError, UnicodeDecodeError):
                     continue
-                values, _ = _parse_frontmatter(text)
-                if values is None:
+                values, parse_error = _parse_frontmatter(text)
+                name = values.get("name") if isinstance(values, dict) else None
+                if not (isinstance(name, str) and name):
+                    # A physically-present local skill with no usable name cannot
+                    # be matched against catalog collisions; surface it instead of
+                    # silently losing the evaluate-don't-drop signal.
+                    sys.stderr.write(
+                        f"[adoption-audit] skipping local skill with no name "
+                        f"frontmatter: {directory}\n"
+                    )
                     continue
-                name = values.get("name")
-                if isinstance(name, str) and name:
-                    names.add(name)
+                names.add(name)
     return names
 
 

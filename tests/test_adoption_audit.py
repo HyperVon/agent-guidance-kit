@@ -37,10 +37,16 @@ class RunAuditTest(unittest.TestCase):
         candidate_names = {c["name"] for c in report["candidates"]}
         collisions = report.get("collisions", [])
         self.assertIsInstance(collisions, list)
-        # Collisions are a subset of candidates: a same-name local skill is an
-        # evaluate-don't-drop signal, never removed from consideration.
-        self.assertLessEqual(set(collisions), candidate_names)
+        # Collisions must be non-empty in the self-audit (every catalog skill is
+        # also a local skill) so the assertion below is meaningful, not vacuous.
+        self.assertGreater(len(collisions), 0)
+        # A collision is an evaluate-don't-drop signal: the same-named catalog
+        # skill must remain a candidate, never silently excluded. Pin a known
+        # catalog skill that is present locally and not SOURCE_ONLY.
+        self.assertIn("code-review", collisions)
+        self.assertIn("code-review", candidate_names)
         for name in collisions:
+            self.assertIn(name, candidate_names)
             self.assertNotIn(name, report["adopted"])
 
     def test_partition_is_consistent(self):
