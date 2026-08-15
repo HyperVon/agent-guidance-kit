@@ -209,14 +209,37 @@ freezing at its first adoption.
     `documentation-review`. Record the reasoning for each candidate. **A
     candidate whose name already exists as a project-local skill is reported as
     a *collision*, not excluded** — still read its `SKILL.md` and choose
-    `KEEP_LOCAL`, `ADAPT`, or `REPLACE`. Never drop a candidate solely because a
-    same-named local skill exists.
-4. For each applicable skill the user approves, follow the normal *Workflow*
-   `add` path: choose the smallest useful set, generate and review the plan,
-   obtain explicit approval, then apply with `--approve`. The audit only
-   proposes; adoption still requires the plan/approval gate.
-5. Report the adopted-vs-catalog totals (for example "adopted 8 of 24; 16
-   candidates reviewed, 6 applicable") so the user sees the gap at a glance.
+     `KEEP_LOCAL`, `ADAPT`, or `REPLACE`. Never drop a candidate solely because a
+     same-named local skill exists.
+ 4. **Reconcile collisions proactively — do not stop at a blanket `KEEP_LOCAL`.**
+    For every collision, read *both* the target-local `SKILL.md` and the kit
+    canonical `<kit-root>/.agents/skills/<name>/SKILL.md`, then produce a targeted
+    recommendation. We surface collisions as `KEEP_LOCAL` vs `ADAPT`; `REPLACE`
+    (swap the local skill for the kit canonical) is intentionally excluded here
+    because the local version is typically richer — only propose `REPLACE` when the
+    local skill is empty or genuinely inferior, and say so explicitly:
+      - `KEEP_LOCAL` when the local version already covers the kit's content or is
+        deliberately project-specific and richer.
+      - `ADAPT` when the kit version contains concrete, useful bits the local
+        version lacks — checklists, adversarial lenses, pattern catalogs,
+        verification procedures, risk matrices, handoff contracts, and the like.
+        List the *specific* kit passages worth folding in so the user can decide
+        without a second round of prompting. Edits must be additive: preserve
+        existing project-specific content; never wholesale-replace a richer local
+        skill with the shorter kit canonical.
+    Present the collision set as a per-skill table with the recommended
+    disposition and the suggested additions. This is still proposal-only.
+ 5. For each applicable skill the user approves, and for each `ADAPT` merge the
+    user approves, follow the normal *Workflow* `add` path (for new skills) or
+    apply targeted additive edits (for `ADAPT` merges): choose the smallest useful
+    set, generate and review the plan, obtain explicit approval, then apply. The
+    audit only proposes; adoption and content merges still require the approval
+    gate. `ADAPT` merges that touch many files may be fanned out to bounded
+    subagents, each editing only its own local `SKILL.md`.
+ 6. Report the adopted-vs-catalog totals and the collision reconciliation summary
+    (for example "adopted 8 of 24; 16 candidates reviewed (6 applicable); 11
+    collisions: 2 KEEP_LOCAL, 9 ADAPT proposed") so the user sees the gap and the
+    suggested merges at a glance.
 
 The audit proposes only; it never writes to the target.
 
