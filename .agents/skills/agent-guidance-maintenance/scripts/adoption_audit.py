@@ -76,12 +76,17 @@ def _parse_frontmatter(text: str) -> tuple[Optional[dict], Optional[str]]:
         if not isinstance(values, dict):
             return None, "frontmatter must be a mapping"
         return values, None
-    values: dict[str, str] = {}
+    values: dict[str, object] = {}
     for line in body.splitlines():
         if line.startswith("name:"):
             values["name"] = line.split(":", 1)[1].strip()
         elif line.startswith("description:"):
             values["description"] = line.split(":", 1)[1].strip()
+        elif line.startswith("source_only:"):
+            # Mirror the installer's flag detection when PyYAML is unavailable, so
+            # a flag-only SOURCE_ONLY skill is still omitted from candidates.
+            flag = line.split(":", 1)[1].strip().lower()
+            values["source_only"] = flag in {"true", "yes", "1", "on"}
     return values, None
 
 
