@@ -4,8 +4,10 @@ description: >-
   Adopt, add, audit, refresh, or update Agent Guidance Kit content in an
   existing target repository. Use after initial adoption so the user does not
   need to remember the kit checkout path. Resolve the source portably, inspect
-  receipts and local guidance, plan first, obtain explicit approval, and never
-  overwrite locally modified adopted content.
+  receipts and local guidance, run a recurring adoption audit to surface kit
+  catalog skills and canonical guidance the target has not yet adopted, plan
+  first, obtain explicit approval, and never overwrite locally modified adopted
+  content.
 ---
 
 # Agent Guidance Maintenance
@@ -155,6 +157,49 @@ applied.
    never overwritten.
 9. Run the bundled target validator plus the target repository's relevant
    guidance and project gates. Report every pass, failure, skip, and conflict.
+
+## Recurring adoption audit
+
+The most common failure after initial adoption is a target that only refreshes
+the skills it already copied and never considers net-new catalog skills or
+canonical guidance it could adopt. Run this audit on a schedule (for example
+before each maintenance cycle, on a recurring reminder, or when the target's
+stack changes) so the target keeps discovering useful guidance instead of
+freezing at its first adoption.
+
+1. Resolve the kit source (see *Resolve the source*) and record the target root.
+2. Run the deterministic, read-only audit helper:
+
+   ```text
+   python <kit-root>/scripts/adoption_audit.py \
+     --target <target-root> --kit-root <kit-root> --format markdown
+   ```
+
+   The helper diffs the full kit catalog (skill name and description) against the
+   skills the target has actually adopted (from receipts) and the target's own
+   repository characteristics (language stack, dependency manifests, tests, CI,
+   harness markers, and any local skills). It produces a partition of:
+   - **Suggested by target characteristics** — catalog skills not yet adopted
+     whose trigger matches something observable in the target (for example
+     `dependency-upgrade` when the repo pins dependencies, `quality-hardening`
+     when it has test roots, `harness-adaptation` when it already integrates
+     multiple harnesses).
+   - **Other catalog skills available** — not-yet-adopted skills with no specific
+     signal; review them for applicability.
+   - **Maintainer-only (excluded)** — `SOURCE_ONLY` skills such as
+     `catalog-discovery` that expand the kit's own catalog and are never shipped
+     to targets. This audit is their target-facing mirror.
+   - **Canonical guidance to review** — a reminder to compare source-owned
+     `.agents/AGENTS.md` and `.agents/OPERATING.md` against the target (step 4)
+     and decide `ADAPT` / `KEEP_LOCAL` / `DEFER` for any changed section.
+3. For each suggested skill the user wants, follow the normal *Workflow* `add`
+   path: choose the smallest useful set, generate and review the plan, obtain
+   explicit approval, then apply with `--approve`. Adoption of a suggested skill
+   still requires the plan/approval gate; the audit only proposes.
+4. Report the adopted-vs-catalog totals (for example "adopted 3 of 24; suggested
+   5 by trigger match, 2 by repo stack") so the user sees the gap at a glance.
+
+The audit proposes only; it never writes to the target.
 
 ## Stop condition
 
