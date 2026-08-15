@@ -983,7 +983,9 @@ def main(argv: list[str] | None = None) -> int:
         records = [
             {
                 "agent": "code",
-                "billing": decision.selected.billing if decision.selected else None,
+                "cost_class": decision.selected.cost_class.value
+                if decision.selected
+                else None,
                 "profile": args.profile,
                 "quality": decision.selected_quality,
                 "effort": decision.selected_effort.value

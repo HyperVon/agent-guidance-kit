@@ -486,7 +486,7 @@ def main(argv: list[str] | None = None) -> int:
                     if decision.selected_effort
                     else None,
                     "variant": decision.selected_variant,
-                    "billing": selected.billing,
+                    "cost_class": selected.cost_class.value,
                 }
             )
             prepared.append(
