@@ -3,19 +3,23 @@
 
 Read-only, deterministic, network-free. Produces a plain index: every skill in
 the kit catalog that the target has **not** already adopted (recorded in
-receipts), each with the path to its ``SKILL.md`` and a neutral ``source_only``
-flag. It deliberately makes **no** applicability or exclusion decision — the
-active agent reads the candidate ``SKILL.md`` files and decides whether to adopt
-each as a straight copy, integrate it into existing guidance, or skip it.
+receipts) and that is **not** reserved for kit maintainers (``SOURCE_ONLY``),
+each with the path to its ``SKILL.md``. It deliberately makes **no** applicability
+or exclusion decision by language, framework, or name — the active agent reads
+each candidate ``SKILL.md`` and decides whether to adopt it as a straight copy,
+integrate it into existing guidance, or skip it.
 
-Because this is only an index, no skill is hidden: ``SOURCE_ONLY`` skills (oriented
-toward kit maintainers) are listed like any other, flagged so the agent knows
-the convention but can still judge them useful for a changed target or kit.
+``SOURCE_ONLY`` skills (for example ``catalog-discovery``) are intentionally
+**omitted** from the index and **refused by the installer**, so a target can never
+adopt a maintainer-only skill by mistake. A candidate that shares a name with a
+skill already present in the target is reported as a ``collisions`` entry — an
+evaluate-don't-drop signal (``KEEP_LOCAL`` / ``ADAPT`` / ``REPLACE``), never an
+exclusion.
 
-This is the target-facing mirror of ``catalog-discovery``: that skill expands
-the kit's own catalog and is ``SOURCE_ONLY``, while this index helps an adopted
-target discover net-new guidance it should consider. Adoption of any candidate
-still requires the normal plan/approval gate via bootstrap-project.
+This is the target-facing mirror of ``catalog-discovery``: that skill expands the
+kit's own catalog and is ``SOURCE_ONLY``, while this index helps an adopted target
+discover net-new guidance it should consider. Adoption of any candidate still
+requires the normal plan/approval gate via bootstrap-project.
 """
 
 from __future__ import annotations
@@ -135,8 +139,18 @@ def local_skill_names(target: Path) -> set[str]:
                 continue
             if not directory.is_dir():
                 continue
-            if (directory / "SKILL.md").is_file():
-                names.add(directory.name)
+            skill_md = directory / "SKILL.md"
+            if skill_md.is_file() and not skill_md.is_symlink():
+                try:
+                    text = skill_md.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
+                    continue
+                values, _ = _parse_frontmatter(text)
+                if values is None:
+                    continue
+                name = values.get("name")
+                if isinstance(name, str) and name:
+                    names.add(name)
     return names
 
 
