@@ -17,6 +17,17 @@ harness performs semantic selection and reconciliation; deterministic source
 and installer scripts resolve paths, calculate dependency closure, compare
 receipts, plan exact changes, and apply approved content.
 
+## Human interface
+
+The human never runs these scripts by hand. They describe the outcome in plain
+language — for example "update the kit and run the adoption audit", "what Agent
+Guidance Kit skills could I adopt?", or "refresh the copied skills" — and the
+active agent resolves the kit, runs the deterministic helpers below, and
+reports a proposal. Every `python …` invocation in this skill is
+**agent-executed**, not a step for the human. If the kit source cannot be
+resolved, the agent asks for the checkout path once and records it; afterwards
+the human only converses.
+
 ## Contract
 
 - **Input:** target repository, requested adopt/add/audit/refresh/update action,
@@ -167,20 +178,28 @@ before each maintenance cycle, on a recurring reminder, or when the target's
 stack changes) so the target keeps discovering useful guidance instead of
 freezing at its first adoption.
 
-1. Resolve the kit source (see *Resolve the source*) and record the target root.
-2. Run the deterministic, read-only audit helper:
+ 1. Resolve the kit source (see *Resolve the source*) and record the target root.
+    If you are unsure whether the resolved checkout is current, check it against
+    `origin/main` and, with the user's go-ahead, run the *Optionally refresh the
+    source checkout* procedure first so the audit reflects the latest catalog. A
+    single request such as "update the kit and run the audit" folds both steps
+    into one conversational turn. The audit always executes the **canonical kit
+    script** at `<kit-root>/.agents/skills/agent-guidance-maintenance/scripts/adoption_audit.py`, never the target's copied
+    copy, so an older adopted copy of this skill does not change audit behavior
+    or output — even a stale target copy still drives the current kit logic.
+ 2. Run the deterministic, read-only audit helper:
 
-   ```text
-   python <kit-root>/scripts/adoption_audit.py \
-     --target <target-root> --kit-root <kit-root> --format markdown
-   ```
+    ```text
+    python <kit-root>/.agents/skills/agent-guidance-maintenance/scripts/adoption_audit.py \
+      --target <target-root> --kit-root <kit-root> --format markdown
+    ```
 
-    The helper is a **plain index**, not a filter. It lists **every adoptable**
-    catalog skill the target has not already adopted (per receipts), each with
-    the path to its `SKILL.md`. Skills reserved for kit maintainers (marked
-    `SOURCE_ONLY`, such as `catalog-discovery`) are intentionally **omitted**
-    from the list and **refused by the installer**, so they can never be adopted
-    into a target by mistake.
+     The helper is a **plain index**, not a filter. It lists **every adoptable**
+     catalog skill the target has not already adopted (per receipts), each with
+     the path to its `SKILL.md`. Skills reserved for kit maintainers (marked
+     `SOURCE_ONLY`, such as `catalog-discovery`) are intentionally **omitted**
+     from the list and **refused by the installer**, so they can never be adopted
+     into a target by mistake.
  3. **Decide applicability yourself by reading the skills.** For each candidate,
     read `<kit-root>/<skill_path>` (the `SKILL.md`) and judge whether to adopt it
     as a straight copy, integrate it into existing guidance, or skip it. Many
