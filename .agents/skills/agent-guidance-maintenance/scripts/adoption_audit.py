@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-"""Audit a target repository's Agent Guidance Kit adoption against the catalog.
+"""Index a target repository's Agent Guidance Kit adoption against the catalog.
 
-Read-only, deterministic, network-free. Diffs the kit catalog (each skill's name
-and description) against the skills the target has actually adopted (recorded in
-receipts) and the target's own repository characteristics (via the bundled
-project inventory) to surface catalog skills the target has not yet adopted but
-that match its stack or activity.
+Read-only, deterministic, network-free. Produces a plain index: every skill in
+the kit catalog that the target has **not** already adopted (recorded in
+receipts), each with the path to its ``SKILL.md`` and a neutral ``source_only``
+flag. It deliberately makes **no** applicability or exclusion decision — the
+active agent reads the candidate ``SKILL.md`` files and decides whether to adopt
+each as a straight copy, integrate it into existing guidance, or skip it.
+
+Because this is only an index, no skill is hidden: ``SOURCE_ONLY`` skills (oriented
+toward kit maintainers) are listed like any other, flagged so the agent knows
+the convention but can still judge them useful for a changed target or kit.
 
 This is the target-facing mirror of ``catalog-discovery``: that skill expands
-the kit's own catalog and is ``SOURCE_ONLY``, while this audit helps an adopted
-target discover net-new guidance it should consider. It proposes only; adoption
+the kit's own catalog and is ``SOURCE_ONLY``, while this index helps an adopted
+target discover net-new guidance it should consider. Adoption of any candidate
 still requires the normal plan/approval gate via bootstrap-project.
 """
 
@@ -21,7 +26,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 _HERE = Path(__file__).resolve().parent
 _BOOTSTRAP = _HERE.parents[1] / "bootstrap-project" / "scripts"
@@ -45,25 +50,6 @@ RECEIPTS = Path(".agents/.agent-guidance-kit/receipts")
 # A skill is SOURCE_ONLY when it describes itself that way (catalog-discovery),
 # not merely when it mentions the term while referring to another skill.
 SOURCE_ONLY_RE = re.compile(r"(?:is|this skill) `SOURCE_ONLY`")
-
-
-DEPENDENCY_MANIFESTS = {
-    "Cargo.toml",
-    "Gemfile",
-    "Makefile",
-    "Package.swift",
-    "build.gradle",
-    "build.gradle.kts",
-    "composer.json",
-    "go.mod",
-    "package.json",
-    "pom.xml",
-    "pyproject.toml",
-    "requirements.txt",
-    "settings.gradle",
-    "settings.gradle.kts",
-}
-FRONTEND_LANGUAGES = {"TypeScript", "JavaScript", "Vue"}
 
 
 # --------------------------------------------------------------------------- #
@@ -121,6 +107,7 @@ def read_catalog(kit_root: Path) -> list[dict]:
             {
                 "name": name,
                 "description": description,
+                "path": f".agents/skills/{directory.name}/SKILL.md",
                 "source_only": bool(SOURCE_ONLY_RE.search(text)),
             }
         )
@@ -150,115 +137,6 @@ def read_adopted(target: Path) -> set[str]:
             if isinstance(name, str) and name:
                 names.add(name)
     return names
-
-
-# --------------------------------------------------------------------------- #
-# Repository-characteristic signals
-# --------------------------------------------------------------------------- #
-def _has_dep_manifest(inv: dict) -> Optional[str]:
-    build = set(inv.get("build_files") or [])
-    present = sorted(build & DEPENDENCY_MANIFESTS)
-    if present:
-        return f"repo pins dependencies ({', '.join(present)})"
-    return None
-
-
-def _has_ci(inv: dict) -> Optional[str]:
-    ci = inv.get("ci_files") or []
-    if ci:
-        shown = ", ".join(sorted(ci)[:3])
-        suffix = "…" if len(ci) > 3 else ""
-        return f"repo has CI configuration ({shown}{suffix})"
-    return None
-
-
-def _has_tests(inv: dict) -> Optional[str]:
-    roots = inv.get("test_roots") or []
-    if roots:
-        return f"repo has test roots ({', '.join(sorted(roots))})"
-    return None
-
-
-def _has_frontend(inv: dict) -> Optional[str]:
-    langs = set(inv.get("languages_by_file_count") or {})
-    build = set(inv.get("build_files") or [])
-    matched = sorted(langs & FRONTEND_LANGUAGES)
-    if matched or "package.json" in build or "Vue" in langs:
-        label = ", ".join(matched) or "package.json"
-        return f"repo has a frontend/browser stack ({label})"
-    return None
-
-
-def _multi_harness(inv: dict) -> Optional[str]:
-    markers = inv.get("harness_markers") or []
-    if len(markers) >= 2:
-        shown = ", ".join(sorted(markers)[:3])
-        return f"target already integrates multiple harnesses ({shown})"
-    return None
-
-
-def _local_skills(inv: dict) -> Optional[str]:
-    guidance = inv.get("guidance_files") or []
-    local = [
-        g
-        for g in guidance
-        if g.endswith("SKILL.md") and not g.startswith(".agents/skills/")
-    ]
-    if local:
-        return f"target maintains local skills ({', '.join(local[:3])})"
-    return None
-
-
-def _git_repo(inv: dict) -> Optional[str]:
-    git = inv.get("git") or {}
-    if git.get("repository"):
-        return "target is a Git repository that could contribute improvements upstream"
-    return None
-
-
-def _deployed(inv: dict) -> Optional[str]:
-    if _has_dep_manifest(inv) and _has_ci(inv):
-        return (
-            "repo is a deployed service (dependencies + CI); a design-time "
-            "threat model applies"
-        )
-    return None
-
-
-def _git_with_ci(inv: dict) -> Optional[str]:
-    if _git_repo(inv) and _has_ci(inv):
-        return "repo uses Git with CI; branch/commit/PR hygiene applies"
-    return None
-
-
-def _authoring_or_upstream(inv: dict) -> Optional[str]:
-    return _local_skills(inv) or _git_repo(inv)
-
-
-SIGNALS: dict[str, list[Callable[[dict], Optional[str]]]] = {
-    "dependency-upgrade": [_has_dep_manifest],
-    "security-review": [_has_dep_manifest],
-    "threat-modeling": [_deployed],
-    "git-github-workflow": [_git_with_ci],
-    "quality-hardening": [_has_tests],
-    "frontend-quality-review": [_has_frontend],
-    "harness-adaptation": [_multi_harness],
-    "skill-authoring": [_local_skills],
-    "skill-reviewer": [_local_skills],
-    "rules-and-skills-audit": [_local_skills],
-    "skill-evaluation": [_local_skills],
-    "skill-optimizer": [_local_skills],
-    "upstream-contribution": [_authoring_or_upstream],
-}
-
-
-def match_signals(name: str, inv: dict) -> list[str]:
-    reasons: list[str] = []
-    for predicate in SIGNALS.get(name, []):
-        reason = predicate(inv)
-        if reason:
-            reasons.append(reason)
-    return reasons
 
 
 # --------------------------------------------------------------------------- #
@@ -299,39 +177,30 @@ def run_audit(kit_root: Path, target: Path) -> dict:
     adopted = read_adopted(target_path)
     inventory = inventory_project.inventory(target_path, 50_000)
 
-    suggestions: list[dict] = []
-    available: list[dict] = []
-    excluded: list[str] = []
-    for skill in catalog:
-        if skill["source_only"]:
-            excluded.append(skill["name"])
-            continue
-        if skill["name"] in adopted:
-            continue
-        entry = {
+    # Plain index: every catalog skill not already adopted. No exclusions, no
+    # ranking — the agent decides applicability after reading each SKILL.md.
+    candidates = [
+        {
             "name": skill["name"],
             "description": skill["description"],
+            "skill_path": skill["path"],
+            "source_only": skill["source_only"],
         }
-        reasons = match_signals(skill["name"], inventory)
-        if reasons:
-            entry["reasons"] = reasons
-            suggestions.append(entry)
-        else:
-            available.append(entry)
-    suggestions.sort(key=lambda item: item["name"])
-    available.sort(key=lambda item: item["name"])
+        for skill in catalog
+        if skill["name"] not in adopted
+    ]
+    # Surface maintainer-oriented (source_only) skills after the rest.
+    candidates.sort(key=lambda item: (item["source_only"], item["name"]))
 
     return {
-        "schema_version": 1,
+        "schema_version": 3,
         "kit_root": str(kit_root),
         "kit_revision": git_revision(kit_root),
         "target": str(target_path),
         "catalog_total": len(catalog),
         "adopted": sorted(adopted),
         "adopted_count": len(adopted),
-        "source_only_excluded": sorted(excluded),
-        "suggestions": suggestions,
-        "available": available,
+        "candidates": candidates,
         "repo_signals": {
             "languages": inventory.get("languages_by_file_count", {}),
             "build_files": inventory.get("build_files", []),
@@ -358,41 +227,27 @@ def markdown_report(report: dict) -> str:
         f"- Kit: `{report['kit_root']}` @ `{report['kit_revision']}`",
         f"- Adopted: **{report['adopted_count']}** of "
         f"**{report['catalog_total']}** catalog skills",
+        "",
+        f"## Candidate skills to evaluate ({len(report['candidates'])})",
+        "",
+        "This is a plain index; **you decide applicability**. Read each "
+        "candidate's `SKILL.md` (path in parentheses) and judge whether to "
+        "adopt it as a straight copy, integrate it into existing guidance, or "
+        "skip it. Skills marked `source_only` are oriented toward kit "
+        "maintainers (they expand the kit's own catalog and are not normally "
+        "shipped to targets) — they may still be useful to this target, so "
+        "judge them per case. Many skills (for example code-review, "
+        "ai-slop-detector, reduce-code-size, architecture-review, "
+        "systematic-debugging, documentation-review) apply to most software "
+        "repositories regardless of detected language or framework.",
+        "",
     ]
-    if report["source_only_excluded"]:
+    for skill in report["candidates"]:
+        flag = " `source_only`" if skill["source_only"] else ""
         lines.append(
-            f"- Maintainer-only (excluded): {', '.join(report['source_only_excluded'])}"
+            f"- **{skill['name']}** — {_first_sentence(skill['description'])} "
+            f"(`{skill['skill_path']}`){flag}"
         )
-    lines.extend(
-        [
-            "",
-            f"## Suggested by target characteristics ({len(report['suggestions'])})",
-            "",
-        ]
-    )
-    if report["suggestions"]:
-        for skill in report["suggestions"]:
-            lines.append(
-                f"- **{skill['name']}** — {_first_sentence(skill['description'])}"
-            )
-            for reason in skill.get("reasons", []):
-                lines.append(f"  - {reason}")
-    else:
-        lines.append("None — every applicable catalog skill appears adopted.")
-    lines.extend(
-        [
-            "",
-            f"## Other catalog skills available ({len(report['available'])})",
-            "",
-        ]
-    )
-    if report["available"]:
-        for skill in report["available"]:
-            lines.append(
-                f"- **{skill['name']}** — {_first_sentence(skill['description'])}"
-            )
-    else:
-        lines.append("None.")
     lines.extend(
         [
             "",
@@ -402,7 +257,7 @@ def markdown_report(report: dict) -> str:
             "against the target (agent-guidance-maintenance step 4) and decide "
             "ADAPT / KEEP_LOCAL / DEFER for any changed section.",
             "",
-            "Adoption of any suggested skill still requires the normal "
+            "Adoption of any applicable candidate still requires the normal "
             "plan/approval gate via bootstrap-project.",
             "",
         ]

@@ -175,29 +175,25 @@ freezing at its first adoption.
      --target <target-root> --kit-root <kit-root> --format markdown
    ```
 
-   The helper diffs the full kit catalog (skill name and description) against the
-   skills the target has actually adopted (from receipts) and the target's own
-   repository characteristics (language stack, dependency manifests, tests, CI,
-   harness markers, and any local skills). It produces a partition of:
-   - **Suggested by target characteristics** — catalog skills not yet adopted
-     whose trigger matches something observable in the target (for example
-     `dependency-upgrade` when the repo pins dependencies, `quality-hardening`
-     when it has test roots, `harness-adaptation` when it already integrates
-     multiple harnesses).
-   - **Other catalog skills available** — not-yet-adopted skills with no specific
-     signal; review them for applicability.
-   - **Maintainer-only (excluded)** — `SOURCE_ONLY` skills such as
-     `catalog-discovery` that expand the kit's own catalog and are never shipped
-     to targets. This audit is their target-facing mirror.
-   - **Canonical guidance to review** — a reminder to compare source-owned
-     `.agents/AGENTS.md` and `.agents/OPERATING.md` against the target (step 4)
-     and decide `ADAPT` / `KEEP_LOCAL` / `DEFER` for any changed section.
-3. For each suggested skill the user wants, follow the normal *Workflow* `add`
-   path: choose the smallest useful set, generate and review the plan, obtain
-   explicit approval, then apply with `--approve`. Adoption of a suggested skill
-   still requires the plan/approval gate; the audit only proposes.
-4. Report the adopted-vs-catalog totals (for example "adopted 3 of 24; suggested
-   5 by trigger match, 2 by repo stack") so the user sees the gap at a glance.
+   The helper is a **plain index**, not a filter. It lists **every** catalog
+   skill the target has not already adopted (per receipts), each with the path
+   to its `SKILL.md` and a neutral `source_only` flag. It makes **no**
+   applicability or exclusion decision — `SOURCE_ONLY` skills (oriented toward
+   kit maintainers) are listed like any other, so a changed target or kit can
+   still consider them.
+3. **Decide applicability yourself by reading the skills.** For each candidate,
+   read `<kit-root>/<skill_path>` (the `SKILL.md`) and judge whether to adopt it
+   as a straight copy, integrate it into existing guidance, or skip it. Many
+   skills apply to most software repositories regardless of detected language
+   or framework — for example `code-review`, `ai-slop-detector`,
+   `reduce-code-size`, `architecture-review`, `systematic-debugging`, and
+   `documentation-review`. Record the reasoning for each candidate.
+4. For each applicable skill the user approves, follow the normal *Workflow*
+   `add` path: choose the smallest useful set, generate and review the plan,
+   obtain explicit approval, then apply with `--approve`. The audit only
+   proposes; adoption still requires the plan/approval gate.
+5. Report the adopted-vs-catalog totals (for example "adopted 8 of 24; 16
+   candidates reviewed, 6 applicable") so the user sees the gap at a glance.
 
 The audit proposes only; it never writes to the target.
 

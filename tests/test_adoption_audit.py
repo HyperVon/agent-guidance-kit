@@ -16,93 +16,45 @@ sys.path.insert(0, str(_SCRIPT.parent))
 import adoption_audit  # noqa: E402
 
 
-def _inventory(**overrides: object) -> dict:
-    base = {
-        "languages_by_file_count": {},
-        "build_files": [],
-        "test_roots": [],
-        "ci_files": [],
-        "guidance_files": [],
-        "harness_markers": [],
-        "git": {"repository": True},
-    }
-    base.update(overrides)
-    return base
-
-
-class MatchSignalsTest(unittest.TestCase):
-    def test_signals_match_repo_characteristics(self):
-        inv = _inventory(
-            build_files=["package.json", "pyproject.toml"],
-            ci_files=[".github/workflows/check.yml"],
-            test_roots=["tests"],
-            languages_by_file_count={"TypeScript": 5},
-            harness_markers=[".agents", ".kilo"],
-            guidance_files=["README.md", "skills/foo/SKILL.md"],
-        )
-        self.assertTrue(adoption_audit.match_signals("dependency-upgrade", inv))
-        self.assertTrue(adoption_audit.match_signals("security-review", inv))
-        self.assertTrue(adoption_audit.match_signals("threat-modeling", inv))
-        self.assertTrue(adoption_audit.match_signals("git-github-workflow", inv))
-        self.assertTrue(adoption_audit.match_signals("quality-hardening", inv))
-        self.assertTrue(adoption_audit.match_signals("frontend-quality-review", inv))
-        self.assertTrue(adoption_audit.match_signals("harness-adaptation", inv))
-        self.assertTrue(adoption_audit.match_signals("skill-authoring", inv))
-        self.assertTrue(adoption_audit.match_signals("skill-reviewer", inv))
-        self.assertTrue(adoption_audit.match_signals("rules-and-skills-audit", inv))
-        self.assertTrue(adoption_audit.match_signals("skill-evaluation", inv))
-        self.assertTrue(adoption_audit.match_signals("skill-optimizer", inv))
-        self.assertTrue(adoption_audit.match_signals("upstream-contribution", inv))
-
-    def test_reasons_are_explanatory_strings(self):
-        inv = _inventory(
-            build_files=["package.json"],
-            ci_files=[".github/workflows/check.yml"],
-            test_roots=["tests"],
-        )
-        for name in ("dependency-upgrade", "threat-modeling", "quality-hardening"):
-            reasons = adoption_audit.match_signals(name, inv)
-            self.assertTrue(reasons, name)
-            self.assertTrue(all(isinstance(r, str) and r for r in reasons), name)
-
-    def test_unmapped_skill_has_no_signals(self):
-        inv = _inventory(build_files=["package.json"])
-        self.assertEqual(adoption_audit.match_signals("code-review", inv), [])
-
-    def test_no_signal_when_characteristics_absent(self):
-        inv = _inventory()
-        self.assertEqual(adoption_audit.match_signals("dependency-upgrade", inv), [])
-        self.assertEqual(adoption_audit.match_signals("quality-hardening", inv), [])
-
-
 class RunAuditTest(unittest.TestCase):
-    def test_audit_partitions_catalog(self):
+    def test_audit_indexes_every_unadopted_skill(self):
         report = adoption_audit.run_audit(_ROOT, _ROOT)
         catalog_names = {s["name"] for s in adoption_audit.read_catalog(_ROOT)}
         self.assertEqual(report["catalog_total"], len(catalog_names))
 
-        # catalog-discovery is SOURCE_ONLY and excluded from proposals.
-        self.assertEqual(report["source_only_excluded"], ["catalog-discovery"])
+        candidate_names = {c["name"] for c in report["candidates"]}
+        # Candidates == catalog minus what the target has adopted. No skill is
+        # excluded by a SOURCE_ONLY or other label.
+        self.assertEqual(candidate_names, catalog_names - set(report["adopted"]))
         self.assertIn("agent-guidance-maintenance", report["adopted"])
-
-        proposed = {s["name"] for s in report["suggestions"] + report["available"]}
-        self.assertNotIn("catalog-discovery", proposed)
-        self.assertFalse(proposed & set(report["adopted"]))
-
-        # The partition covers the whole catalog exactly once.
-        covered = (
-            set(report["adopted"])
-            | set(report["source_only_excluded"])
-            | {s["name"] for s in report["suggestions"]}
-            | {s["name"] for s in report["available"]}
+        # catalog-discovery is not adopted here, so it must appear as a
+        # source_only candidate rather than being hidden.
+        catalog_discovery = next(
+            (c for c in report["candidates"] if c["name"] == "catalog-discovery"),
+            None,
         )
-        self.assertEqual(covered, catalog_names)
+        self.assertIsNotNone(catalog_discovery)
+        self.assertTrue(catalog_discovery["source_only"])
 
-    def test_suggestions_carry_reasons(self):
+    def test_partition_is_consistent(self):
         report = adoption_audit.run_audit(_ROOT, _ROOT)
-        for skill in report["suggestions"]:
-            self.assertIn("reasons", skill)
-            self.assertTrue(skill["reasons"])
+        covered = set(report["adopted"]) | {c["name"] for c in report["candidates"]}
+        catalog_names = {s["name"] for s in adoption_audit.read_catalog(_ROOT)}
+        self.assertEqual(covered, catalog_names)
+        self.assertEqual(
+            len(report["adopted"]) + len(report["candidates"]),
+            report["catalog_total"],
+        )
+
+    def test_candidates_expose_paths_and_flags(self):
+        report = adoption_audit.run_audit(_ROOT, _ROOT)
+        for candidate in report["candidates"]:
+            self.assertIn("name", candidate)
+            self.assertIn("description", candidate)
+            self.assertTrue(candidate["skill_path"].endswith("SKILL.md"))
+            self.assertIsInstance(candidate["source_only"], bool)
+        # The index applies no ranking; no applicability verdict is present.
+        self.assertNotIn("mechanical_hints", report["candidates"][0])
 
 
 class CliTest(unittest.TestCase):
@@ -124,8 +76,11 @@ class CliTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
-        self.assertEqual(payload["schema_version"], 1)
-        self.assertIn("suggestions", payload)
+        self.assertEqual(payload["schema_version"], 3)
+        self.assertIn("candidates", payload)
+        self.assertNotIn("suggestions", payload)
+        self.assertNotIn("available", payload)
+        self.assertNotIn("source_only_excluded", payload)
 
     def test_cli_markdown_runs(self):
         result = subprocess.run(
@@ -144,7 +99,8 @@ class CliTest(unittest.TestCase):
             text=True,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Agent Guidance Kit adoption audit", result.stdout)
+        self.assertIn("Candidate skills to evaluate", result.stdout)
+        self.assertIn("you decide applicability", result.stdout)
 
 
 if __name__ == "__main__":
