@@ -43,6 +43,7 @@ from .source import (
 from .utils import read_text_exact
 from .validation import (
     AdoptionError,
+    assert_not_source_only,
     ensure_safe_ancestors,
     ensure_no_symlink_tree,
     validate_relative,
@@ -317,6 +318,7 @@ def build_plan(kit_root: Path, target_root: Path, skills: list[str]) -> dict[str
     target_root = validate_root(target_root, "target root")
     dependencies = load_dependencies(kit_root)
     selected, automatically_added = dependency_closure(skills, dependencies, kit_root)
+    assert_not_source_only(kit_root, selected)
     adopted_digests = receipt_skill_digests(target_root)
     entries = [
         inspect_skill(kit_root, target_root, name, dependencies, adopted_digests)

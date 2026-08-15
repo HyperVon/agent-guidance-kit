@@ -175,12 +175,12 @@ freezing at its first adoption.
      --target <target-root> --kit-root <kit-root> --format markdown
    ```
 
-   The helper is a **plain index**, not a filter. It lists **every** catalog
-   skill the target has not already adopted (per receipts), each with the path
-   to its `SKILL.md` and a neutral `source_only` flag. It makes **no**
-   applicability or exclusion decision — `SOURCE_ONLY` skills (oriented toward
-   kit maintainers) are listed like any other, so a changed target or kit can
-   still consider them.
+   The helper is a **plain index**, not a filter. It lists **every adoptable**
+   catalog skill the target has not already adopted (per receipts), each with
+   the path to its `SKILL.md`. Skills reserved for kit maintainers (marked
+   `SOURCE_ONLY`, such as `catalog-discovery`) are intentionally **omitted**
+   from the list and **refused by the installer**, so they can never be adopted
+   into a target by mistake.
 3. **Decide applicability yourself by reading the skills.** For each candidate,
    read `<kit-root>/<skill_path>` (the `SKILL.md`) and judge whether to adopt it
    as a straight copy, integrate it into existing guidance, or skip it. Many

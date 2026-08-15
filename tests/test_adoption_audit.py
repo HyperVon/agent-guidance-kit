@@ -17,44 +17,47 @@ import adoption_audit  # noqa: E402
 
 
 class RunAuditTest(unittest.TestCase):
-    def test_audit_indexes_every_unadopted_skill(self):
+    def test_audit_indexes_adoptable_unadopted_skills(self):
         report = adoption_audit.run_audit(_ROOT, _ROOT)
-        catalog_names = {s["name"] for s in adoption_audit.read_catalog(_ROOT)}
+        catalog = adoption_audit.read_catalog(_ROOT)
+        catalog_names = {s["name"] for s in catalog}
         self.assertEqual(report["catalog_total"], len(catalog_names))
 
+        source_only = {s["name"] for s in catalog if s["source_only"]}
         candidate_names = {c["name"] for c in report["candidates"]}
-        # Candidates == catalog minus what the target has adopted. No skill is
-        # excluded by a SOURCE_ONLY or other label.
-        self.assertEqual(candidate_names, catalog_names - set(report["adopted"]))
+        # Candidates == catalog minus adopted minus SOURCE_ONLY (hidden).
+        expected = catalog_names - set(report["adopted"]) - source_only
+        self.assertEqual(candidate_names, expected)
         self.assertIn("agent-guidance-maintenance", report["adopted"])
-        # catalog-discovery is not adopted here, so it must appear as a
-        # source_only candidate rather than being hidden.
-        catalog_discovery = next(
-            (c for c in report["candidates"] if c["name"] == "catalog-discovery"),
-            None,
-        )
-        self.assertIsNotNone(catalog_discovery)
-        self.assertTrue(catalog_discovery["source_only"])
+        # catalog-discovery is SOURCE_ONLY, so it must NOT be surfaced.
+        self.assertNotIn("catalog-discovery", candidate_names)
 
     def test_partition_is_consistent(self):
         report = adoption_audit.run_audit(_ROOT, _ROOT)
-        covered = set(report["adopted"]) | {c["name"] for c in report["candidates"]}
-        catalog_names = {s["name"] for s in adoption_audit.read_catalog(_ROOT)}
-        self.assertEqual(covered, catalog_names)
+        catalog = adoption_audit.read_catalog(_ROOT)
+        source_only = {s["name"] for s in catalog if s["source_only"]}
+        covered = (
+            set(report["adopted"])
+            | {c["name"] for c in report["candidates"]}
+            | source_only
+        )
+        self.assertEqual(covered, {s["name"] for s in catalog})
+        # catalog_total counts every skill, including the hidden SOURCE_ONLY ones.
         self.assertEqual(
-            len(report["adopted"]) + len(report["candidates"]),
+            len(report["adopted"]) + len(report["candidates"]) + len(source_only),
             report["catalog_total"],
         )
 
-    def test_candidates_expose_paths_and_flags(self):
+    def test_candidates_expose_paths(self):
         report = adoption_audit.run_audit(_ROOT, _ROOT)
         for candidate in report["candidates"]:
             self.assertIn("name", candidate)
             self.assertIn("description", candidate)
             self.assertTrue(candidate["skill_path"].endswith("SKILL.md"))
-            self.assertIsInstance(candidate["source_only"], bool)
-        # The index applies no ranking; no applicability verdict is present.
+        # The index applies no ranking or applicability verdict, and does not
+        # surface SOURCE_ONLY metadata.
         self.assertNotIn("mechanical_hints", report["candidates"][0])
+        self.assertNotIn("source_only", report["candidates"][0])
 
 
 class CliTest(unittest.TestCase):
@@ -76,7 +79,7 @@ class CliTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
-        self.assertEqual(payload["schema_version"], 3)
+        self.assertEqual(payload["schema_version"], 4)
         self.assertIn("candidates", payload)
         self.assertNotIn("suggestions", payload)
         self.assertNotIn("available", payload)

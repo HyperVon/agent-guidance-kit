@@ -177,23 +177,24 @@ def run_audit(kit_root: Path, target: Path) -> dict:
     adopted = read_adopted(target_path)
     inventory = inventory_project.inventory(target_path, 50_000)
 
-    # Plain index: every catalog skill not already adopted. No exclusions, no
-    # ranking — the agent decides applicability after reading each SKILL.md.
+    # Plain index of adoptable skills: every catalog skill not already adopted
+    # and not reserved for kit maintainers (SOURCE_ONLY). SOURCE_ONLY skills are
+    # intentionally omitted so a target is never even aware of them, and the
+    # installer refuses them regardless. The agent decides applicability for
+    # everything that remains after reading each SKILL.md.
     candidates = [
         {
             "name": skill["name"],
             "description": skill["description"],
             "skill_path": skill["path"],
-            "source_only": skill["source_only"],
         }
         for skill in catalog
-        if skill["name"] not in adopted
+        if not skill["source_only"] and skill["name"] not in adopted
     ]
-    # Surface maintainer-oriented (source_only) skills after the rest.
-    candidates.sort(key=lambda item: (item["source_only"], item["name"]))
+    candidates.sort(key=lambda item: item["name"])
 
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "kit_root": str(kit_root),
         "kit_revision": git_revision(kit_root),
         "target": str(target_path),
@@ -233,20 +234,19 @@ def markdown_report(report: dict) -> str:
         "This is a plain index; **you decide applicability**. Read each "
         "candidate's `SKILL.md` (path in parentheses) and judge whether to "
         "adopt it as a straight copy, integrate it into existing guidance, or "
-        "skip it. Skills marked `source_only` are oriented toward kit "
-        "maintainers (they expand the kit's own catalog and are not normally "
-        "shipped to targets) — they may still be useful to this target, so "
-        "judge them per case. Many skills (for example code-review, "
-        "ai-slop-detector, reduce-code-size, architecture-review, "
-        "systematic-debugging, documentation-review) apply to most software "
-        "repositories regardless of detected language or framework.",
+        "skip it. Skills reserved for kit maintainers are intentionally "
+        "omitted from this list and refused by the installer, so no "
+        "maintainer-only skill can be adopted by mistake. Many skills (for "
+        "example code-review, ai-slop-detector, reduce-code-size, "
+        "architecture-review, systematic-debugging, documentation-review) "
+        "apply to most software repositories regardless of detected language "
+        "or framework.",
         "",
     ]
     for skill in report["candidates"]:
-        flag = " `source_only`" if skill["source_only"] else ""
         lines.append(
             f"- **{skill['name']}** — {_first_sentence(skill['description'])} "
-            f"(`{skill['skill_path']}`){flag}"
+            f"(`{skill['skill_path']}`)"
         )
     lines.extend(
         [

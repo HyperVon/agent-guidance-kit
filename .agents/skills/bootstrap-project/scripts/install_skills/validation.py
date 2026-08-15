@@ -3,11 +3,43 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
+from typing import Iterable
+
+# A skill is SOURCE_ONLY when it describes itself that way (catalog-discovery),
+# not merely when it mentions the term while referring to another skill.
+SOURCE_ONLY_RE = re.compile(r"(?:is|this skill) `SOURCE_ONLY`")
 
 
 class AdoptionError(RuntimeError):
     """Raised when a safety or plan invariant is not satisfied."""
+
+
+def assert_not_source_only(kit_root: Path, skill_names: Iterable[str]) -> None:
+    """Refuse to adopt SOURCE_ONLY skills into a target.
+
+    SOURCE_ONLY skills (for example catalog-discovery) are kit-maintainer tools
+    and must never be shipped to a target. This is the hard gate that enforces
+    the documented "never shipped to targets" invariant; the audit omits them
+    for visibility, but the installer must refuse regardless.
+    """
+    blocked = []
+    for name in skill_names:
+        skill_md = kit_root / ".agents/skills" / name / "SKILL.md"
+        if skill_md.is_symlink() or not skill_md.is_file():
+            continue
+        try:
+            text = skill_md.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if SOURCE_ONLY_RE.search(text):
+            blocked.append(name)
+    if blocked:
+        raise AdoptionError(
+            "SOURCE_ONLY skills cannot be adopted into a target: "
+            + ", ".join(sorted(blocked))
+        )
 
 
 def validate_root(path: Path, label: str) -> Path:
