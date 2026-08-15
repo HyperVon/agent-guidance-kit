@@ -77,6 +77,16 @@ class RunAuditTest(unittest.TestCase):
         self.assertNotIn("mechanical_hints", report["candidates"][0])
         self.assertNotIn("source_only", report["candidates"][0])
 
+    def test_symlinked_target_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            real_target = Path(tmp) / "real"
+            real_target.mkdir()
+            symlink_target = Path(tmp) / "symlink"
+            symlink_target.symlink_to(real_target)
+
+            with self.assertRaisesRegex(ValueError, "real directory"):
+                adoption_audit.run_audit(_ROOT, symlink_target)
+
 
 class CliTest(unittest.TestCase):
     def test_cli_emits_valid_json(self):

@@ -29,6 +29,9 @@ HEADER_MARKER = (
 
 def parse_timestamp(value: str) -> datetime:
     # ISO-8601, tolerate trailing Z and normalize to UTC
+    # Legacy fallback: invalid strings return datetime.min for backward
+    # compatibility (test expects this). New code should use
+    # try_parse_timestamp for explicit invalid handling.
     try:
         if value.endswith("Z"):
             dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -41,6 +44,21 @@ def parse_timestamp(value: str) -> datetime:
         return dt
     except ValueError:
         return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def try_parse_timestamp(value: str) -> datetime | None:
+    try:
+        if value.endswith("Z"):
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        else:
+            dt = datetime.fromisoformat(value)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+        return dt
+    except ValueError:
+        return None
 
 
 def load_results() -> list[dict]:
@@ -80,10 +98,16 @@ def load_results() -> list[dict]:
             if isinstance(model.get("reasoning_effort"), str)
             else ""
         )
+        parsed_ts = (
+            try_parse_timestamp(timestamp) if isinstance(timestamp, str) else None
+        )
         ts = (
-            parse_timestamp(timestamp)
-            if isinstance(timestamp, str)
+            parsed_ts
+            if parsed_ts is not None
             else datetime.min.replace(tzinfo=timezone.utc)
+        )
+        ts_invalid = (
+            parsed_ts is None and isinstance(timestamp, str) and timestamp.strip() != ""
         )
         for entry in skills:
             if not isinstance(entry, dict):
@@ -134,6 +158,7 @@ def load_results() -> list[dict]:
                     "run_id": run_id if isinstance(run_id, str) else "",
                     "timestamp": timestamp if isinstance(timestamp, str) else "",
                     "timestamp_dt": ts,
+                    "timestamp_invalid": ts_invalid,
                     "baseline": baseline if isinstance(baseline, str) else "",
                     "cases": len(cases),
                     "total_assertions": total_assertions,
@@ -222,6 +247,17 @@ def generate_summary_text() -> str:
     lines.append(
         f"_Generated from {len(results_files)} result file(s) in `docs/evaluations/results/`; {len(records)} skill-records considered, {len(latest)} latest entries retained (dedup key: skill × harness × model × reasoning_effort)._"
     )
+    # Surface silently skipped invalid/unreadable files (load_results continues on
+    # JSON errors; validate_repository flags them, but summary should also warn)
+    files_with_records = {r["file"] for r in records}
+    skipped_files = [p.name for p in results_files if p.name not in files_with_records]
+    # Symlinked files are skipped by load_results but present on disk; count them
+    # as skipped as well even though they are not in results_files glob? glob
+    # follows symlinks depending on filesystem, but we treat any non-record file as skipped
+    if skipped_files:
+        lines.append(
+            f"_Note: `{len(skipped_files)}` file(s) were skipped as invalid/unreadable and do not contribute to the latest set (see history table for `_invalid_` rows)._"
+        )
     lines.append("")
     lines.append(
         "Human interface: ask the agent to \u201crun evals\u201d or \u201cupdate the eval summary\u201d \u2014 the agent runs `python3 scripts/generate_evaluation_summary.py --write` and `make check` (or `--check`). You do not need to run scripts manually; the agent keeps this file fresh and validated."
@@ -249,6 +285,11 @@ def generate_summary_text() -> str:
         lines.append(
             f"* Latest window: `{oldest.isoformat()}` → `{newest.isoformat()}`."
         )
+        invalid_count = sum(1 for r in latest.values() if r.get("timestamp_invalid"))
+        if invalid_count:
+            lines.append(
+                f"* Warning: `{invalid_count}` latest entry(s) have an invalid timestamp that was treated as the oldest value; fix the result file(s)."
+            )
     lines.append(
         "* Deduplication: latest per `(skill, harness, model, reasoning_effort)` by ISO timestamp, then `run_id`."
     )
@@ -350,9 +391,14 @@ def generate_summary_text() -> str:
                 if isinstance(harness, dict)
                 else ""
             )
-            m = f"{model.get('name', '')}"
-            if isinstance(model, dict) and model.get("reasoning_effort"):
-                m += f" ({model.get('reasoning_effort')})"
+            if isinstance(model, dict):
+                m = f"{model.get('name', '')}".strip()
+                if model.get("reasoning_effort"):
+                    m += f" ({model.get('reasoning_effort')})"
+            elif isinstance(model, str):
+                m = model.strip()
+            else:
+                m = ""
             skills_list = data.get("skills", [])
             lines.append(
                 f"| `{path.name}` | `{run_id}` | {ts} | {h or '–'} | {m or '–'} | {baseline or '–'} | {len(skills_list) if isinstance(skills_list, list) else '–'} |"

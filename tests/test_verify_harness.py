@@ -343,6 +343,26 @@ class VerifyHarnessTest(unittest.TestCase):
                 )
             self.assertEqual(before, doc.read_text(encoding="utf-8"))
 
+    def test_apply_evidence_updates_row_without_trailing_pipe(self) -> None:
+        module = load()
+        with tempfile.TemporaryDirectory() as tmp:
+            doc = Path(tmp) / "harness-compatibility.md"
+            doc.write_text(
+                "| Harness | AGENTS.md | Discovery | Kit route | Status\n"
+                "| :--- | :--- | :--- | :--- | :---\n"
+                "| Muse Code | `AGENTS.md` hierarchy | Native | canonical | DOCUMENTED\n",
+                encoding="utf-8",
+            )
+            changed, message = module.apply_evidence_to_compatibility(
+                {"harness": "Muse Code", "result": "VERIFIED"}, doc
+            )
+            self.assertTrue(changed)
+            updated = doc.read_text(encoding="utf-8")
+            self.assertIn(
+                "| Muse Code | `AGENTS.md` hierarchy | Native | canonical | VERIFIED\n",
+                updated,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -14,17 +14,28 @@ from .validation import AdoptionError
 
 
 def managed_route_names(text: str) -> set[str]:
-    if text.count(ROUTE_START) != 1 or text.count(ROUTE_END) != 1:
+    start_idx = text.find(ROUTE_START)
+    end_idx = text.find(ROUTE_END)
+    if (
+        text.count(ROUTE_START) != 1
+        or text.count(ROUTE_END) != 1
+        or start_idx >= end_idx
+    ):
         return set()
-    block = text.split(ROUTE_START, 1)[1].split(ROUTE_END, 1)[0]
+    block = text[start_idx + len(ROUTE_START) : end_idx]
     return set(re.findall(r"skills/([a-z0-9-]+)/SKILL\.md", block))
 
 
 def managed_route_block(text: str) -> str | None:
-    if text.count(ROUTE_START) != 1 or text.count(ROUTE_END) != 1:
+    start_idx = text.find(ROUTE_START)
+    end_idx = text.find(ROUTE_END)
+    if (
+        text.count(ROUTE_START) != 1
+        or text.count(ROUTE_END) != 1
+        or start_idx >= end_idx
+    ):
         return None
-    body = text.split(ROUTE_START, 1)[1].split(ROUTE_END, 1)[0]
-    return f"{ROUTE_START}{body}{ROUTE_END}"
+    return text[start_idx : end_idx + len(ROUTE_END)]
 
 
 def newline_sequence(text: str) -> str:
@@ -102,10 +113,12 @@ def render_routing(current: str, block: str) -> str:
             else newline * 2
         )
         return f"{current}{separator}{block}"
-    if start_count != 1 or end_count != 1:
+    start_idx = current.find(ROUTE_START)
+    end_idx = current.find(ROUTE_END)
+    if start_count != 1 or end_count != 1 or start_idx >= end_idx:
         raise AdoptionError("managed Agent Guidance Kit route block is malformed")
-    before, remainder = current.split(ROUTE_START, 1)
-    _, after = remainder.split(ROUTE_END, 1)
+    before = current[:start_idx]
+    after = current[end_idx + len(ROUTE_END) :]
     return f"{before}{block.rstrip()}{after}"
 
 
@@ -192,6 +205,15 @@ def write_routing(
     from .validation import validate_relative
 
     validate_relative(relative, "routing path")
+    from .validation import ensure_safe_ancestors
+
+    # Ensure ancestor chain contains no symlinks before creating parents.
+    if relative.parent != Path("."):
+        ensure_safe_ancestors(target_root, relative.parent, create=True)
+    else:
+        # For root-level routing file (AGENTS.md) the parent is the target root
+        # itself; validation of the root was already done via validate_root.
+        pass
     path = target_root / relative
     before = path.read_bytes() if path.exists() else None
     before_digest = digest_bytes(before) if before is not None else None
@@ -204,7 +226,6 @@ def write_routing(
     desired = render_routing(current, str(routing.get("block", "")))
     if digest_bytes(desired.encode("utf-8")) != routing.get("after_digest"):
         raise AdoptionError("managed AGENTS route does not match the approved plan")
-    path.parent.mkdir(parents=True, exist_ok=True)
     if before is None:
         with path.open("xb") as handle:
             handle.write(desired.encode("utf-8"))

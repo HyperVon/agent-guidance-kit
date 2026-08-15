@@ -519,6 +519,19 @@ class InstallSkillsTest(unittest.TestCase):
         with self.assertRaisesRegex(install_skills.AdoptionError, "routing conflict"):
             install_skills.apply_plan(self.kit, self.target, plan)
 
+    def test_inverted_managed_route_block_delimiters_is_a_conflict(self) -> None:
+        self.add_skill("alpha")
+        (self.target / "AGENTS.md").write_text(
+            f"# Local\n\n{install_skills.ROUTE_END}\nmiddle\n{install_skills.ROUTE_START}\n",
+            encoding="utf-8",
+        )
+
+        plan = install_skills.build_plan(self.kit, self.target, ["alpha"])
+
+        self.assertEqual("CONFLICT", plan["routing"]["status"])
+        with self.assertRaisesRegex(install_skills.AdoptionError, "routing conflict"):
+            install_skills.apply_plan(self.kit, self.target, plan)
+
     def test_locally_modified_managed_route_block_is_a_conflict(self) -> None:
         self.add_skill("alpha")
         initial = install_skills.build_plan(self.kit, self.target, ["alpha"])

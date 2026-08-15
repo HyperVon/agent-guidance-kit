@@ -16,14 +16,60 @@ SOURCE_ONLY_RE = re.compile(r"(?:is|this skill) `SOURCE_ONLY`")
 
 
 def frontmatter_source_only(text: str) -> bool:
-    """Return True when the SKILL.md frontmatter declares `source_only: true`."""
-    match = re.match(r"\A---\n(.*?)\n---\n", text, re.DOTALL)
+    """Return True when the SKILL.md frontmatter declares `source_only: true`.
+
+    Uses YAML parsing to handle indented keys, quoted values, and
+    trailing comments consistently with `scripts/validate_repository.py`.
+    Falls back to a stripped line check when PyYAML is unavailable.
+    """
+    match = re.match(r"\A---\r?\n(.*?)\r?\n---\r?\n", text, re.DOTALL)
     if not match:
         return False
-    for line in match.group(1).splitlines():
-        if line.startswith("source_only:"):
-            value = line.split(":", 1)[1].strip().lower()
-            return value in {"true", "yes", "1", "on"}
+    body = match.group(1)
+    # Primary path: YAML-correct parsing
+    try:
+        import yaml  # local import to avoid hard dependency at import time
+
+        values = yaml.safe_load(body)
+        if isinstance(values, dict):
+            raw = values.get("source_only")
+            if isinstance(raw, bool):
+                return raw is True
+            if isinstance(raw, str):
+                return raw.strip().lower() in {"true", "yes", "1", "on"}
+            if isinstance(raw, int) and not isinstance(raw, bool):
+                return raw == 1
+            # Explicit true/false without quotes already handled; any other
+            # truthy string form is accepted above.
+            if raw is not None:
+                return str(raw).strip().lower() in {"true", "yes", "1", "on"}
+    except Exception:
+        pass
+    # Fallback: tolerate leading whitespace and inline comments
+    for line in body.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        # Match source_only with optional whitespace around colon
+        mo = re.match(r"source_only\s*:\s*(.+)", stripped)
+        if not mo:
+            continue
+        raw_value = mo.group(1).strip()
+        # Strip trailing inline comment
+        if "#" in raw_value:
+            raw_value = raw_value.split("#", 1)[0].strip()
+        # Strip surrounding quotes
+        if (
+            len(raw_value) >= 2
+            and raw_value[0] == raw_value[-1]
+            and raw_value[0] in {"'", '"'}
+        ):
+            raw_value = raw_value[1:-1].strip()
+        if raw_value.lower() in {"true", "yes", "1", "on"}:
+            return True
+        # Explicit false values must not trigger fallback success
+        if raw_value.lower() in {"false", "no", "0", "off"}:
+            return False
     return False
 
 

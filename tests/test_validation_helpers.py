@@ -219,6 +219,27 @@ class ValidationHelpersTest(unittest.TestCase):
 
             self.assertEqual(python, setup_dev.ensure_venv(venv_dir))
 
+    def test_existing_symlinked_python_is_reused(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            venv_dir = Path(temporary_directory) / ".venv"
+            python = setup_dev.venv_python(venv_dir)
+            python.parent.mkdir(parents=True)
+            target_python = Path(temporary_directory) / "host_python"
+            target_python.touch()
+            python.symlink_to(target_python)
+
+            self.assertEqual(python, setup_dev.ensure_venv(venv_dir))
+
+    def test_symlinked_virtual_environment_directory_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            real_venv = Path(temporary_directory) / "real_venv"
+            real_venv.mkdir()
+            venv_dir = Path(temporary_directory) / ".venv"
+            venv_dir.symlink_to(real_venv)
+
+            with self.assertRaisesRegex(RuntimeError, "is a symlink"):
+                setup_dev.ensure_venv(venv_dir)
+
     def test_incomplete_virtual_environment_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             venv_dir = Path(temporary_directory) / ".venv"

@@ -254,10 +254,52 @@ def apply_evidence_to_compatibility(evidence: dict, doc_path: Path) -> tuple[boo
         )
 
     index, cells, raw_line = matches[0]
-    cells[-1] = "VERIFIED"
-    replacement = "| " + " | ".join(cells) + " |"
     line_without_ending = raw_line.rstrip("\r\n")
     line_ending = raw_line[len(line_without_ending) :]
+    # Preserve original whitespace and column padding; only replace last cell's
+    # trimmed content so the diff touches just the status column.
+    has_trailing_pipe = line_without_ending.endswith("|")
+    if has_trailing_pipe:
+        last_pipe = line_without_ending.rfind("|")
+        penultimate_pipe = line_without_ending.rfind("|", 0, last_pipe)
+        if penultimate_pipe != -1:
+            prefix = line_without_ending[: penultimate_pipe + 1]
+            suffix = line_without_ending[last_pipe:]
+            middle = line_without_ending[penultimate_pipe + 1 : last_pipe]
+        else:
+            prefix = None
+    else:
+        last_pipe = line_without_ending.rfind("|")
+        if last_pipe != -1:
+            prefix = line_without_ending[: last_pipe + 1]
+            suffix = ""
+            middle = line_without_ending[last_pipe + 1 :]
+        else:
+            prefix = None
+
+    if prefix is not None:
+        import re as _re
+
+        mo = _re.match(r"(\s*)(.*?)(\s*)\Z", middle, _re.DOTALL)
+        if mo:
+            leading, _content, trailing = mo.groups()
+            # If original cell had no surrounding spaces, use single spaces for readability;
+            # otherwise preserve exactly.
+            if not leading and not trailing:
+                new_middle = " VERIFIED " if has_trailing_pipe else " VERIFIED"
+            else:
+                # Preserve original padding; ensure at least one space if none
+                if not leading:
+                    leading = " "
+                if not trailing and has_trailing_pipe:
+                    trailing = " "
+                new_middle = f"{leading}VERIFIED{trailing}"
+        else:
+            new_middle = " VERIFIED " if has_trailing_pipe else " VERIFIED"
+        replacement = prefix + new_middle + suffix
+    else:
+        cells[-1] = "VERIFIED"
+        replacement = "| " + " | ".join(cells) + " |"
     new_lines = list(lines)
     new_lines[index] = replacement + line_ending
     new_text = "".join(new_lines)

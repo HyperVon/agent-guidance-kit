@@ -89,6 +89,22 @@ class SourceOnlyEnforcementTest(unittest.TestCase):
             with self.assertRaises(AdoptionError):
                 assert_not_source_only(root, ["legacy-only"])
 
+    def test_structured_marker_with_crlf_blocks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skill_dir = root / ".agents" / "skills" / "crlf-tool"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_bytes(
+                b"---\r\n"
+                b"name: crlf-tool\r\n"
+                b"description: A maintainer-only tool with CRLF line endings.\r\n"
+                b"source_only: true\r\n"
+                b"---\r\n"
+                b"# CRLF Tool\r\n"
+            )
+            with self.assertRaises(AdoptionError):
+                assert_not_source_only(root, ["crlf-tool"])
+
     def test_ordinary_skill_without_marker_is_allowed(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
