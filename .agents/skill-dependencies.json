@@ -11,6 +11,22 @@
       "requires": [],
       "route": "Adopt, add, audit, refresh, or update Agent Guidance Kit content"
     },
+    "agent-runtime-router": {
+      "related": [
+        "parallel-multi-agent"
+      ],
+      "requires": [],
+      "route": "Use the installed Agent Runtime Router to inventory provider/model evidence and make a fail-closed route decision"
+    },
+    "agent-runtime-router-maintenance": {
+      "related": [
+        "agent-guidance-maintenance"
+      ],
+      "requires": [
+        "agent-runtime-router"
+      ],
+      "route": "Audit, refresh, or repair an Agent Runtime Router installation"
+    },
     "ai-slop-detector": {
       "related": [
         "architecture-review",

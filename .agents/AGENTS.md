@@ -83,6 +83,8 @@ plan.
 | Task | Skill |
 | :--- | :--- |
 | Adopt, add, audit, refresh, or update kit content in a target; run a recurring adoption audit to surface unadopted catalog skills | [agent-guidance-maintenance](skills/agent-guidance-maintenance/SKILL.md) |
+| Use the installed Agent Runtime Router to inventory provider/model evidence and route tasks | [agent-runtime-router](skills/agent-runtime-router/SKILL.md) |
+| Audit, refresh, or repair an Agent Runtime Router installation | [agent-runtime-router-maintenance](skills/agent-runtime-router-maintenance/SKILL.md) |
 | Inspect a target project and propose/adopt a minimal guidance set | [bootstrap-project](skills/bootstrap-project/SKILL.md) |
 | Audit code, tests, docs, or guidance for evidence-backed quality defects | [ai-slop-detector](skills/ai-slop-detector/SKILL.md) |
 | Review a system architecture with fresh eyes and compare options | [architecture-review](skills/architecture-review/SKILL.md) |
