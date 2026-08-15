@@ -48,8 +48,12 @@ _INDEX_ALIASES = {
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """Reject redirects so a configured benchmark host cannot change scope."""
 
-    def redirect_request(self, request: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> Any:
-        raise urllib.error.HTTPError(request.full_url, code, "redirect_rejected", headers, None)
+    def redirect_request(
+        self, request: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str
+    ) -> Any:
+        raise urllib.error.HTTPError(
+            request.full_url, code, "redirect_rejected", headers, None
+        )
 
 
 class BenchmarkError(RuntimeError):
@@ -96,12 +100,16 @@ def _fetch_json(
         raise BenchmarkError("benchmark_timeout_invalid")
     if fetcher is not None:
         try:
-            return fetcher(url=url, headers=dict(headers or {}), timeout_seconds=timeout_seconds)
+            return fetcher(
+                url=url, headers=dict(headers or {}), timeout_seconds=timeout_seconds
+            )
         except BenchmarkError:
             raise
         except Exception as exc:
             raise BenchmarkError("benchmark_fetch_failed") from exc
-    request = urllib.request.Request(url, headers=dict(headers or {"Accept": "application/json"}))
+    request = urllib.request.Request(
+        url, headers=dict(headers or {"Accept": "application/json"})
+    )
     # Some standalone Python builds (notably the macOS framework build) ship
     # without an OpenSSL CA bundle even though the host has one.  Use an
     # existing trusted bundle when available; never disable certificate
@@ -174,7 +182,11 @@ def _configured_alias_matches(alias: str, identities: Sequence[str]) -> bool:
     )
 
 
-def _match_record(candidate: Candidate, override: Mapping[str, Any], records: Sequence[Mapping[str, Any]]) -> Mapping[str, Any] | None:
+def _match_record(
+    candidate: Candidate,
+    override: Mapping[str, Any],
+    records: Sequence[Mapping[str, Any]],
+) -> Mapping[str, Any] | None:
     configured_values: list[str] = []
     configured = override.get("aaSlug")
     if isinstance(configured, str) and configured:
@@ -204,7 +216,9 @@ def _match_record(candidate: Candidate, override: Mapping[str, Any], records: Se
     best: tuple[float, Mapping[str, Any]] | None = None
     for record in records:
         identities = _identity_values(record)
-        record_normalized = {_normalize_identity(value) for value in identities if value}
+        record_normalized = {
+            _normalize_identity(value) for value in identities if value
+        }
         if normalized.intersection(record_normalized):
             return record
         if not normalized or not record_normalized:
@@ -232,7 +246,9 @@ def _records_from_payload(payload: Any) -> list[Mapping[str, Any]]:
     return records
 
 
-def _source_digest(settings: Mapping[str, Any], model_settings: Mapping[str, Any] | None = None) -> str:
+def _source_digest(
+    settings: Mapping[str, Any], model_settings: Mapping[str, Any] | None = None
+) -> str:
     aliases: dict[str, list[str]] = {}
     if isinstance(model_settings, Mapping):
         for candidate_id, override in model_settings.items():
@@ -259,7 +275,9 @@ def _source_digest(settings: Mapping[str, Any], model_settings: Mapping[str, Any
         # quality cache that was created before that route existed.
         "model_aliases": aliases,
     }
-    return hashlib.sha256(json.dumps(safe, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return hashlib.sha256(
+        json.dumps(safe, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
 
 
 def _cache_path(target: Path) -> Path:
@@ -282,7 +300,10 @@ def _load_cache(
         return None
     if value.get("source_digest") != source_digest:
         return None
-    if not isinstance(value.get("expires_at_epoch_seconds"), (int, float)) or float(value["expires_at_epoch_seconds"]) <= now:
+    if (
+        not isinstance(value.get("expires_at_epoch_seconds"), (int, float))
+        or float(value["expires_at_epoch_seconds"]) <= now
+    ):
         return None
     records = value.get("records")
     if not isinstance(records, Mapping):
@@ -303,7 +324,16 @@ def _load_cache(
     )
 
 
-def _write_cache(path: Path, *, source_digest: str, source: str, fallback_used: bool, records: Mapping[str, Mapping[str, float]], observed: float, expires: float) -> None:
+def _write_cache(
+    path: Path,
+    *,
+    source_digest: str,
+    source: str,
+    fallback_used: bool,
+    records: Mapping[str, Mapping[str, float]],
+    observed: float,
+    expires: float,
+) -> None:
     value = {
         "schema_version": 1,
         "source": source,
@@ -311,10 +341,15 @@ def _write_cache(path: Path, *, source_digest: str, source: str, fallback_used: 
         "fallback_used": fallback_used,
         "observed_at_epoch_seconds": observed,
         "expires_at_epoch_seconds": expires,
-        "records": {str(key): {str(metric): float(score) for metric, score in item.items()} for key, item in records.items()},
+        "records": {
+            str(key): {str(metric): float(score) for metric, score in item.items()}
+            for key, item in records.items()
+        },
     }
     path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, prefix=".quality-", delete=False) as handle:
+    with tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", dir=path.parent, prefix=".quality-", delete=False
+    ) as handle:
         temporary = Path(handle.name)
         json.dump(value, handle, sort_keys=True, separators=(",", ":"))
         handle.flush()
@@ -322,10 +357,14 @@ def _write_cache(path: Path, *, source_digest: str, source: str, fallback_used: 
     os.replace(temporary, path)
 
 
-def _fetch_sources(settings: Mapping[str, Any], *, refresh: bool, fetcher: Callable[..., Any] | None) -> tuple[list[Mapping[str, Any]], str, bool]:
+def _fetch_sources(
+    settings: Mapping[str, Any], *, refresh: bool, fetcher: Callable[..., Any] | None
+) -> tuple[list[Mapping[str, Any]], str, bool]:
     if not settings.get("enabled", True):
         return [], "disabled", False
-    base = str(settings.get("baseUrl", "https://artificialanalysis.ai/api/v2")).rstrip("/")
+    base = str(settings.get("baseUrl", "https://artificialanalysis.ai/api/v2")).rstrip(
+        "/"
+    )
     api_env = str(settings.get("apiKeyEnv", "ARTIFICIAL_ANALYSIS_API_KEY"))
     api_key = os.environ.get(api_env)
     if api_key:
@@ -333,19 +372,35 @@ def _fetch_sources(settings: Mapping[str, Any], *, refresh: bool, fetcher: Calla
         try:
             for page in range(1, MAX_PAGES + 1):
                 query = urllib.parse.urlencode({"page": page})
-                payload = _fetch_json(f"{base}/language/models/free?{query}", headers={"Accept": "application/json", "x-api-key": api_key}, fetcher=fetcher)
+                payload = _fetch_json(
+                    f"{base}/language/models/free?{query}",
+                    headers={"Accept": "application/json", "x-api-key": api_key},
+                    fetcher=fetcher,
+                )
                 page_records = _records_from_payload(payload)
                 records.extend(page_records)
-                pagination = payload.get("pagination") if isinstance(payload, Mapping) else None
-                if not isinstance(pagination, Mapping) or not pagination.get("has_more"):
+                pagination = (
+                    payload.get("pagination") if isinstance(payload, Mapping) else None
+                )
+                if not isinstance(pagination, Mapping) or not pagination.get(
+                    "has_more"
+                ):
                     break
             if records:
                 return records[:MAX_RECORDS], "artificial-analysis", False
         except BenchmarkError:
             pass
     try:
-        payload = _fetch_json("https://openrouter.ai/api/v1/models", headers={"Accept": "application/json"}, fetcher=fetcher)
-        records = [record for record in _records_from_payload(payload) if _quality_values(record)]
+        payload = _fetch_json(
+            "https://openrouter.ai/api/v1/models",
+            headers={"Accept": "application/json"},
+            fetcher=fetcher,
+        )
+        records = [
+            record
+            for record in _records_from_payload(payload)
+            if _quality_values(record)
+        ]
         if records:
             return records, "openrouter-benchmark", True
     except BenchmarkError:
@@ -382,7 +437,9 @@ def apply_benchmark_quality(
     if cached is not None:
         records, source, fallback_used, observed, expires = cached
     if records is None and allow_network:
-        raw_records, source, fallback_used = _fetch_sources(settings, refresh=refresh, fetcher=fetcher)
+        raw_records, source, fallback_used = _fetch_sources(
+            settings, refresh=refresh, fetcher=fetcher
+        )
         if raw_records:
             built: dict[str, dict[str, float]] = {}
             for candidate in candidates:
@@ -394,20 +451,36 @@ def apply_benchmark_quality(
                     built[candidate.candidate_id] = values
             records = built
             try:
-                _write_cache(path, source_digest=digest, source=source, fallback_used=fallback_used, records=records, observed=observed, expires=expires)
+                _write_cache(
+                    path,
+                    source_digest=digest,
+                    source=source,
+                    fallback_used=fallback_used,
+                    records=records,
+                    observed=observed,
+                    expires=expires,
+                )
             except OSError:
                 pass
     if not records:
         return tuple(candidates)
     result: list[Candidate] = []
     evidence_source = source if source != "cache" else "benchmark-cache"
-    fallback = FallbackProvenance("openrouter-benchmark", "primary_unavailable") if fallback_used else None
+    fallback = (
+        FallbackProvenance("openrouter-benchmark", "primary_unavailable")
+        if fallback_used
+        else None
+    )
     for candidate in candidates:
         values = records.get(candidate.candidate_id)
         if not isinstance(values, Mapping):
             result.append(candidate)
             continue
-        metrics = {str(metric): float(score) for metric, score in values.items() if _safe_metric(metric) is not None and _number(score) is not None}
+        metrics = {
+            str(metric): float(score)
+            for metric, score in values.items()
+            if _safe_metric(metric) is not None and _number(score) is not None
+        }
         if not metrics:
             result.append(candidate)
             continue
@@ -418,13 +491,21 @@ def apply_benchmark_quality(
                 source=evidence_source,
                 observed_at_epoch_seconds=observed,
                 expires_at_epoch_seconds=expires,
-                status=EvidenceStatus.BEST_EFFORT if fallback_used else EvidenceStatus.VERIFIED,
+                status=EvidenceStatus.BEST_EFFORT
+                if fallback_used
+                else EvidenceStatus.VERIFIED,
                 freshness=Freshness.FRESH,
                 fallback=fallback,
             )
             for metric, score in sorted(metrics.items())
         )
-        result.append(replace(candidate, quality_metrics={**(candidate.quality_metrics or {}), **metrics}, quality_evidence=evidences))
+        result.append(
+            replace(
+                candidate,
+                quality_metrics={**(candidate.quality_metrics or {}), **metrics},
+                quality_evidence=evidences,
+            )
+        )
     return tuple(result)
 
 

@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 from pathlib import Path
 
 from agent_runtime_router.harnesses.contracts import (
@@ -25,7 +24,11 @@ from adapter import load_json, KrakenCatalogSource
 
 
 def _report(error_code: str) -> DiscoveryReport:
-    safe = error_code if error_code and error_code.replace("_", "").isalnum() else "discovery_failed"
+    safe = (
+        error_code
+        if error_code and error_code.replace("_", "").isalnum()
+        else "discovery_failed"
+    )
     return DiscoveryReport(
         adapter_id="kilo",
         status=EvidenceStatus.UNKNOWN,
@@ -63,9 +66,15 @@ def main(argv: list[str] | None = None) -> int:
     try:
         target = _target_root()
         executable = Path(args.kilo).expanduser()
-        if not executable.is_absolute() or executable.is_symlink() or not executable.is_file():
+        if (
+            not executable.is_absolute()
+            or executable.is_symlink()
+            or not executable.is_file()
+        ):
             raise ValueError("kilo_executable_invalid")
-        policy_path = target / ".agents/runtime-router/adapters/kilo/provider-policy.json"
+        policy_path = (
+            target / ".agents/runtime-router/adapters/kilo/provider-policy.json"
+        )
         policy = load_json(policy_path)
         request = DiscoveryRequest(
             target_root=str(target),
@@ -80,7 +89,13 @@ def main(argv: list[str] | None = None) -> int:
         validated = DiscoveryReport.from_mapping(report.to_dict())
         print(json.dumps(validated.to_dict(), sort_keys=True, separators=(",", ":")))
     except Exception:
-        print(json.dumps(_report("report_invalid").to_dict(), sort_keys=True, separators=(",", ":")))
+        print(
+            json.dumps(
+                _report("report_invalid").to_dict(),
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
     return 0
 
 

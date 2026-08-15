@@ -106,7 +106,7 @@ applied.
 
 ## Workflow
 
- 1. **Working tree pre-flight.** Inspect target working tree status
+1. **Working tree pre-flight.** Inspect target working tree status
     (`git status --porcelain`). If the target repository has uncommitted
     modifications in `.agents/` or root guidance files, warn the user and
     recommend committing or stashing WIP **before applying maintenance updates**.
@@ -181,7 +181,7 @@ before each maintenance cycle, on a recurring reminder, or when the target's
 stack changes) so the target keeps discovering useful guidance instead of
 freezing at its first adoption.
 
-  1. Resolve the kit source (see *Resolve the source*) and record the target root.
+ 1. Resolve the kit source (see *Resolve the source*) and record the target root.
      If you are unsure whether the resolved checkout is current, check it against
      `origin/main` and, with the user's go-ahead, run the *Optionally refresh the
      source checkout* procedure first so the audit reflects the latest catalog. A

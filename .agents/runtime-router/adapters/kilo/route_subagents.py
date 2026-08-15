@@ -38,7 +38,9 @@ def _use_receipt_runtime() -> None:
     runtime = _requested_target() / ".agents" / ".agent-runtime-router" / "venv"
     python = runtime / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     if python.is_file() and Path(sys.executable).resolve() != python.resolve():
-        os.execv(str(python), [str(python), str(Path(__file__).resolve()), *sys.argv[1:]])
+        os.execv(
+            str(python), [str(python), str(Path(__file__).resolve()), *sys.argv[1:]]
+        )
 
 
 if __name__ == "__main__":
@@ -47,17 +49,14 @@ if __name__ == "__main__":
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-from agent_runtime_router.dispatch import TaskPacket  # noqa: E402
-from agent_runtime_router.harnesses.target import load_catalog_cache, load_target_policy, route_with_target_policy  # noqa: E402
+from agent_runtime_router.harnesses.target import load_catalog_cache, load_target_policy  # noqa: E402
 from agent_runtime_router.launcher import LaunchItem, launch_tracks  # noqa: E402
 from agent_runtime_router.workflow import Track, load_manifest_tracks  # noqa: E402
-from agent_runtime_router import TaskRequest, CostClass  # noqa: E402
+from agent_runtime_router import CostClass  # noqa: E402
 from agent_runtime_router.quota import apply_quota_evidence  # noqa: E402
 from agent_runtime_router.cost import (  # noqa: E402
     TaskCostSummary,
-    WorkflowCostReport,
     TaskActualCostSummary,
-    WorkflowActualCostReport,
     summarize_workflow_cost,
     summarize_actual_workflow_cost,
 )
@@ -234,7 +233,12 @@ def _workflow_tracks(path: Path, workflow: str, parent_task: str) -> list[Track]
         for item in raw_tracks
     )
     tracks = load_manifest_tracks(
-        {"tracks": [{**item, "task": _sanitize_prompt(text)} for item, text in zip(raw_tracks, assembled)]}
+        {
+            "tracks": [
+                {**item, "task": _sanitize_prompt(text)}
+                for item, text in zip(raw_tracks, assembled)
+            ]
+        }
     )
     return tracks
 
@@ -301,17 +305,32 @@ def main(argv: list[str] | None = None) -> int:
     if not task_text:
         parser.error("a task is required")
     if args.prepare_evidence and not args.approve:
-        print(json.dumps({"status": "INCOMPLETE", "error_code": "evidence_approval_required"}, sort_keys=True))
+        print(
+            json.dumps(
+                {"status": "INCOMPLETE", "error_code": "evidence_approval_required"},
+                sort_keys=True,
+            )
+        )
         return 2
     if args.prepare_evidence and args.refresh:
-        print(json.dumps({"status": "INCOMPLETE", "error_code": "discovery_requires_separate_approval"}, sort_keys=True))
+        print(
+            json.dumps(
+                {
+                    "status": "INCOMPLETE",
+                    "error_code": "discovery_requires_separate_approval",
+                },
+                sort_keys=True,
+            )
+        )
         return 2
     target = Path(args.target).resolve()
     try:
         policy = load_target_policy(target / ".agents/runtime-router/policy.json")
         if args.free_only:
             policy = _free_only_policy(policy)
-        provider_policy = load_json(target / ".agents/runtime-router/adapters/kilo/provider-policy.json")
+        provider_policy = load_json(
+            target / ".agents/runtime-router/adapters/kilo/provider-policy.json"
+        )
         (
             readiness_budget,
             readiness_cache_ttl,
@@ -320,26 +339,41 @@ def main(argv: list[str] | None = None) -> int:
         ) = _readiness_settings(
             provider_policy, requested_max_probes=args.max_readiness_probes
         )
-        profiles = load_json(target / ".agents/runtime-router/adapters/kilo/profiles.json")
+        profiles = load_json(
+            target / ".agents/runtime-router/adapters/kilo/profiles.json"
+        )
         if args.manifest:
             manifest_path = (target / args.manifest).resolve()
             manifest_path.relative_to(target)
             tracks = load_manifest_tracks(load_json(manifest_path))
         elif args.workflow:
-            tracks = _workflow_tracks(target / ".agents/runtime-router/adapters/kilo/workflows.json", args.workflow, task_text)
+            tracks = _workflow_tracks(
+                target / ".agents/runtime-router/adapters/kilo/workflows.json",
+                args.workflow,
+                task_text,
+            )
         else:
             raise ValueError("manifest_or_workflow_required")
         distinct_routes = (
-            (args.distinct_routes or _workflow_uses_distinct_routes(args.workflow))
-            and not args.allow_route_reuse
+            args.distinct_routes or _workflow_uses_distinct_routes(args.workflow)
+        ) and not args.allow_route_reuse
+        catalog_path = _catalog_path(
+            target, target / ".agents/runtime-router/catalog-cache.json"
         )
-        catalog_path = _catalog_path(target, target / ".agents/runtime-router/catalog-cache.json")
         executable = shutil.which("kilo")
         if args.refresh and executable:
             # Refresh is an explicit metadata/discovery request.  It may
             # produce a plan without launching workers; ``--approve`` remains
             # required for execution and for any provider task.
-            cache = _load_or_discover(target, catalog_path, executable, provider_policy, policy, refresh=True, approve=args.approve)
+            cache = _load_or_discover(
+                target,
+                catalog_path,
+                executable,
+                provider_policy,
+                policy,
+                refresh=True,
+                approve=args.approve,
+            )
         else:
             try:
                 cache = load_catalog_cache(catalog_path)
@@ -402,7 +436,9 @@ def main(argv: list[str] | None = None) -> int:
         records: list[dict[str, Any]] = []
         for track in tracks:
             profile = _profile(profiles, track.profile)
-            task = _task(track.profile, profile, track.task, candidate=None, sensitive=False)
+            task = _task(
+                track.profile, profile, track.task, candidate=None, sensitive=False
+            )
             profile_candidates = _apply_profile_quality(candidates, profile)
             available = tuple(
                 candidate
@@ -441,8 +477,30 @@ def main(argv: list[str] | None = None) -> int:
                 catalog_digest=cache.source_digest,
                 approve=args.approve,
             )
-            records.append({"track": track.id, "route": selected.candidate_id, "profile": track.profile, "effort": decision.selected_effort.value if decision.selected_effort else None, "variant": decision.selected_variant, "billing": selected.billing})
-            prepared.append(LaunchItem(track=track, selection=selected, prompt=track.task, candidates=launch_candidates, policy=policy.routing_policy, task=launch_task, effort=decision.selected_effort, variant=decision.selected_variant))
+            records.append(
+                {
+                    "track": track.id,
+                    "route": selected.candidate_id,
+                    "profile": track.profile,
+                    "effort": decision.selected_effort.value
+                    if decision.selected_effort
+                    else None,
+                    "variant": decision.selected_variant,
+                    "billing": selected.billing,
+                }
+            )
+            prepared.append(
+                LaunchItem(
+                    track=track,
+                    selection=selected,
+                    prompt=track.task,
+                    candidates=launch_candidates,
+                    policy=policy.routing_policy,
+                    task=launch_task,
+                    effort=decision.selected_effort,
+                    variant=decision.selected_variant,
+                )
+            )
 
         cost_summaries: list[TaskCostSummary] = []
         for track, item in zip(tracks, prepared):
@@ -452,16 +510,29 @@ def main(argv: list[str] | None = None) -> int:
             eff_cost = float(item.selection.effective_cost or 0.0)
             if item.selection.billing != "free" and eff_cost == 0.0:
                 # Approximate default estimate when rate table is not explicitly bound
-                eff_cost = 0.002 if ("mini" in item.selection.candidate_id or "flash" in item.selection.candidate_id or "oss" in item.selection.candidate_id) else 0.008
+                eff_cost = (
+                    0.002
+                    if (
+                        "mini" in item.selection.candidate_id
+                        or "flash" in item.selection.candidate_id
+                        or "oss" in item.selection.candidate_id
+                    )
+                    else 0.008
+                )
 
             free_alt_id = None
             free_alt_qual = None
             if item.selection.billing != "free":
                 prof_cands = _apply_profile_quality(candidates, profile)
                 free_cands = [
-                    c for c in prof_cands
-                    if (c.billing == "free" or getattr(c, "cost_class", None) is CostClass.FREE)
-                    and c.quality is not None and c.quality >= float(profile.get("minimum", 0))
+                    c
+                    for c in prof_cands
+                    if (
+                        c.billing == "free"
+                        or getattr(c, "cost_class", None) is CostClass.FREE
+                    )
+                    and c.quality is not None
+                    and c.quality >= float(profile.get("minimum", 0))
                 ]
                 if free_cands:
                     best_free = max(free_cands, key=lambda c: c.quality or 0.0)
@@ -505,27 +576,45 @@ def main(argv: list[str] | None = None) -> int:
             "distinct_routes": distinct_routes,
         }
         if args.prepare_evidence:
-            print(json.dumps({**plan, "status": "EVIDENCE_READY", "workers_not_started": True}, sort_keys=True))
+            print(
+                json.dumps(
+                    {**plan, "status": "EVIDENCE_READY", "workers_not_started": True},
+                    sort_keys=True,
+                )
+            )
             return 0
         if not args.approve:
             print(json.dumps(plan, sort_keys=True))
             return 0
         if cost_report.any_paid and not args.approve_cost:
-            print(json.dumps({
-                **plan,
-                "status": "AWAITING_COST_APPROVAL",
-                "message": f"Workflow requires paid execution with estimated total cost of ${cost_report.total_estimated_cost:.4f} USD. Pass --approve-cost to confirm or --free-only to route to free models.",
-            }, sort_keys=True))
+            print(
+                json.dumps(
+                    {
+                        **plan,
+                        "status": "AWAITING_COST_APPROVAL",
+                        "message": f"Workflow requires paid execution with estimated total cost of ${cost_report.total_estimated_cost:.4f} USD. Pass --approve-cost to confirm or --free-only to route to free models.",
+                    },
+                    sort_keys=True,
+                )
+            )
             return 2
         from agent_runtime_router.supervisor import ExecutionApproval
+
         results = launch_tracks(
             prepared,
             timeout=args.worker_timeout,
             adapter=adapter,
-            approval_factory=lambda item, dispatch, command: ExecutionApproval(f"kraken-{item.track.id}", dispatch.task_id, dispatch.candidate_id, command.sha256),
+            approval_factory=lambda item, dispatch, command: ExecutionApproval(
+                f"kraken-{item.track.id}",
+                dispatch.task_id,
+                dispatch.candidate_id,
+                command.sha256,
+            ),
             max_workers=min(len(prepared), 8),
             max_output_bytes=KILO_MAX_OUTPUT_BYTES,
-            start_delay_seconds=float(provider_policy.get("coldStart", {}).get("staggerSeconds", 0)),
+            start_delay_seconds=float(
+                provider_policy.get("coldStart", {}).get("staggerSeconds", 0)
+            ),
             allow_failover=all(item.track.read_only for item in prepared),
             allow_cold_start_retry=all(item.track.read_only for item in prepared),
         )
@@ -553,7 +642,15 @@ def main(argv: list[str] | None = None) -> int:
             act_out_tok = max(1, out_chars // 4)
             eff_cost = float(item.selection.effective_cost or 0.0)
             if item.selection.billing != "free" and eff_cost == 0.0:
-                eff_cost = 0.002 if ("mini" in item.selection.candidate_id or "flash" in item.selection.candidate_id or "oss" in item.selection.candidate_id) else 0.008
+                eff_cost = (
+                    0.002
+                    if (
+                        "mini" in item.selection.candidate_id
+                        or "flash" in item.selection.candidate_id
+                        or "oss" in item.selection.candidate_id
+                    )
+                    else 0.008
+                )
 
             est_cost = eff_cost if item.selection.billing != "free" else 0.0
             act_cost = (

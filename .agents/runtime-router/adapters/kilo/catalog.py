@@ -47,7 +47,9 @@ def _error_code(value: str) -> str:
     return value if _SAFE_ERROR.fullmatch(value) else "catalog_failed"
 
 
-def _run_bounded(command: Sequence[str], *, timeout_seconds: float) -> tuple[int, bytes]:
+def _run_bounded(
+    command: Sequence[str], *, timeout_seconds: float
+) -> tuple[int, bytes]:
     if not command or any(not isinstance(item, str) or not item for item in command):
         raise CatalogError("catalog_command_invalid")
     if not Path(command[0]).is_absolute():
@@ -125,7 +127,9 @@ def _json_values(output: bytes) -> list[Mapping[str, Any]]:
     return objects
 
 
-def parse_catalog_output(provider: str, output: bytes | str) -> tuple[Mapping[str, Any], ...]:
+def parse_catalog_output(
+    provider: str, output: bytes | str
+) -> tuple[Mapping[str, Any], ...]:
     """Parse a Kilo model listing into bounded provider/model records."""
 
     if not isinstance(provider, str) or not provider:
@@ -160,7 +164,9 @@ def _integer(value: Any) -> int | None:
     return int(number) if number is not None and number >= 1 else None
 
 
-def _raw_capabilities(record: Mapping[str, Any]) -> tuple[frozenset[str], bool | None, bool | None]:
+def _raw_capabilities(
+    record: Mapping[str, Any],
+) -> tuple[frozenset[str], bool | None, bool | None]:
     capabilities = record.get("capabilities")
     if not isinstance(capabilities, Mapping):
         return frozenset({"code", "completion"}), None, None
@@ -171,10 +177,19 @@ def _raw_capabilities(record: Mapping[str, Any]) -> tuple[frozenset[str], bool |
         values.add("tool_call")
     if reasoning is True:
         values.add("reasoning")
-    return frozenset(values), tool if isinstance(tool, bool) else None, reasoning if isinstance(reasoning, bool) else None
+    return (
+        frozenset(values),
+        tool if isinstance(tool, bool) else None,
+        reasoning if isinstance(reasoning, bool) else None,
+    )
 
 
-def _billing(route: str, provider_settings: Mapping[str, Any], model_settings: Mapping[str, Any], record: Mapping[str, Any]) -> str:
+def _billing(
+    route: str,
+    provider_settings: Mapping[str, Any],
+    model_settings: Mapping[str, Any],
+    record: Mapping[str, Any],
+) -> str:
     configured = model_settings.get("billing", provider_settings.get("billing"))
     record_billing = record.get("billing")
     costs = record.get("cost")
@@ -188,9 +203,20 @@ def _billing(route: str, provider_settings: Mapping[str, Any], model_settings: M
     # models in their IDs.
     if record.get("isFree") is True:
         return "free"
-    if route.lower().endswith(":free") or "/free" in route.lower() or provider_settings.get("freeOnly"):
+    if (
+        route.lower().endswith(":free")
+        or "/free" in route.lower()
+        or provider_settings.get("freeOnly")
+    ):
         return "free"
-    valid_billing = {"free", "paid", "payg", "subscription", "subscription/account-priced", "account-priced"}
+    valid_billing = {
+        "free",
+        "paid",
+        "payg",
+        "subscription",
+        "subscription/account-priced",
+        "account-priced",
+    }
     if isinstance(record_billing, str) and record_billing in valid_billing:
         return record_billing
     if isinstance(configured, str) and configured in valid_billing:
@@ -205,25 +231,50 @@ def _billing(route: str, provider_settings: Mapping[str, Any], model_settings: M
     return "unknown"
 
 
-def _allowed(route: str, model: str, provider: str, provider_settings: Mapping[str, Any], blacklist: Mapping[str, Any]) -> bool:
+def _allowed(
+    route: str,
+    model: str,
+    provider: str,
+    provider_settings: Mapping[str, Any],
+    blacklist: Mapping[str, Any],
+) -> bool:
     includes = provider_settings.get("include", ["*"])
     excludes = provider_settings.get("exclude", [])
-    if not isinstance(includes, list) or not any(fnmatchcase(route, str(pattern)) or fnmatchcase(model, str(pattern)) for pattern in includes):
+    if not isinstance(includes, list) or not any(
+        fnmatchcase(route, str(pattern)) or fnmatchcase(model, str(pattern))
+        for pattern in includes
+    ):
         return False
-    if isinstance(excludes, list) and any(fnmatchcase(route, str(pattern)) or fnmatchcase(model, str(pattern)) for pattern in excludes):
+    if isinstance(excludes, list) and any(
+        fnmatchcase(route, str(pattern)) or fnmatchcase(model, str(pattern))
+        for pattern in excludes
+    ):
         return False
-    model_patterns = blacklist.get("models", []) if isinstance(blacklist, Mapping) else []
-    provider_patterns = blacklist.get("providers", []) if isinstance(blacklist, Mapping) else []
+    model_patterns = (
+        blacklist.get("models", []) if isinstance(blacklist, Mapping) else []
+    )
+    provider_patterns = (
+        blacklist.get("providers", []) if isinstance(blacklist, Mapping) else []
+    )
     return not (
-        isinstance(model_patterns, list) and any(fnmatchcase(route, str(pattern)) or fnmatchcase(model, str(pattern)) for pattern in model_patterns)
-        or isinstance(provider_patterns, list) and any(fnmatchcase(provider, str(pattern)) for pattern in provider_patterns)
+        isinstance(model_patterns, list)
+        and any(
+            fnmatchcase(route, str(pattern)) or fnmatchcase(model, str(pattern))
+            for pattern in model_patterns
+        )
+        or isinstance(provider_patterns, list)
+        and any(fnmatchcase(provider, str(pattern)) for pattern in provider_patterns)
     )
 
 
 def _quality(record: Mapping[str, Any]) -> dict[str, float]:
     values: dict[str, float] = {}
     benchmarks = record.get("benchmarks")
-    aa = benchmarks.get("artificial_analysis") if isinstance(benchmarks, Mapping) else None
+    aa = (
+        benchmarks.get("artificial_analysis")
+        if isinstance(benchmarks, Mapping)
+        else None
+    )
     evaluations = record.get("evaluations")
     for source in (aa, evaluations):
         if not isinstance(source, Mapping):
@@ -241,7 +292,9 @@ def _quality(record: Mapping[str, Any]) -> dict[str, float]:
     return values
 
 
-def _effort_profiles(variants: tuple[str, ...], quality: float | None, metrics: dict[str, float]) -> tuple[EffortProfile, ...]:
+def _effort_profiles(
+    variants: tuple[str, ...], quality: float | None, metrics: dict[str, float]
+) -> tuple[EffortProfile, ...]:
     native_to_effort = {
         "instant": EffortLevel.MINIMAL,
         "minimal": EffortLevel.MINIMAL,
@@ -259,11 +312,20 @@ def _effort_profiles(variants: tuple[str, ...], quality: float | None, metrics: 
         if effort is None or effort in seen:
             continue
         seen.add(effort)
-        result.append(EffortProfile(effort=effort, quality=quality, quality_metrics=metrics or None, variant=native))
+        result.append(
+            EffortProfile(
+                effort=effort,
+                quality=quality,
+                quality_metrics=metrics or None,
+                variant=native,
+            )
+        )
     return tuple(result)
 
 
-def build_candidates(raw_models: Iterable[Mapping[str, Any]], provider_policy: Mapping[str, Any]) -> tuple[Candidate, ...]:
+def build_candidates(
+    raw_models: Iterable[Mapping[str, Any]], provider_policy: Mapping[str, Any]
+) -> tuple[Candidate, ...]:
     providers = provider_policy.get("providers", {})
     models = provider_policy.get("models", {})
     blacklist = provider_policy.get("blacklist", {})
@@ -280,7 +342,9 @@ def build_candidates(raw_models: Iterable[Mapping[str, Any]], provider_policy: M
             continue
         route = f"{provider}/{model}"
         override = models.get(route, {})
-        if not isinstance(override, Mapping) or not _allowed(route, model, provider, settings, blacklist):
+        if not isinstance(override, Mapping) or not _allowed(
+            route, model, provider, settings, blacklist
+        ):
             continue
         costs = record.get("cost") if isinstance(record.get("cost"), Mapping) else {}
         input_cost = _number(costs.get("input"))
@@ -324,23 +388,39 @@ def build_candidates(raw_models: Iterable[Mapping[str, Any]], provider_policy: M
         qualities = _quality(record)
         primary = override.get("quality")
         if primary is None:
-            primary = qualities.get(str(override.get("qualityMetric", "artificial_analysis_intelligence_index")))
+            primary = qualities.get(
+                str(
+                    override.get(
+                        "qualityMetric", "artificial_analysis_intelligence_index"
+                    )
+                )
+            )
         result.append(
             Candidate(
                 provider=provider,
                 model=model,
                 capabilities=capabilities,
-                availability=Availability.AVAILABLE if str(record.get("status", "active")) in {"active", "available"} else Availability.UNKNOWN,
-                cost_class=CostClass.FREE if billing == "free" else CostClass.PAID if billing != "unknown" else CostClass.UNKNOWN,
+                availability=Availability.AVAILABLE
+                if str(record.get("status", "active")) in {"active", "available"}
+                else Availability.UNKNOWN,
+                cost_class=CostClass.FREE
+                if billing == "free"
+                else CostClass.PAID
+                if billing != "unknown"
+                else CostClass.UNKNOWN,
                 quota_status=QuotaStatus.UNKNOWN,
                 context_window=context,
                 quality=_number(primary),
-                effective_cost=0.0 if billing == "free" else _number(record.get("effective_cost")),
+                effective_cost=0.0
+                if billing == "free"
+                else _number(record.get("effective_cost")),
                 billing=billing,
                 tool_call=tool_call,
                 reasoning=reasoning,
                 variants=variants,
-                preferred_variant=str(override["variant"]) if override.get("variant") else None,
+                preferred_variant=str(override["variant"])
+                if override.get("variant")
+                else None,
                 quality_metrics=qualities or None,
                 effort_profiles=_effort_profiles(variants, _number(primary), qualities),
                 max_output_tokens=output_limit,
@@ -351,7 +431,13 @@ def build_candidates(raw_models: Iterable[Mapping[str, Any]], provider_policy: M
     return tuple(sorted(result, key=lambda item: item.candidate_id))
 
 
-def discover_candidates(executable: str | Path, provider_policy: Mapping[str, Any], *, refresh: bool = False, timeout_seconds: float = 900.0) -> tuple[Candidate, ...]:
+def discover_candidates(
+    executable: str | Path,
+    provider_policy: Mapping[str, Any],
+    *,
+    refresh: bool = False,
+    timeout_seconds: float = 900.0,
+) -> tuple[Candidate, ...]:
     """Run bounded Kilo discovery for configured providers and build ARR candidates."""
 
     providers = provider_policy.get("providers", {})
@@ -364,10 +450,16 @@ def discover_candidates(executable: str | Path, provider_policy: Mapping[str, An
     )
     if not enabled:
         raise CatalogError("catalog_no_enabled_providers")
-    if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)):
+    if isinstance(timeout_seconds, bool) or not isinstance(
+        timeout_seconds, (int, float)
+    ):
         raise CatalogError("catalog_timeout_invalid")
     timeout_seconds = float(timeout_seconds)
-    if not math.isfinite(timeout_seconds) or timeout_seconds <= 0 or timeout_seconds > MAX_TIMEOUT_SECONDS:
+    if (
+        not math.isfinite(timeout_seconds)
+        or timeout_seconds <= 0
+        or timeout_seconds > MAX_TIMEOUT_SECONDS
+    ):
         raise CatalogError("catalog_timeout_invalid")
     discovery_settings = provider_policy.get("discovery", {})
     if discovery_settings is None:
@@ -375,9 +467,15 @@ def discover_candidates(executable: str | Path, provider_policy: Mapping[str, An
     if not isinstance(discovery_settings, Mapping):
         raise CatalogError("catalog_policy_invalid")
     provider_timeout = _number(
-        discovery_settings.get("providerTimeoutSeconds", DEFAULT_PROVIDER_TIMEOUT_SECONDS)
+        discovery_settings.get(
+            "providerTimeoutSeconds", DEFAULT_PROVIDER_TIMEOUT_SECONDS
+        )
     )
-    if provider_timeout is None or provider_timeout <= 0 or provider_timeout > MAX_TIMEOUT_SECONDS:
+    if (
+        provider_timeout is None
+        or provider_timeout <= 0
+        or provider_timeout > MAX_TIMEOUT_SECONDS
+    ):
         raise CatalogError("catalog_timeout_invalid")
     # The adapter has one explicit outer deadline, but each provider receives a
     # target-configured multi-minute budget.  A fixed short slice per provider
@@ -420,4 +518,9 @@ def discover_candidates(executable: str | Path, provider_policy: Mapping[str, An
     return build_candidates(all_records, provider_policy)
 
 
-__all__ = ["CatalogError", "build_candidates", "discover_candidates", "parse_catalog_output"]
+__all__ = [
+    "CatalogError",
+    "build_candidates",
+    "discover_candidates",
+    "parse_catalog_output",
+]

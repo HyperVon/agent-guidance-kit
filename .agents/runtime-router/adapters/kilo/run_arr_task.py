@@ -58,7 +58,9 @@ def _use_receipt_runtime() -> None:
     runtime = _requested_target() / ".agents" / ".agent-runtime-router" / "venv"
     python = runtime / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     if python.is_file() and Path(sys.executable).resolve() != python.resolve():
-        os.execv(str(python), [str(python), str(Path(__file__).resolve()), *sys.argv[1:]])
+        os.execv(
+            str(python), [str(python), str(Path(__file__).resolve()), *sys.argv[1:]]
+        )
 
 
 if __name__ == "__main__":
@@ -83,12 +85,10 @@ from agent_runtime_router import (  # noqa: E402
     apply_tps_measurements,
     apply_readiness_measurements,
 )
-from agent_runtime_router.dispatch import TaskPacket  # noqa: E402
 from agent_runtime_router.harnesses.target import (  # noqa: E402
     CatalogCache,
     TargetPolicyConfig,
     load_target_policy,
-    route_catalog_cache,
     route_with_target_policy,
 )
 from agent_runtime_router.harness_state import HarnessStateNamespace  # noqa: E402
@@ -98,7 +98,12 @@ from agent_runtime_router.observations import Freshness  # noqa: E402
 from agent_runtime_router.quota import apply_quota_evidence  # noqa: E402
 from agent_runtime_router.router import RouteDecision  # noqa: E402
 from agent_runtime_router.router import route as route_candidates  # noqa: E402
-from agent_runtime_router.throughput import TpsCache, TpsCacheKey, TpsProbeConfig, TpsProbeRunner  # noqa: E402
+from agent_runtime_router.throughput import (
+    TpsCache,
+    TpsCacheKey,
+    TpsProbeConfig,
+    TpsProbeRunner,
+)  # noqa: E402
 from agent_runtime_router.workflow import Track  # noqa: E402
 
 from adapter import build_adapter, load_json, KILO_MAX_OUTPUT_BYTES  # noqa: E402
@@ -111,9 +116,16 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target", default=str(TARGET))
     parser.add_argument("--policy", default=".agents/runtime-router/policy.json")
-    parser.add_argument("--provider-policy", default=".agents/runtime-router/adapters/kilo/provider-policy.json")
-    parser.add_argument("--profiles", default=".agents/runtime-router/adapters/kilo/profiles.json")
-    parser.add_argument("--catalog", default=".agents/runtime-router/catalog-cache.json")
+    parser.add_argument(
+        "--provider-policy",
+        default=".agents/runtime-router/adapters/kilo/provider-policy.json",
+    )
+    parser.add_argument(
+        "--profiles", default=".agents/runtime-router/adapters/kilo/profiles.json"
+    )
+    parser.add_argument(
+        "--catalog", default=".agents/runtime-router/catalog-cache.json"
+    )
     parser.add_argument("--profile", default="agentic")
     parser.add_argument("--candidate", default=None)
     parser.add_argument("--sensitive", action="store_true")
@@ -147,14 +159,26 @@ class MappingLike(dict[str, Any]):
 
 def _paths(args: argparse.Namespace) -> tuple[Path, Path, Path, Path, Path]:
     target = Path(args.target).expanduser().resolve()
+
     def inside(raw: str) -> Path:
-        path = (target / raw).resolve() if not Path(raw).is_absolute() else Path(raw).resolve()
+        path = (
+            (target / raw).resolve()
+            if not Path(raw).is_absolute()
+            else Path(raw).resolve()
+        )
         try:
             path.relative_to(target)
         except ValueError as exc:
             raise CatalogError("target_path_outside_root") from exc
         return path
-    return target, inside(args.policy), inside(args.provider_policy), inside(args.profiles), inside(args.catalog)
+
+    return (
+        target,
+        inside(args.policy),
+        inside(args.provider_policy),
+        inside(args.profiles),
+        inside(args.catalog),
+    )
 
 
 def _profile(profiles: dict[str, Any], name: str) -> dict[str, Any]:
@@ -167,11 +191,22 @@ def _profile(profiles: dict[str, Any], name: str) -> dict[str, Any]:
     return selected
 
 
-def _task(profile_name: str, profile: dict[str, Any], prompt: str, *, candidate: str | None, sensitive: bool) -> TaskRequest:
+def _task(
+    profile_name: str,
+    profile: dict[str, Any],
+    prompt: str,
+    *,
+    candidate: str | None,
+    sensitive: bool,
+) -> TaskRequest:
     minimum = profile.get("minimum")
     margin = profile.get("margin", 0)
-    quality = float(minimum) + float(margin) if isinstance(minimum, (int, float)) else None
-    secondary = profile.get("secondary") if isinstance(profile.get("secondary"), dict) else None
+    quality = (
+        float(minimum) + float(margin) if isinstance(minimum, (int, float)) else None
+    )
+    secondary = (
+        profile.get("secondary") if isinstance(profile.get("secondary"), dict) else None
+    )
     context = profile.get("context", 0)
     output = profile.get("output_tokens")
     provider = model = None
@@ -182,18 +217,28 @@ def _task(profile_name: str, profile: dict[str, Any], prompt: str, *, candidate:
     return TaskRequest(
         task_id="kraken-task",
         required_capabilities=frozenset({"code", READINESS_CAPABILITY}),
-        min_context_window=max(0, int(context) if isinstance(context, (int, float)) else 0),
+        min_context_window=max(
+            0, int(context) if isinstance(context, (int, float)) else 0
+        ),
         pinned_provider=provider,
         pinned_model=model,
         quality_minimum=quality,
         requires_reasoning=bool(profile.get("requiresReasoning", False)),
         sensitive=sensitive or profile_name == "critical",
-        secondary_thresholds={str(key): float(value) for key, value in secondary.items()} if secondary else None,
-        required_output_tokens=int(output) if isinstance(output, (int, float)) and output > 0 else None,
+        secondary_thresholds={
+            str(key): float(value) for key, value in secondary.items()
+        }
+        if secondary
+        else None,
+        required_output_tokens=int(output)
+        if isinstance(output, (int, float)) and output > 0
+        else None,
     )
 
 
-def _resolve_kilo_alias(task: TaskRequest, candidates: tuple[Candidate, ...]) -> TaskRequest:
+def _resolve_kilo_alias(
+    task: TaskRequest, candidates: tuple[Candidate, ...]
+) -> TaskRequest:
     """Resolve Kilo's native ``kilo/<model>`` alias to one catalog route.
 
     Kilo accepts that shorthand even when its model catalog records the same
@@ -213,23 +258,43 @@ def _resolve_kilo_alias(task: TaskRequest, candidates: tuple[Candidate, ...]) ->
     return replace(task, pinned_provider=selected.provider, pinned_model=selected.model)
 
 
-def _apply_profile_quality(candidates: tuple[Candidate, ...], profile: dict[str, Any]) -> tuple[Candidate, ...]:
+def _apply_profile_quality(
+    candidates: tuple[Candidate, ...], profile: dict[str, Any]
+) -> tuple[Candidate, ...]:
     metric = str(profile.get("metric", "artificial_analysis_intelligence_index"))
     variants = profile.get("variantPreference", [])
-    preferred = next((str(value) for value in variants if isinstance(value, str) and value), None)
+    preferred = next(
+        (str(value) for value in variants if isinstance(value, str) and value), None
+    )
     result: list[Candidate] = []
     for candidate in candidates:
         metrics = candidate.quality_metrics or {}
         quality = metrics.get(metric, candidate.quality)
         profiles: list[EffortProfile] = []
         for option in candidate.effort_profiles:
-            profiles.append(replace(option, quality=quality, quality_metrics=metrics or None))
-        result.append(replace(candidate, quality=quality, effort_profiles=tuple(profiles), preferred_variant=preferred or candidate.preferred_variant))
+            profiles.append(
+                replace(option, quality=quality, quality_metrics=metrics or None)
+            )
+        result.append(
+            replace(
+                candidate,
+                quality=quality,
+                effort_profiles=tuple(profiles),
+                preferred_variant=preferred or candidate.preferred_variant,
+            )
+        )
     return tuple(result)
 
 
 def _catalog_path(target: Path, requested: Path) -> Path:
-    namespace = target / ".agents" / "runtime-router" / "harnesses" / "kilo" / "catalog-cache.json"
+    namespace = (
+        target
+        / ".agents"
+        / "runtime-router"
+        / "harnesses"
+        / "kilo"
+        / "catalog-cache.json"
+    )
     # A single legacy top-level cache is accepted only as a read-only migration
     # source. New discovery always writes the active harness namespace.
     return namespace if namespace.is_file() or not requested.is_file() else requested
@@ -249,6 +314,7 @@ def _load_or_discover(
     if path.is_file() and not refresh:
         try:
             from agent_runtime_router.harnesses.target import load_catalog_cache
+
             return load_catalog_cache(path)
         except Exception:
             return None
@@ -260,11 +326,32 @@ def _load_or_discover(
         return None
     report = DiscoveryReport(
         adapter_id="kilo",
-        status=__import__("agent_runtime_router.harnesses.contracts", fromlist=["EvidenceStatus"]).EvidenceStatus.BEST_EFFORT,
+        status=__import__(
+            "agent_runtime_router.harnesses.contracts", fromlist=["EvidenceStatus"]
+        ).EvidenceStatus.BEST_EFFORT,
         candidates=candidates,
-        probes=(__import__("agent_runtime_router.harnesses.contracts", fromlist=["ProbeEvidence"]).ProbeEvidence("kilo-models", "kilo-cli", __import__("agent_runtime_router.harnesses.contracts", fromlist=["EvidenceStatus"]).EvidenceStatus.BEST_EFFORT, Freshness.FRESH),),
+        probes=(
+            __import__(
+                "agent_runtime_router.harnesses.contracts", fromlist=["ProbeEvidence"]
+            ).ProbeEvidence(
+                "kilo-models",
+                "kilo-cli",
+                __import__(
+                    "agent_runtime_router.harnesses.contracts",
+                    fromlist=["EvidenceStatus"],
+                ).EvidenceStatus.BEST_EFFORT,
+                Freshness.FRESH,
+            ),
+        ),
     )
-    cache = CatalogCache(report, time.time(), time.time() + policy.refresh.ttl_seconds, hashlib.sha256(json.dumps(report.to_dict(), sort_keys=True).encode()).hexdigest())
+    cache = CatalogCache(
+        report,
+        time.time(),
+        time.time() + policy.refresh.ttl_seconds,
+        hashlib.sha256(
+            json.dumps(report.to_dict(), sort_keys=True).encode()
+        ).hexdigest(),
+    )
     namespace = HarnessStateNamespace.for_target(target, "kilo")
     namespace.write_artifact("catalog", cache.to_dict())
     return cache
@@ -291,7 +378,16 @@ def _cached_tps(
     """
     path = target / ".agents" / "runtime-router" / "harnesses" / "kilo" / "tps.json"
     try:
-        cache = TpsCache.load(path, expected_harness_id="kilo", expected_source=KILO_TPS_SOURCE, expected_source_digest=source_digest) if path.is_file() else TpsCache()
+        cache = (
+            TpsCache.load(
+                path,
+                expected_harness_id="kilo",
+                expected_source=KILO_TPS_SOURCE,
+                expected_source_digest=source_digest,
+            )
+            if path.is_file()
+            else TpsCache()
+        )
     except Exception:
         cache = TpsCache()
     if not approve:
@@ -299,8 +395,10 @@ def _cached_tps(
         for candidate in candidates:
             measurement = cache.get(
                 TpsCacheKey(
-                    "kilo", KILO_TPS_SOURCE,
-                    candidate.candidate_id, source_digest,
+                    "kilo",
+                    KILO_TPS_SOURCE,
+                    candidate.candidate_id,
+                    source_digest,
                 )
             )
             if measurement is not None:
@@ -431,7 +529,9 @@ def _tps_evidence_digest(policy: TargetPolicyConfig, executable: str) -> str:
 
 
 def _readiness_cache(target: Path) -> tuple[Path, ReadinessCache]:
-    path = target / ".agents" / "runtime-router" / "harnesses" / "kilo" / "readiness.json"
+    path = (
+        target / ".agents" / "runtime-router" / "harnesses" / "kilo" / "readiness.json"
+    )
     try:
         return path, ReadinessCache.load(path) if path.is_file() else ReadinessCache()
     except Exception:
@@ -455,7 +555,11 @@ def _readiness_settings(
         return result
 
     maximum = settings.get("maxProbesPerRun", 3)
-    if isinstance(maximum, bool) or not isinstance(maximum, int) or not 1 <= maximum <= 10:
+    if (
+        isinstance(maximum, bool)
+        or not isinstance(maximum, int)
+        or not 1 <= maximum <= 10
+    ):
         raise CatalogError("readiness_settings_invalid")
     if requested_max_probes is not None:
         if not 1 <= requested_max_probes <= maximum:
@@ -510,7 +614,10 @@ def _annotate_readiness_failures(
             evaluation,
             reasons=tuple(
                 dict.fromkeys(
-                    (*evaluation.reasons, *sorted(failures.get(evaluation.candidate.candidate_id, ())))
+                    (
+                        *evaluation.reasons,
+                        *sorted(failures.get(evaluation.candidate.candidate_id, ())),
+                    )
                 )
             ),
         )
@@ -639,6 +746,7 @@ def _route_with_readiness(
         elif measurement is None and not approve:
             current_time = time.time()
             from agent_runtime_router.readiness import ReadinessStatus
+
             measurement = ReadinessMeasurement(
                 candidate_id=selected.candidate_id,
                 source=KILO_READINESS_SOURCE,
@@ -734,6 +842,7 @@ def _prepare_launch_binding(
         if not approve:
             current_time = time.time()
             from agent_runtime_router.readiness import ReadinessStatus
+
             measurement = ReadinessMeasurement(
                 candidate_id=selected.candidate_id,
                 source=KILO_READINESS_SOURCE,
@@ -778,7 +887,10 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.prepare_evidence and args.refresh:
         return _emit(
-            {"status": "INCOMPLETE", "error_code": "discovery_requires_separate_approval"},
+            {
+                "status": "INCOMPLETE",
+                "error_code": "discovery_requires_separate_approval",
+            },
             code=2,
         )
     try:
@@ -795,13 +907,34 @@ def main(argv: list[str] | None = None) -> int:
         )
         profiles = load_json(profiles_path)
         selected_profile = _profile(profiles, args.profile)
-        task = _task(args.profile, selected_profile, args.task, candidate=args.candidate, sensitive=args.sensitive)
+        task = _task(
+            args.profile,
+            selected_profile,
+            args.task,
+            candidate=args.candidate,
+            sensitive=args.sensitive,
+        )
         executable = str(Path(shutil.which("kilo") or "").resolve())
         if not executable or executable == ".":
             raise CatalogError("kilo_executable_missing")
-        cache = _load_or_discover(target, catalog_path, executable, provider_policy, policy, refresh=args.refresh, approve=args.approve)
+        cache = _load_or_discover(
+            target,
+            catalog_path,
+            executable,
+            provider_policy,
+            policy,
+            refresh=args.refresh,
+            approve=args.approve,
+        )
         if cache is None:
-            return _emit({"status": "INCOMPLETE", "error_code": "catalog_missing_or_unusable", "approval_required": True}, code=2)
+            return _emit(
+                {
+                    "status": "INCOMPLETE",
+                    "error_code": "catalog_missing_or_unusable",
+                    "approval_required": True,
+                },
+                code=2,
+            )
         candidates = apply_benchmark_quality(
             cache.candidates_for_route(),
             provider_policy,
@@ -828,9 +961,7 @@ def main(argv: list[str] | None = None) -> int:
             policy,
             approve=args.approve,
             source_digest=_tps_evidence_digest(policy, executable),
-            priority_candidates=_tps_probe_priority(
-                task, candidates, policy
-            ),
+            priority_candidates=_tps_probe_priority(task, candidates, policy),
             adapter=adapter,
         )
         decision = _route_with_readiness(
@@ -849,12 +980,30 @@ def main(argv: list[str] | None = None) -> int:
             failure_cache_ttl_seconds=readiness_failure_ttl,
             timeout_seconds=readiness_timeout,
         )
-        records = [{"agent": "code", "billing": decision.selected.billing if decision.selected else None, "profile": args.profile, "quality": decision.selected_quality, "effort": decision.selected_effort.value if decision.selected_effort else None, "variant": decision.selected_variant, "route": decision.selected.candidate_id if decision.selected else None}]
-        plan = {"records": records, "route": decision.selected.candidate_id if decision.selected else None, "status": "PLAN" if decision.selected else "NO_ROUTE"}
+        records = [
+            {
+                "agent": "code",
+                "billing": decision.selected.billing if decision.selected else None,
+                "profile": args.profile,
+                "quality": decision.selected_quality,
+                "effort": decision.selected_effort.value
+                if decision.selected_effort
+                else None,
+                "variant": decision.selected_variant,
+                "route": decision.selected.candidate_id if decision.selected else None,
+            }
+        ]
+        plan = {
+            "records": records,
+            "route": decision.selected.candidate_id if decision.selected else None,
+            "status": "PLAN" if decision.selected else "NO_ROUTE",
+        }
         if decision.selected is None:
             return _emit(plan, code=2)
         if args.prepare_evidence:
-            return _emit({**plan, "status": "EVIDENCE_READY", "worker_not_started": True})
+            return _emit(
+                {**plan, "status": "EVIDENCE_READY", "worker_not_started": True}
+            )
         if not args.approve:
             return _emit({**plan, "approval_required": True}, code=0)
         launch_task, launch_candidates = _prepare_launch_binding(
@@ -869,9 +1018,39 @@ def main(argv: list[str] | None = None) -> int:
         )
         safe_task = _sanitize_prompt(args.task)
         track = Track("manual-kilo", safe_task, args.profile, "code", (), True)
-        item = LaunchItem(track=track, selection=decision.selected, prompt=safe_task, candidates=launch_candidates, policy=policy.routing_policy, task=launch_task, effort=decision.selected_effort, variant=decision.selected_variant)
-        result = launch_worker(item, timeout=args.timeout, adapter=adapter, approval_factory=lambda item, dispatch, command: __import__("agent_runtime_router.supervisor", fromlist=["ExecutionApproval"]).ExecutionApproval("kraken-manual", dispatch.task_id, dispatch.candidate_id, command.sha256), max_output_bytes=KILO_MAX_OUTPUT_BYTES)
-        return _emit({**plan, "status": "SUCCEEDED" if result.exit_code == 0 and not result.failure_kind else "FAILED", "exit_code": result.exit_code, "failure_kind": result.failure_kind, "error_code": result.error_code, "report": result.report})
+        item = LaunchItem(
+            track=track,
+            selection=decision.selected,
+            prompt=safe_task,
+            candidates=launch_candidates,
+            policy=policy.routing_policy,
+            task=launch_task,
+            effort=decision.selected_effort,
+            variant=decision.selected_variant,
+        )
+        result = launch_worker(
+            item,
+            timeout=args.timeout,
+            adapter=adapter,
+            approval_factory=lambda item, dispatch, command: __import__(
+                "agent_runtime_router.supervisor", fromlist=["ExecutionApproval"]
+            ).ExecutionApproval(
+                "kraken-manual", dispatch.task_id, dispatch.candidate_id, command.sha256
+            ),
+            max_output_bytes=KILO_MAX_OUTPUT_BYTES,
+        )
+        return _emit(
+            {
+                **plan,
+                "status": "SUCCEEDED"
+                if result.exit_code == 0 and not result.failure_kind
+                else "FAILED",
+                "exit_code": result.exit_code,
+                "failure_kind": result.failure_kind,
+                "error_code": result.error_code,
+                "report": result.report,
+            }
+        )
     except Exception as exc:
         code = str(exc).split(":", 1)[0] or "router_error"
         if not code.replace("_", "").replace("-", "").isalnum():

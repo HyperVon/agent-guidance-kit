@@ -6,7 +6,13 @@
       "siblings_only": true
     },
     "MD033": {
-      "allowed_elements": ["a", "br", "img", "p", "strong"]
+      "allowed_elements": [
+        "a",
+        "br",
+        "img",
+        "p",
+        "strong"
+      ]
     }
   },
   "globs": [
@@ -23,6 +29,8 @@
     "**/.kilo/**",
     "**/.idea/**",
     "**/.cursor/**",
-    "**/.vscode/**"
+    "**/.vscode/**",
+    "**/.agent-runtime-router/**",
+    ".agents/.agent-runtime-router/**"
   ]
 }

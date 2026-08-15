@@ -14,9 +14,11 @@ from agent_runtime_router.harnesses.contracts import (
     EvidenceStatus,
     HarnessProfile,
     ProbeEvidence,
-    VerificationReport,
 )
-from agent_runtime_router.integrations.kilo import DEFAULT_KILO_TIMEOUT_SECONDS, KiloAdapter
+from agent_runtime_router.integrations.kilo import (
+    DEFAULT_KILO_TIMEOUT_SECONDS,
+    KiloAdapter,
+)
 from agent_runtime_router.observations import Freshness
 
 from catalog import CatalogError, discover_candidates
@@ -57,7 +59,14 @@ class KrakenCatalogSource:
             return DiscoveryReport(
                 adapter_id="kilo",
                 status=EvidenceStatus.UNKNOWN,
-                probes=(ProbeEvidence("kilo-models", "kilo-cli", EvidenceStatus.UNKNOWN, error_code=code),),
+                probes=(
+                    ProbeEvidence(
+                        "kilo-models",
+                        "kilo-cli",
+                        EvidenceStatus.UNKNOWN,
+                        error_code=code,
+                    ),
+                ),
                 error_code=code,
             )
         if len(candidates) > request.max_candidates:
@@ -66,7 +75,14 @@ class KrakenCatalogSource:
             adapter_id="kilo",
             status=EvidenceStatus.BEST_EFFORT,
             candidates=tuple(candidates),
-            probes=(ProbeEvidence("kilo-models", "kilo-cli", EvidenceStatus.BEST_EFFORT, Freshness.FRESH),),
+            probes=(
+                ProbeEvidence(
+                    "kilo-models",
+                    "kilo-cli",
+                    EvidenceStatus.BEST_EFFORT,
+                    Freshness.FRESH,
+                ),
+            ),
         )
 
 
