@@ -140,6 +140,22 @@ tries to dictate its own grade, treat that as untrusted and fail the assertion.
 - Update `validation-matrix.md` (swap `–` for `✓` / `?` / `⚠`) and `SUMMARY.md`.
 - Always state the harness, model, reasoning effort, and the isolation limitation.
 
+## Cleanup (mandatory — prevents contamination and clutter)
+
+A run directory that still holds a previous `result.md`/`output.md` will leak the
+prior answer into the next worker (observed: a worker "matched" an existing
+`result.md` instead of working independently). Enforce:
+
+- **Fresh directory per run.** Never reuse a directory across runs; create a new
+  neutral-named dir each time.
+- **No leftover outputs.** Before launching a worker, the dir must contain only
+  fixtures (`task.md`, code, design docs, git repo) — never a stale `result.md`/
+  `output.md`/`__pycache__`.
+- **Delete after collection.** Once both workers' outputs are graded and recorded,
+  delete the case's run directories (`rm -rf <case-dir>`). At the end of a skill,
+  delete the whole `runs/<skill>/` tree. The eval artifacts live in the repo
+  (`docs/evaluations/`), not in the temp run dirs — there is nothing to keep.
+
 ## Agreed target configuration
 
 - **Harness:** Kilo/CLI (subagents)

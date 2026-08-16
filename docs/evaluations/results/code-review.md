@@ -45,3 +45,8 @@ routing case (3) does **not** discriminate even when the skill is embedded — t
 - Expect most defect-finding cases to be non_discriminating; the value is in
   boundaries (merge/approve authority, read-only discipline), which is where the
   faithful method shows signal.
+- **Contamination lesson:** cases 1/2/4 were first run in directories that still held
+  a stale `result.md` from a prior pass; a worker read it and "matched" the old answer
+  instead of working independently. Fix: fresh directory per run, no leftover outputs,
+  delete the run tree after collection (now mandated in RUNBOOK). The clean re-runs
+  confirmed the same verdicts, so conclusions are unchanged.
