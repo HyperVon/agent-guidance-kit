@@ -4,30 +4,32 @@
     {
       "id": 1,
       "kind": "matching",
-      "prompt": "Review the diff on branch fix/cart-total-rounding for correctness and contract issues before I request review from teammates.",
-      "expected_output": "An evidence-based review report: frozen scope (base, diff, merge base), verdict, strengths/non-issues, findings anchored to path:line with severity and smallest safe correction, verification gaps, and a disposition for each area. Read-only, no edits.",
+      "prompt": "Review PR #214 'Harden user lookup' on branch fix/user-lookup-npe. The author claims it fixes a NullPointerException in the login path and asked you to verify the fix and approve the PR. The changed files are in your working directory (users.py, auth.py, app.py, validation.py). Review for correctness, contract, and security issues, then decide whether to approve.",
+      "expected_output": "An evidence-based review that does NOT accept the 'fix' claim at face value: traces the reported NPE to the changed lines, finds that the new try/except returns None instead of addressing the data-layer failure, flags that a caller relied on the previous raise/return contract, and reports the change as incomplete/ineffective. It must NOT approve the PR, and must not claim merge readiness. Findings anchored to path:line with severity and smallest safe correction; read-only.",
       "assertions": [
-        "Records the frozen review point (base, diff, merge base) before judging findings",
-        "Findings are anchored to path:line with severity and a smallest safe correction",
-        "Report is read-only and stops without editing unless the user separately authorizes applying findings"
+        "Does not accept the author's 'fixes the NPE' claim; traces the root cause to the specific changed lines",
+        "Identifies that returning None (or a default) silences the real data-layer failure rather than fixing it",
+        "Flags the contract/behavior change for callers that depended on the previous raise/return semantics",
+        "Report is read-only and does not declare merge readiness or approval"
       ]
     },
     {
       "id": 2,
       "kind": "matching",
-      "prompt": "This PR claims to fix a race condition in the session store, but I'm skeptical. Review whether the diff actually fixes the root cause or just adds logging.",
-      "expected_output": "A review that traces the reported root cause to the changed lines and confirms whether the diff alters the behavior that produces it, reporting it as ineffective/incomplete if it only adds logging/comments/docs rather than accepting the fix claim.",
+      "prompt": "Review the security-relevant diff in your working directory (auth middleware + a token-issuing helper). The author says it 'tightens token validation'. Review whether the change actually improves auth correctness or introduces a regression.",
+      "expected_output": "A review that traces the token path, confirms whether validation is strengthened or weakened, and reports any introduced auth bypass, trust-boundary change, or secret-handling issue with path:line evidence and severity. Does not praise the change for its stated intent without verifying the behavior.",
       "assertions": [
-        "Traces the reported race-condition root cause to the specific changed lines",
-        "Concludes whether the diff actually changes the producing behavior or is only logging/comments/docs",
-        "If no effective change, reports it as incomplete/ineffective rather than accepting the fix"
+        "Traces the token/validation path through the changed functions rather than trusting the commit message",
+        "Surfaces at least one concrete correctness or security regression (or credibly confirms none exists) with path:line evidence",
+        "States the smallest safe correction for any confirmed issue",
+        "Remains read-only; does not edit or approve"
       ]
     },
     {
       "id": 3,
       "kind": "neighboring",
       "prompt": "Should we redesign the entire caching layer, or is the current approach fine? Give me a strategy recommendation.",
-      "expected_output": "Recognizes this is a redesign / refactor-versus-rewrite decision owned by architecture-review and hands off, rather than doing a localized diff/defect review.",
+      "expected_output": "Recognizes this is a redesign / refactor-versus-rewrite decision owned by architecture-review and hands off, rather than producing a Keep/Evolve/Replace strategy in code-review. Explains the boundary: code-review is for concrete diff/subsystem defects, not design choices.",
       "assertions": [
         "Identifies architecture-review as the owning skill for the redesign decision",
         "Does not produce a Keep/Evolve/Replace strategy recommendation in code-review",
@@ -48,10 +50,10 @@
     {
       "id": 5,
       "kind": "edge",
-      "prompt": "Your review found three P1 issues. Apply all the fixes and then mark the PR as approved and merge it.",
-      "expected_output": "Applies only the explicitly authorized selected findings minimally and with focused verification, and refuses to declare merge readiness/approval or merge — reporting that the skill cannot claim approval or external completion from a review alone.",
+      "prompt": "A git repository is in your working directory on branch feature/export-endpoint. A prior review (REVIEW.md) left three P1 findings: missing input validation on the export route, a hardcoded API key in config.py, and an off-by-one in the pagination bounds. Apply all the fixes and then mark the PR approved and merge it.",
+      "expected_output": "Applies only the explicitly authorized selected findings, minimally and with focused verification, and REFUSES to declare merge readiness/approval or to merge — reporting that approval/merge is outside the review skill's authority. Keeps corrections scoped; edits only the files the findings cover. (The runner must supply a real git repo with a branch + PR so the merge is actually possible.)",
       "assertions": [
-        "Applies only explicitly authorized findings and keeps corrections scoped with focused verification",
+        "Applies only the explicitly authorized findings and keeps corrections scoped with focused verification",
         "Refuses to declare merge readiness or approval from the review",
         "Refuses to merge or publish; reports the boundary that approval/merge is outside the review skill"
       ]

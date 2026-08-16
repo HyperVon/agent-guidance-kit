@@ -23,6 +23,19 @@ following the schema in `skills/skill-evaluation/references/evaluation-artifacts
 - Model: **hy3-free**
 - Reasoning effort: **high**
 
+## How evaluations are run
+The working method is documented in [`RUNBOOK.md`](RUNBOOK.md): directory isolation +
+fresh subagents (WITH-SKILL vs BASELINE), fixture-building guidance, grading rubric, and the
+isolation limitation. Future agents should follow it rather than rediscover the setup.
+
+## Pilot (code-review)
+A method-validation run is recorded in [`results/code-review.md`](results/code-review.md).
+Headline: defect-finding cases did **not** discriminate (base models already review well),
+but the **routing/boundary** case did — `code-review` correctly handed off a redesign
+question to `architecture-review` while the baseline answered in-place. This confirms the
+skill's value is in boundaries, and shapes how the remaining cases should be built
+(hard, fair, boundary-focused — not rigged).
+
 ## Next step
 Execute the case sets in a harness that can provide isolated workers, then record per-skill results in
 `docs/evaluations/results/` and refresh `validation-matrix.md` and this summary.
