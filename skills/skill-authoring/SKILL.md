@@ -39,6 +39,39 @@ If the trigger, owner, and completion contract are not distinct from an existing
 skill, extend that skill instead of inventing another one. An approval to edit a
 named skill does not authorize unrelated guidance, index, or runtime changes.
 
+## Calibrate instruction rigidity
+
+Match how prescriptive the skill is to the task's risk and variability. Both
+over- and under-specifying cause failures:
+
+- **Flexible heuristics** for work with several valid approaches. State the goal
+  and the trade-offs; let the agent judge. Reserve rigid steps for when they earn
+  their cost.
+- **Structured procedures** when a preferred sequence measurably reduces mistakes
+  (order-dependent builds, multi-step migrations, safety-critical setups). Name
+  the required order and the checkpoint that gates the next step.
+- **Deterministic scripts/tools** for fragile, repetitive, or failure-sensitive
+  operations (parsing, checking, transforming). A script removes ambiguity and
+  lowers context cost, but keep it network-free, standard-library, and covered by
+  tests per the [companion script hygiene](#validate-before-handoff) rules.
+
+Connect rigidity to the rest of this skill:
+
+- *Context cost:* deterministic scripts and tight procedures shrink the reasoning
+  an agent must do; spend that saved budget on the parts that still need judgment.
+- *Progressive disclosure:* push rare, rigid detail into a `references/` file so
+  the common path stays flexible; do not pad the entrypoint with ceremony.
+- *Degrees of freedom:* prescription level is the main lever for how much freedom
+  the agent keeps. Choose it deliberately, not by habit.
+
+Two failure modes to avoid:
+
+- **Unnecessary ceremony:** do not convert judgment-heavy work (design, triage,
+  review) into checklists that pretend a hard call is a procedure.
+- **Underspecified danger:** do not leave destructive, security-sensitive, or
+  irreversible operations as vague advice. Pin them to exact commands, guards, and
+  approval gates.
+
 ## Workflow
 
 1. Read the repository's applicable rules, the current skill, its index entry,
