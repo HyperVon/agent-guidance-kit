@@ -51,9 +51,73 @@ parses and checks. The block is JSON:
         }
       ]
     }
+   ]
+ }
+ ```
+
+### Routing result
+
+For `evaluation_mode: "routing"` the `result-json` block grades **harness
+selection evidence**, not worker output. It records the skill the harness
+selected in each condition and lets the validator check it against the case's
+`routing` expectation. No execution `assertions` are graded.
+
+```result-json
+{
+  "skill": "code-review",
+  "evaluation_mode": "routing",
+  "method": "harness-routing",
+  "case_revision": "sha256:…",
+  "fixture_revision": "sha256:…",
+  "target_skill_revision": "sha256:…",
+  "runtime": {
+    "harness": "kilo",
+    "harness_version": "unknown",
+    "model": "hy3-free",
+    "reasoning_effort": "high",
+    "tool_policy": "sandbox",
+    "network_policy": "none",
+    "isolation_method": "instruction-only (limited)"
+  },
+  "protocol": {
+    "status": "limited",
+    "worker_isolation_verified": true,
+    "target_loaded_in_guided": null,
+    "target_absent_in_baseline": null,
+    "contamination": "none",
+    "routing_mechanism": "harness startup log names selected skill"
+  },
+  "runs": {
+    "guided":   { "session_id": "g1", "output_hash": "sha256:…" },
+    "baseline": { "session_id": "b1", "output_hash": "sha256:…" }
+  },
+  "cases": [
+    {
+      "case_id": 1,
+      "outcome": {
+        "category": "both_pass",
+        "measurement_status": "discriminating",
+        "protocol_status": "limited"
+      },
+      "verdict": { "guided_pass": true, "baseline_pass": true },
+      "runs": {
+        "guided":   { "selected_skill": "code-review" },
+        "baseline": { "selected_skill": null }
+      }
+    }
   ]
 }
 ```
+
+- `runs.guided.selected_skill` — the skill the harness selected in the
+  target-present condition (must be present; null is only valid when the
+  expectation allows it via `allowed_fallbacks`).
+- `runs.baseline.selected_skill` — the skill selected in the target-absent
+  condition; `null` means the harness declined to select the (absent) target,
+  which is the expected baseline outcome.
+- The validator compares each captured selection to the case's
+  `routing.target_present` / `routing.target_absent` expectation and fails the
+  case when the `verdict` booleans disagree with the captured selection.
 
 ## Required identity
 
@@ -99,11 +163,17 @@ parses and checks. The block is JSON:
   - `baseline_only_pass` ⇔ guided fail & baseline pass
   - `both_pass` ⇔ both pass
   - `both_fail` ⇔ both fail
-- Every frozen assertion from `evals.json` must appear in the graded
-  `assertions` list (no assertion silently disappears). Each assertion grades
-  `guided` and `baseline` with a `pass` boolean; **every passing condition must
-  carry concrete `evidence`** (quoted span / diff line / exit code) — plausible
-  prose or self-assertion is not evidence.
+- **Execution mode** — every frozen assertion from `evals.json` must appear in
+  the graded `assertions` list (no assertion silently disappears). Each
+  assertion grades `guided` and `baseline` with a `pass` boolean; **every
+  passing condition must carry concrete `evidence`** (quoted span / diff line /
+  exit code) — plausible prose or self-assertion is not evidence.
+- **Routing mode** — no execution `assertions` are graded. Instead each case's
+  `runs.guided.selected_skill` / `runs.baseline.selected_skill` are checked
+  against the case `routing` expectation (`target_present.expected_selected_skill`
+  and `target_absent.expected_selected_skill`, with `allowed_fallbacks`). A
+  routing result may not claim a passing `verdict` on a condition whose captured
+  selection does not satisfy the expectation.
 
 ## Protocol-validity gates
 

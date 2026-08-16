@@ -20,7 +20,8 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from eval_hashing import HASH_PREFIX, canonical_hash
+from eval_hashing import (HASH_PREFIX, canonical_hash, source_hash_of,
+                          verify_generator_deterministic)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EVALS_DIR = os.path.join(ROOT, "docs", "evaluations")
@@ -35,6 +36,11 @@ ALLOWED_OUTCOME = {"skill_only_pass", "baseline_only_pass", "both_pass",
                    "both_fail", "invalid", "not_run"}
 ALLOWED_MEASUREMENT = {"discriminating", "non_discriminating", "inconclusive"}
 ALLOWED_PROTOCOL = {"valid", "limited", "contaminated", "invalid", "not_run"}
+# Isolation methods that are NOT valid production isolation. A run claiming
+# protocol.status == "valid" must use real OS-level isolation (container/gvisor/
+# sandbox with a verified boundary), not instruction-only / prompt-only wording.
+LIMITED_ISOLATION = ("instruction-only", "prompt-only", "no sandbox", "none",
+                     "n/a", "unknown")
 HISTORICAL = {"code-review.md", "git-github-workflow.md",
               "review-feedback-resolution.md", "security-review.md"}
 
@@ -210,14 +216,35 @@ def check_fixture(f, rel, c, tag):
         err(f"{tag}: fixture missing/invalid content_hash")
         return
     if ftype == "generator":
+        src = fx.get("source", "setup.sh")
+        src_path = os.path.join(fpath, src)
         if not fx.get("source_hash", "").startswith(HASH_PREFIX):
             err(f"{tag}: generator missing source_hash")
         if not fx.get("output_hash", "").startswith(HASH_PREFIX):
             err(f"{tag}: generator missing output_hash")
+        if not os.path.exists(src_path):
+            err(f"{tag}: generator source missing: {src}")
+            return
+        # Real source-hash validation: the recorded source_hash must match the
+        # generator source on disk. A changed setup.sh without an updated
+        # source_hash must fail.
         try:
-            computed = canonical_hash(fpath, "generator",
-                                      fx.get("source", "setup.sh"),
-                                      fx.get("invocation", "bash setup.sh"))
+            sh = source_hash_of(src_path)
+        except Exception as e:
+            err(f"{tag}: cannot read generator source: {e}")
+            return
+        if HASH_PREFIX + sh != fx.get("source_hash"):
+            err(f"{tag}: source_hash mismatch (generator source '{src}' changed "
+                f"without updating source_hash)")
+        # Real output-hash validation with a deterministic double-run: the generator
+        # must produce the SAME output on two independent runs, and that output must
+        # match the recorded content_hash / output_hash.
+        inv = fx.get("invocation", "bash setup.sh")
+        try:
+            computed = verify_generator_deterministic(fpath, src, inv)
+        except ValueError as e:
+            err(f"{tag}: {e}")
+            return
         except Exception as e:
             err(f"{tag}: generator could not run: {e}")
             return
@@ -345,6 +372,11 @@ def check_one_result(base, res, skill_names, case_index):
         err(f"{base}: protocol.worker_isolation_verified must be boolean")
     if status == "valid" and pr.get("worker_isolation_verified") is not True:
         err(f"{base}: valid run requires worker_isolation_verified=true")
+    if status == "valid":
+        im = (rt.get("isolation_method") or "").lower()
+        if any(kw in im for kw in LIMITED_ISOLATION):
+            err(f"{base}: valid run requires OS-level isolation, but isolation_method "
+                f"is '{rt.get('isolation_method')}' (limited-grade only)")
     if mode == "execution":
         if not pr.get("target_loaded_in_guided"):
             err(f"{base}: execution result missing target_loaded_in_guided evidence")
@@ -361,8 +393,6 @@ def check_one_result(base, res, skill_names, case_index):
         err(f"{base}: result must record distinct guided/baseline session_ids")
     elif g["session_id"] == b["session_id"]:
         err(f"{base}: guided and baseline share a session_id (contamination)")
-    if mode == "routing" and not g.get("selected_skill"):
-        err(f"{base}: routing result missing runs.guided.selected_skill evidence")
     # Protocol-validity gates: invalid/contaminated cannot produce success.
     if status in ("invalid", "contaminated"):
         for cs in res.get("cases", []):
@@ -386,28 +416,94 @@ def check_result_case(base, cs, skill, mode, case_index):
         err(f"{base} case {cid}: outcome.measurement_status invalid")
     if oc.get("protocol_status") not in ALLOWED_PROTOCOL:
         err(f"{base} case {cid}: outcome.protocol_status invalid")
-    # outcome <-> verdict consistency
+    # outcome <-> verdict consistency (verdict booleans are required for every mode)
     verdict = cs.get("verdict") or {}
     gp = verdict.get("guided_pass")
     bp = verdict.get("baseline_pass")
     if not isinstance(gp, bool) or not isinstance(bp, bool):
         err(f"{base} case {cid}: missing verdict.guided_pass/baseline_pass booleans")
+        return
+    expect = None
+    if gp and not bp:
+        expect = "skill_only_pass"
+    elif bp and not gp:
+        expect = "baseline_only_pass"
+    elif gp and bp:
+        expect = "both_pass"
+    elif not gp and not bp:
+        expect = "both_fail"
+    if expect and cat != expect:
+        err(f"{base} case {cid}: outcome.category '{cat}' inconsistent with verdict (expected {expect})")
+
+    if mode == "routing":
+        check_routing_result_case(base, cs, skill, case_index, cid, gp, bp)
     else:
-        expect = None
-        if gp and not bp:
-            expect = "skill_only_pass"
-        elif bp and not gp:
-            expect = "baseline_only_pass"
-        elif gp and bp:
-            expect = "both_pass"
-        elif not gp and not bp:
-            expect = "both_fail"
-        if expect and cat != expect:
-            err(f"{base} case {cid}: outcome.category '{cat}' inconsistent with verdict (expected {expect})")
-    # Frozen-assertion presence + evidence
+        check_exec_result_case(base, cs, skill, case_index, cid)
+
+
+def _routing_match(selected, expected, fallbacks):
+    """Whether a captured selection satisfies the routing expectation.
+
+    For a target-absent expectation (expected is None) a null selection or any
+    allowed fallback is acceptable; for a target-present expectation the selected
+    skill must equal the expected skill or be an allowed fallback.
+    """
+    fallbacks = fallbacks or []
+    if expected is not None:
+        return selected == expected or selected in fallbacks
+    return selected is None or selected in fallbacks
+
+
+def check_routing_result_case(base, cs, skill, case_index, cid, gp, bp):
+    """Routing results grade harness selection evidence, not worker output.
+
+    Requires both routing conditions (target-present == runs.guided, target-absent
+    == runs.baseline) to be present, and verifies the captured selected skills
+    against the case's routing expectation. No execution assertions are graded.
+    """
+    rn = cs.get("runs") or {}
+    g = rn.get("guided") or {}
+    b = rn.get("baseline") or {}
+    # target-present condition evidence (a concrete selected skill must exist)
+    sel_p = g.get("selected_skill")
+    if not sel_p:
+        err(f"{base} case {cid}: routing result missing target-present selected_skill "
+            f"evidence (captured harness selection is required)")
+    # target-absent condition evidence (selected skill or explicit null selection)
+    if "baseline" not in rn:
+        err(f"{base} case {cid}: routing result missing target-absent condition "
+            f"(runs.baseline must be present)")
+        return
+    if "selected_skill" not in b:
+        err(f"{base} case {cid}: routing result missing target-absent selected_skill "
+            f"evidence (captured selection or explicit null is required)")
+        return
+    sel_a = b.get("selected_skill")
+
+    exp = {}
+    if skill in case_index and cid in case_index[skill]:
+        exp = case_index[skill][cid].get("routing") or {}
+    tp = exp.get("target_present") or {}
+    ta = exp.get("target_absent") or {}
+    exp_present = tp.get("expected_selected_skill")
+    exp_absent = ta.get("expected_selected_skill")
+    fallbacks = ta.get("allowed_fallbacks") or []
+
+    guided_ok = _routing_match(sel_p, exp_present, tp.get("allowed_fallbacks") or [])
+    baseline_ok = _routing_match(sel_a, exp_absent, fallbacks)
+    # The verdict must reflect the actual captured selection: a routing result may
+    # not claim success on a condition whose captured selection does not match.
+    if exp and (gp != guided_ok or bp != baseline_ok):
+        err(f"{base} case {cid}: routing verdict (guided_pass={gp}, baseline_pass={bp}) "
+            f"does not match captured selection (present={sel_p!r}->{exp_present!r}, "
+            f"absent={sel_a!r}->{exp_absent!r}, fallbacks={fallbacks!r})")
+
+
+def check_exec_result_case(base, cs, skill, case_index, cid):
+    """Execution results grade frozen assertions with evidence on both conditions."""
     assertions = cs.get("assertions") or []
     if not isinstance(assertions, list) or not assertions:
-        err(f"{base} case {cid}: must grade at least one assertion")
+        err(f"{base} case {cid}: execution result must grade at least one assertion")
         return
     frozen = []
     if skill in case_index and cid in case_index[skill]:

@@ -84,29 +84,46 @@ def committed_hash(path: str) -> str:
 
 
 def _generator_output_hash(output_dir: str) -> str:
-    """Hash a generated fixture directory in a host-independent way."""
+    """Hash a generated fixture directory in a host-independent, deterministic way.
+
+    For git repositories the hash covers the FULL working-tree + index state, not
+    just the committed HEAD tree. It includes tracked files, uncommitted
+    modifications, staged changes, untracked files, and the relevant git metadata
+    (HEAD tree id + branch name). Everything is content-addressed (blob/file
+    hashes), so the hash is independent of author/commit date, mtimes, absolute
+    paths, and host identity.
+
+    For non-git fixtures it falls back to a recursive content hash of the output.
+    """
     git_dir = os.path.join(output_dir, ".git")
     if os.path.isdir(git_dir):
-        # Content-addressed: committed tree only, independent of author/date.
         try:
-            tree = subprocess.check_output(
-                ["git", "-C", output_dir, "rev-parse", "HEAD^{tree}"],
-                text=True,
-            ).strip()
-            ls = subprocess.check_output(
-                ["git", "-C", output_dir, "ls-tree", "-r", "HEAD"],
-                text=True,
-            ).splitlines()
+            def _git(*args):
+                return subprocess.check_output(
+                    ["git", "-C", output_dir] + list(args), text=True,
+                ).strip()
+
+            meta = []
+            # Content-addressed tree of the committed state (independent of
+            # author/commit date, so determinism holds even when dates vary).
+            meta.append("TREE=" + _git("rev-parse", "HEAD^{tree}"))
+            # Current branch (or 'HEAD' when detached) — part of the routing surface.
+            meta.append("BRANCH=" + _git("rev-parse", "--abbrev-ref", "HEAD"))
+            # Index: every staged/tracked entry as "<mode> <type> <sha>\t<path>".
+            meta.append("INDEX:\n" + _git("ls-files", "-s"))
+            # Unstaged working-tree vs index diff (captures uncommitted modifications).
+            meta.append("UNSTAGED:\n" + _git("diff", "--no-color"))
+            # Staged vs HEAD (captures changes added but not committed).
+            meta.append("STAGED:\n" + _git("diff", "--cached", "--no-color"))
             h = hashlib.sha256()
-            h.update(("tree:" + tree + "\n").encode())
-            for line in sorted(ls):
-                # "<mode> <type> <sha>\t<path>"
-                parts = line.split("\t", 1)
-                if len(parts) != 2:
-                    continue
-                meta, objpath = parts
-                sha = meta.split()[2]
-                h.update((objpath + ":" + sha + "\n").encode())
+            h.update("\n".join(meta).encode("utf-8"))
+            # File contents: every on-disk file (tracked + untracked), excluding
+            # .git internals. Deterministically captures untracked files, uncommitted
+            # modifications, and staged-but-dirty content.
+            for rel in _files_recursive(output_dir):
+                full = os.path.join(output_dir, rel)
+                fh = _sha256_of(open(full, "rb").read())
+                h.update((rel + ":" + fh + "\n").encode("utf-8"))
             return h.hexdigest()
         except subprocess.CalledProcessError:
             pass

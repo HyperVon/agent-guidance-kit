@@ -14,6 +14,7 @@ import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
+import build_routing_catalog as brc
 import eval_hashing as eh
 import validate_evaluations as ve
 
@@ -200,6 +201,67 @@ class ResultFailureTests(unittest.TestCase):
         ve.check_one_result("r.md", res, {"code-review"}, case_index)
         self.assertTrue(any("missing from graded result" in e for e in ve.errors))
 
+    # --- routing result validation (mode-specific) ---
+    def _routing_result(self, present="code-review", absent=None, **over):
+        res = self._result(
+            mode="routing",
+            protocol={"status": "limited", "worker_isolation_verified": True,
+                      "routing_mechanism": "harness-selection-log",
+                      "target_loaded_in_guided": None,
+                      "target_absent_in_baseline": None, "contamination": "none"},
+            runs={"guided": {"session_id": "g1", "output_hash": "h",
+                             "selected_skill": present},
+                  "baseline": {"session_id": "b1", "output_hash": "h",
+                               "selected_skill": absent}},
+            cases=[{
+                "case_id": 1,
+                "outcome": {"category": "both_pass",
+                            "measurement_status": "discriminating",
+                            "protocol_status": "limited"},
+                "verdict": {"guided_pass": True, "baseline_pass": True},
+                "runs": {"guided": {"selected_skill": present},
+                         "baseline": {"selected_skill": absent}},
+                "assertions": [],
+            }])
+        res.update(over)
+        return res
+
+    def _routing_index(self, present="code-review", absent=None,
+                       present_fallbacks=None, absent_fallbacks=None):
+        return {"code-review": {1: {"routing": {
+            "target_present": {"expected_selected_skill": present,
+                               "allowed_fallbacks": present_fallbacks or []},
+            "target_absent": {"expected_selected_skill": absent,
+                              "allowed_fallbacks": absent_fallbacks or []}}}}}
+
+    def test_routing_valid_passes(self):
+        res = self._routing_result()
+        ve.check_one_result("r.md", res, {"code-review"}, self._routing_index())
+        self.assertEqual(ve.errors, [], ve.errors)
+
+    def test_routing_target_present_wrong_fails(self):
+        res = self._routing_result(present="wrong-skill")
+        ve.check_one_result("r.md", res, {"code-review"}, self._routing_index())
+        self.assertTrue(any("does not match captured selection" in e for e in ve.errors))
+
+    def test_routing_target_absent_wrong_fails(self):
+        res = self._routing_result(absent="some-skill")
+        ve.check_one_result("r.md", res, {"code-review"}, self._routing_index())
+        self.assertTrue(any("does not match captured selection" in e for e in ve.errors))
+
+    def test_routing_result_ignores_assertions(self):
+        # Routing grades harness selection evidence; execution assertions are not
+        # required and must not be flagged as missing.
+        res = self._routing_result()
+        ve.check_one_result("r.md", res, {"code-review"}, self._routing_index())
+        self.assertFalse(any("assertion" in e.lower() for e in ve.errors))
+
+    def test_valid_requires_os_level_isolation(self):
+        res = self._result()
+        res["protocol"]["status"] = "valid"
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("OS-level isolation" in e for e in ve.errors))
+
 
 class GeneratorTests(unittest.TestCase):
     def tearDown(self):
@@ -225,6 +287,46 @@ class GeneratorTests(unittest.TestCase):
                 "#!/usr/bin/env bash\nset -e\necho 'static content' > out.txt\n")
             h = eh.verify_generator_deterministic(tmp)
             self.assertTrue(h)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_fixture_source_hash_mismatch_fails(self):
+        # Item 4: a changed generator source without an updated source_hash fails.
+        tmp = tempfile.mkdtemp()
+        try:
+            fxdir = os.path.join(tmp, "files")
+            os.makedirs(fxdir)
+            open(os.path.join(fxdir, "setup.sh"), "w").write(
+                "#!/usr/bin/env bash\nset -e\necho hi > a.txt\n")
+            fx = {"status": "ready", "type": "generator", "path": fxdir,
+                  "source_hash": "sha256:" + "0" * 64,
+                  "output_hash": "sha256:" + "0" * 64,
+                  "content_hash": "sha256:" + "0" * 64}
+            c = {"id": 1, "evaluation_modes": ["routing"], "fixture": fx}
+            ve.check_fixture("x/evals.json", "x/evals.json", c, "x case 1")
+            self.assertTrue(any("source_hash mismatch" in e for e in ve.errors))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_generator_git_hash_includes_untracked(self):
+        # Item 3: the content hash must cover the full working tree (untracked files
+        # included), not just the committed HEAD tree.
+        tmp = tempfile.mkdtemp()
+        try:
+            open(os.path.join(tmp, "setup.sh"), "w").write(
+                "#!/usr/bin/env bash\nset -e\n"
+                "git init -q .\n"
+                "git config user.email e@e.com\n"
+                "git config user.name n\n"
+                "echo tracked > tracked.txt\n"
+                "git add tracked.txt\n"
+                "git commit -q -m init\n"
+                "echo untracked > untracked.txt\n")
+            work, h1 = eh.run_generator(tmp)
+            os.remove(os.path.join(work, "untracked.txt"))
+            h2 = eh._generator_output_hash(work)
+            shutil.rmtree(work, ignore_errors=True)
+            self.assertNotEqual(h1, h2, "git generator hash ignored untracked file")
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -306,6 +408,39 @@ class CatalogCoverageTests(unittest.TestCase):
             self.assertTrue(any("nonexistent-skill" in e and "skill_name" in e for e in ve.errors))
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+class CatalogTests(unittest.TestCase):
+    def test_minimal_yaml_folded_scalar(self):
+        d = brc.load_frontmatter("name: foo\ndescription: >-\n  line one\n  line two\n")
+        self.assertEqual(d["name"], "foo")
+        self.assertEqual(d["description"], "line one line two")
+
+    def test_minimal_yaml_literal_scalar(self):
+        d = brc.load_frontmatter("name: foo\ndescription: |\n  a\n  b\n")
+        self.assertEqual(d["description"], "a\nb\n")
+
+    def test_parse_frontmatter_reads_file(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            p = os.path.join(tmp, "SKILL.md")
+            open(p, "w").write(
+                "---\nname: bar\ndescription: >-\n  multi line\n  description here\n---\nbody\n")
+            name, desc = brc.parse_frontmatter(p)
+            self.assertEqual(name, "bar")
+            self.assertEqual(desc, "multi line description here")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_build_target_absent_removes_skill(self):
+        # target-absent must drop ONLY the target skill from the catalog.
+        all_rows = brc.build()
+        names = [n for n, _ in all_rows]
+        self.assertIn("code-review", names)
+        absent_rows = brc.build(target_absent="code-review")
+        absent_names = [n for n, _ in absent_rows]
+        self.assertNotIn("code-review", absent_names)
+        self.assertEqual(len(names), len(absent_names) + 1)
 
 
 if __name__ == "__main__":
