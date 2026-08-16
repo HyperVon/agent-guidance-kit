@@ -28,26 +28,32 @@ The working method is documented in [`RUNBOOK.md`](RUNBOOK.md): directory isolat
 fresh subagents (WITH-SKILL vs BASELINE), fixture-building guidance, grading rubric, and the
 isolation limitation. Future agents should follow it rather than rediscover the setup.
 
-## Pilot (code-review)
-A leak-free re-run is recorded in [`results/code-review.md`](results/code-review.md).
-Correction: the **first** pilot was run with leaky prompts/paths and its discriminating
-claims (case 3 routing, case 5 refusal) were **tainted artifacts** of the eval context.
-The leak-free re-run shows **no discriminating case**: defect-finding is caught by both
-conditions, and under neutral conditions the with-guidance worker reviewed a redesign
-in-place and merged a branch rather than routing/refusing. Open question (see the
-results file): whether this is skill weakness or under-activation from shipping the skill
-as an optional `guide.md` vs. embedding it as instructions. This is exactly why the
-leak-free method is mandatory.
+## Methodology (settled)
+Directory isolation + fresh subagents; the skill is **embedded as instructions** (not an
+optional file, which under-activates it); neutral paths; a containment directive; and a
+**neutral skill catalog for routing/neighboring cases** (both conditions get it, so
+hand-off is actually possible). Fixtures are deleted after collection. Full method in
+[`RUNBOOK.md`](RUNBOOK.md). Earlier leaky runs and the optional-`guide.md` runs are
+retracted as tainted / under-activating.
 
-## Second skill (git-github-workflow)
-Now fully run (5 cases) with the authoritative embedded method — see
-[`results/git-github-workflow.md`](results/git-github-workflow.md). It discriminates on
-**3 of 5** cases (branch/commit/PR discipline, identity safety, not claiming the
-dependency-upgrade workflow), far more than `code-review`'s 1. Non-discriminating on the
-routing gap (case 3 — same passive-non-goal weakness) and a safety case the baseline also
-refuses (case 5). Two skill-strength fixes flagged: enforce the `code-review` hand-off,
-and explicitly name `dependency-upgrade` for bump work.
+## Piloted skills (3 of 26)
+- `code-review` (5/5): discriminates only on the **merge/approve boundary** (case 5).
+  Defect-finding is non-discriminating; routing case 3 still does not route *with* the
+  catalog → genuine skill weakness.
+- `git-github-workflow` (5/5): discriminates on **3/5** (publish-gate discipline,
+  identity safety, not claiming the dependency-upgrade workflow). Routing case 3 still
+  does not route *with* the catalog → genuine skill weakness.
+- `review-feedback-resolution` (5/5): discriminates on **3/5** (route defect-discovery
+  to `code-review`, defer new-feature requests, refuse a module rewrite). Cases 1–2
+  (resolution mechanics) are non-discriminating.
+
+## Routing caveat
+A routing case only discriminates if the target skill is reachable. Without a catalog it
+cannot be, so "no hand-off" is a methodology artifact — `review-feedback-resolution` case
+3 routes correctly once the catalog is present. Where routing still fails *with* the
+catalog (`code-review` / `git-github-workflow` case 3), it is a real skill weakness to
+fix (their routing lines are too passive).
 
 ## Next step
-Execute the case sets in a harness that can provide isolated workers, then record per-skill results in
-`docs/evaluations/results/` and refresh `validation-matrix.md` and this summary.
+Continue the remaining 23 skills with the same method, recording per-skill results in
+`docs/evaluations/results/` and refreshing `validation-matrix.md`.

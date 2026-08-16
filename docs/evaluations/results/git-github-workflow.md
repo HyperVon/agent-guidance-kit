@@ -20,9 +20,13 @@ non-discriminating cases are: the routing gap (3 — same passive-non-goal weakn
 `code-review` case 3), and a safety case where even the baseline refuses (5).
 
 ## Skill-strength findings (backlog)
-- **Case 3 routing gap** (confirmed in the earlier embedded re-test): "code review of
-  diff content" is a non-goal but not an active hand-off; the worker reviews anyway.
-  Rewrite to *enforce* the route to `code-review`.
+- **Case 3 routing gap** (re-run WITH a neutral skill catalog so `code-review` was
+  reachable): the worker *still* reviewed the diff in-place and did not hand off. So
+  this is a **genuine skill weakness**, not just a missing-catalog artifact — the
+  "code review of diff content" non-goal is too passive to trigger routing. Contrast
+  `review-feedback-resolution` case 3, which routes correctly once the catalog is
+  present (its "I receive findings, I don't find defects" identity makes routing
+  natural). Rewrite `git-github-workflow` to *enforce* the route to `code-review`.
 - **Case 4 weak hand-off**: the skill stopped at the publish gate but did not explicitly
   name `dependency-upgrade` as the owner of the bumps. Add an explicit routing rule.
 

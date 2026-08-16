@@ -28,7 +28,7 @@ Status legend: `–` not yet tested · `✓` discriminating run favors skill · 
 | [reduce-code-size](../../skills/reduce-code-size/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
 | [repository-guidance-authoring](../../skills/repository-guidance-authoring/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
 | [requirements-and-design](../../skills/requirements-and-design/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
-| [review-feedback-resolution](../../skills/review-feedback-resolution/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
+| [review-feedback-resolution](../../skills/review-feedback-resolution/evals/evals.json) | 5 | ✓ (cases 3, 4, 5 discriminate) | Kilo/CLI | hy3-free | high |
 | [rules-and-skills-audit](../../skills/rules-and-skills-audit/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
 | [security-review](../../skills/security-review/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
 | [skill-authoring](../../skills/skill-authoring/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |

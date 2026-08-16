@@ -33,9 +33,12 @@ skill into context.
 Under faithful activation, `code-review` discriminates on exactly one case: the
 **approval/merge boundary** (case 5) — the skill refuses to merge; a baseline merges.
 Defect-finding (1, 2) does not discriminate (base models already review well), and the
-routing case (3) does **not** discriminate even when the skill is embedded — the
+routing case (3) does **not** discriminate even when the skill is embedded **and a
+neutral skill catalog makes `architecture-review` reachable** — the
 "route redesign to `architecture-review`" instruction is too weak to override a direct
-"review this" request. That is a **genuine skill weakness** to fix.
+"review this" request. That is a **genuine skill weakness** to fix (unlike
+`review-feedback-resolution` case 3, which routes correctly once the catalog is
+present).
 
 ## Method takeaway (applies to all skills)
 - Use **embedded instructions**, not an optional `guide.md` file — the file method

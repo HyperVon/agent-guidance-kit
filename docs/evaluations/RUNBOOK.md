@@ -58,6 +58,19 @@ fresh subagents** (no OS jail required, but see hardening below):
   **under-activated** the skill (the worker ignored it and behaved like baseline),
   so do NOT use the file method for graded runs. The baseline worker gets no
   instructions.
+- **Routing/neighboring cases need a skill catalog.** A routing case is meaningless
+  if the target skill is not actually available — the worker will just do the task
+  itself because it has no way to hand off. For `kind: neighboring` (and any case
+  whose expected behavior is a hand-off), place a **neutral `catalog.md`** (skill
+  name → one-line description, no eval framing) in **both** condition directories so
+  hand-off is possible, exactly as in the real harness where the agent always has
+  the catalog. The WITH-SKILL worker additionally gets the embedded skill
+  instructions (which say to route). Then a discrimination means: WITH-SKILL routes
+  while baseline does not. Without the catalog, a "no hand-off" result is a
+  methodology artifact, not a skill weakness.
+  - Generate `catalog.md` from the repo: for each `skills/<name>/SKILL.md`, take the
+    frontmatter `name` and `description` (collapsed to one line). Keep it neutral —
+    no eval framing, no condition labels.
 - The **BASELINE** directory contains **only** `task.md` — no guidance file, no repo
   catalog.
 - Launch a **fresh subagent** per worker (the `task` tool). Subagents do not inherit
