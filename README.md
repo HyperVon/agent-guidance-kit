@@ -18,19 +18,24 @@ review-and-adopt workflow your agent should follow.
 | [adversarial-pr-review](skills/adversarial-pr-review/SKILL.md) | Parent-validated adversarial PR review using a fresh independent subagent; partitions large diffs into bounded tracks and re-reviews until convergence. |
 | [ai-slop-detector](skills/ai-slop-detector/SKILL.md) | Audit artifacts for plausible-but-harmful quality defects: AI slop, invented APIs, misleading tests/docs, needless complexity. |
 | [architecture-review](skills/architecture-review/SKILL.md) | Fresh-eyes architecture review comparing Keep / Evolve / Replace / Greenfield options; recommends only. |
-| [skill-discovery](skills/skill-discovery/SKILL.md) | Proactively search GitHub, harness docs, and public guidance for candidate agent workflows and map them to a project's existing skill catalog (evidence table for skill-reviewer intake). |
 | [code-review](skills/code-review/SKILL.md) | Evidence-based review of diffs, branches, and subsystems for correctness, contract, security, and test defects; report-first. |
+| [codebase-orientation](skills/codebase-orientation/SKILL.md) | Map and explain unfamiliar repositories from evidence: purpose, stack, structure, entry points, workflows, modules, integrations, config, tests, conventions, unknowns. |
 | [dependency-upgrade](skills/dependency-upgrade/SKILL.md) | Safely upgrade pinned dependencies: inventory, security-first, group by risk, verify after each group. |
 | [documentation-review](skills/documentation-review/SKILL.md) | Sync docs to implementation, build, config, tests, and CI truth; factual accuracy only. |
 | [frontend-quality-review](skills/frontend-quality-review/SKILL.md) | Evidence-based UI/UX quality, interaction, accessibility, responsive, and performance review. |
 | [git-github-workflow](skills/git-github-workflow/SKILL.md) | Git hygiene and GitHub collaboration: branches, commits, PRs, issues, releases; approval-gated. |
 | [harness-adaptation](skills/harness-adaptation/SKILL.md) | Adapt a repository's canonical guidance to the active harness without creating a second source of truth. |
+| [implementation-planning](skills/implementation-planning/SKILL.md) | Create execution-ready implementation plans from approved designs: objective, files, ordering, contracts, migration, tasks, verification, risks. |
 | [parallel-multi-agent](skills/parallel-multi-agent/SKILL.md) | Partition work into bounded concurrent workers with disjoint ownership and parent-owned integration. |
 | [quality-hardening](skills/quality-hardening/SKILL.md) | Bounded evidence-first QA loop: baseline, find gaps, add regression tests, minimal fixes, re-verify. |
 | [reduce-code-size](skills/reduce-code-size/SKILL.md) | Shrink or split code while preserving behavior, contracts, and verification; measure first. |
+| [repository-guidance-authoring](skills/repository-guidance-authoring/SKILL.md) | Create canonical agent instructions (AGENTS.md, onboarding) from repository reality; separate discovered facts from team policy. |
+| [requirements-and-design](skills/requirements-and-design/SKILL.md) | Clarify desired behavior and design choices before implementation: outcome, requirements, constraints, acceptance criteria, approach. |
+| [review-feedback-resolution](skills/review-feedback-resolution/SKILL.md) | Resolve incoming review comments against repository evidence: disposition each item, apply accepted fixes, reject unsupported ones. |
 | [rules-and-skills-audit](skills/rules-and-skills-audit/SKILL.md) | Audit agent rules and skills for overlap, conflicts, unclear triggers, and consolidation opportunities. |
 | [security-review](skills/security-review/SKILL.md) | Evidence-based review of changes, boundaries, and workflows for secrets, auth, input, data exposure, and dependency risks. |
 | [skill-authoring](skills/skill-authoring/SKILL.md) | Author or revise a repository-local agent skill after approval, preserving trigger, boundaries, and portability. |
+| [skill-discovery](skills/skill-discovery/SKILL.md) | Proactively search GitHub, harness docs, and public guidance for candidate agent workflows and map them to a project's existing skill catalog (evidence table for skill-reviewer intake). |
 | [skill-evaluation](skills/skill-evaluation/SKILL.md) | Design or run clean-context evaluations to decide whether a skill improves outcomes. |
 | [skill-optimizer](skills/skill-optimizer/SKILL.md) | Lower guidance context cost without weakening routing, safety, correctness, or verification. |
 | [skill-reviewer](skills/skill-reviewer/SKILL.md) | Review skills and guidance for missing, weak, or misleading content and recommend improvements. |
