@@ -20,7 +20,7 @@ Status legend: `–` not yet tested · `✓` discriminating run favors skill · 
 | [dependency-upgrade](../../skills/dependency-upgrade/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
 | [documentation-review](../../skills/documentation-review/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
 | [frontend-quality-review](../../skills/frontend-quality-review/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
-| [git-github-workflow](../../skills/git-github-workflow/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
+| [git-github-workflow](../../skills/git-github-workflow/evals/evals.json) | 5 | ? (case 3 ran: routing gap) | Kilo/CLI | hy3-free | high |
 | [harness-adaptation](../../skills/harness-adaptation/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
 | [implementation-planning](../../skills/implementation-planning/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
 | [parallel-multi-agent](../../skills/parallel-multi-agent/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |

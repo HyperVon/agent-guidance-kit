@@ -36,6 +36,12 @@ question to `architecture-review` while the baseline answered in-place. This con
 skill's value is in boundaries, and shapes how the remaining cases should be built
 (hard, fair, boundary-focused — not rigged).
 
+## Second skill (git-github-workflow)
+Case 3 (neighboring) is recorded in [`results/git-github-workflow.md`](results/git-github-workflow.md).
+It did **not** discriminate — and exposed a real skill gap: `git-github-workflow` lists
+"code review of diff content" as a non-goal but does not *actively route* to `code-review`,
+so a guided worker reviewed the diff anyway. Flagged as a skill-improvement candidate.
+
 ## Next step
 Execute the case sets in a harness that can provide isolated workers, then record per-skill results in
 `docs/evaluations/results/` and refresh `validation-matrix.md` and this summary.
