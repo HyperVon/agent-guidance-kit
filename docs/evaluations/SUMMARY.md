@@ -29,12 +29,15 @@ fresh subagents (WITH-SKILL vs BASELINE), fixture-building guidance, grading rub
 isolation limitation. Future agents should follow it rather than rediscover the setup.
 
 ## Pilot (code-review)
-A method-validation run is recorded in [`results/code-review.md`](results/code-review.md).
-Headline: defect-finding cases did **not** discriminate (base models already review well),
-but the **routing/boundary** case did — `code-review` correctly handed off a redesign
-question to `architecture-review` while the baseline answered in-place. This confirms the
-skill's value is in boundaries, and shapes how the remaining cases should be built
-(hard, fair, boundary-focused — not rigged).
+A leak-free re-run is recorded in [`results/code-review.md`](results/code-review.md).
+Correction: the **first** pilot was run with leaky prompts/paths and its discriminating
+claims (case 3 routing, case 5 refusal) were **tainted artifacts** of the eval context.
+The leak-free re-run shows **no discriminating case**: defect-finding is caught by both
+conditions, and under neutral conditions the with-guidance worker reviewed a redesign
+in-place and merged a branch rather than routing/refusing. Open question (see the
+results file): whether this is skill weakness or under-activation from shipping the skill
+as an optional `guide.md` vs. embedding it as instructions. This is exactly why the
+leak-free method is mandatory.
 
 ## Second skill (git-github-workflow)
 Case 3 (neighboring) is recorded in [`results/git-github-workflow.md`](results/git-github-workflow.md).
