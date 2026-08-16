@@ -63,6 +63,13 @@ than asserting it.
   point to it rather than copying it here (per `harness-adaptation`'s single-source
   rule).
 
+## Avoid skill duplication
+
+Repository guidance should contain project-specific rules and navigation, not copies
+of reusable skill procedures. Prefer linking to skills over embedding their
+workflows. A generated `AGENTS.md` or onboarding doc points at the canonical skill;
+it does not become a second copy of it.
+
 ## Output
 
 Return the drafted guidance file (or the proposed edits to an existing one) with a

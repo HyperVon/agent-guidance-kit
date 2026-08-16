@@ -73,6 +73,21 @@ For each `rejected-with-evidence` item, state the precise reason with a reposito
 anchor (file/line, contract, or test) so the rejection is auditable, not an
 opinion.
 
+## Side effects and approval boundary
+
+Assessment mode is read-only by default. Do not modify code, reply to reviewers,
+update branches, or apply accepted fixes unless the user explicitly requests
+implementation of selected accepted items. Resolving whether feedback is valid and
+implementing the resolution are separate steps:
+
+1. **evaluate** the review feedback against the frozen context;
+2. **decide** whether each item is valid and what disposition it receives;
+3. **implement** accepted changes only as a separate, explicitly authorized action.
+
+Preserve the ownership model: `code-review` finds defects, this skill evaluates
+incoming feedback, and implementation is a distinct authorized step — not an
+automatic consequence of resolving a comment.
+
 ## Anti-patterns
 
 - **Do not blindly obey reviewers.** A review comment is an input, not an order.

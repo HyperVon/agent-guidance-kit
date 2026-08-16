@@ -33,6 +33,12 @@ relevant repository context, and any constraints the decision imposed. If the
 design leaves a load-bearing choice unmade, mark it as an unresolved assumption
 rather than guessing the answer.
 
+Before planning, verify that the referenced requirements/design still represent the
+intended state. If repository state, interfaces, dependencies, or constraints have
+materially changed since the decision, identify the drift before producing the
+plan. This is a freshness check, not a full architecture review: report the drift
+and its planning impact, then continue or route the redesign question elsewhere.
+
 ## Required plan contents
 
 Produce a plan that contains:

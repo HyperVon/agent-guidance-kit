@@ -36,7 +36,9 @@ implementation or the execution plan (that is `implementation-planning`).
 3. **Define acceptance criteria.** Each criterion must be testable and tied to the
    outcome, so a later implementation agent knows when "done" is reached.
 4. **Consider alternatives.** Enumerate plausible approaches, including doing less
-   or nothing, and record why each was or was not chosen.
+   or nothing, and record why each was or was not chosen. Scale this analysis with
+   the change's risk and impact; do not stand up a heavyweight decision process for
+   a trivial change.
 5. **Recommend an approach.** Select one, state the trade-offs accepted, and list
    any unresolved decisions that block implementation.
 
