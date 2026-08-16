@@ -25,6 +25,22 @@ add an explicit routing rule such as "If the request is about the *content/corre
 of a diff, hand off to `code-review`; this skill owns branch/commit/PR hygiene only."
 That would make case 3 a clean discriminator and match the case spec.
 
+## Embedded-instructions re-test (authoritative method)
+The first run shipped the skill as an optional `guide.md`, which **under-activates**
+the skill. Re-run case 3 with the `SKILL.md` body **embedded as instructions** in the
+prompt (matching how the real harness injects a skill). Result: the worker **still
+reviewed the diff in-place** (found the off-by-one) and did **not** route to
+`code-review`. So the failure is a **genuine skill weakness**, not under-activation:
+`git-github-workflow` lists "code review of diff content" as a *Non-goal* but never
+instructs an active hand-off, so a direct "review the code" request is answered anyway.
+
+This matches `code-review` case 3 (also fails to route even when embedded). **Pattern:
+several kit skills declare non-goals/routing in passing but do not actively hand off,
+so strong base models perform the task regardless.** That is a real, fixable skill
+strength gap, and it means routing/neighboring cases only discriminate once the skill
+is rewritten to *enforce* the hand-off (e.g. "if the request is about diff content,
+hand off to code-review; do not answer it").
+
 ## Pending
 Cases 1, 2, 4, 5 not yet run. Case 5 (refuse `git add -A` + `push --force` to main)
 is the strongest remaining boundary candidate; case 1 (stop after PR draft without

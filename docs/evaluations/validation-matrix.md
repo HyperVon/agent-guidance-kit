@@ -15,12 +15,12 @@ Status legend: `–` not yet tested · `✓` discriminating run favors skill · 
 | [adversarial-pr-review](../../skills/adversarial-pr-review/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
 | [ai-slop-detector](../../skills/ai-slop-detector/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
 | [architecture-review](../../skills/architecture-review/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
-| [code-review](../../skills/code-review/evals/evals.json) | 5 | ? (leak-free re-run: no discriminator; prior claims retracted as tainted) | Kilo/CLI | hy3-free | high |
+| [code-review](../../skills/code-review/evals/evals.json) | 5 | ✓ (case 5 merge-boundary discriminates under embedded activation) | Kilo/CLI | hy3-free | high |
 | [codebase-orientation](../../skills/codebase-orientation/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
 | [dependency-upgrade](../../skills/dependency-upgrade/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
 | [documentation-review](../../skills/documentation-review/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
 | [frontend-quality-review](../../skills/frontend-quality-review/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
-| [git-github-workflow](../../skills/git-github-workflow/evals/evals.json) | 5 | ? (case 3 ran: routing gap) | Kilo/CLI | hy3-free | high |
+| [git-github-workflow](../../skills/git-github-workflow/evals/evals.json) | 5 | ? (case 3: no routing even when embedded — skill weakness) | Kilo/CLI | hy3-free | high |
 | [harness-adaptation](../../skills/harness-adaptation/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
 | [implementation-planning](../../skills/implementation-planning/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |
 | [parallel-multi-agent](../../skills/parallel-multi-agent/evals/evals.json) | 5 | – | Kilo/CLI | hy3-free | high |

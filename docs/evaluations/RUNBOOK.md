@@ -51,12 +51,13 @@ fresh subagents** (no OS jail required, but see hardening below):
   name** — e.g. a session temp dir like `/var/folders/.../kilo/runs/run_a/`. Never put
   the skill name, `eval`, `with-skill`, or `baseline` in any path, filename, or task
   text the worker can see; that leaks the condition and biases the worker.
-- The **WITH-SKILL** directory contains `task.md` (neutral scenario). For the
-  skill itself, prefer **embedding the `SKILL.md` body as instructions inside the
-  worker prompt** (heading: "For this task, follow these instructions:") over an
-  optional `guide.md` file — an optional file can be ignored, which under-activates
-  the skill versus the real harness (which injects skills into context). If you do
-  use a file, name it `guide.md` (neutral), never `skills/<name>/SKILL.md`.
+- The **WITH-SKILL** worker receives the target `SKILL.md` body **embedded as
+  instructions directly in its prompt** (heading: "For this task, follow these
+  instructions:"). This is the authoritative method — it matches how the real
+  harness injects a skill into context. An optional `guide.md` file was tried and
+  **under-activated** the skill (the worker ignored it and behaved like baseline),
+  so do NOT use the file method for graded runs. The baseline worker gets no
+  instructions.
 - The **BASELINE** directory contains **only** `task.md` — no guidance file, no repo
   catalog.
 - Launch a **fresh subagent** per worker (the `task` tool). Subagents do not inherit
