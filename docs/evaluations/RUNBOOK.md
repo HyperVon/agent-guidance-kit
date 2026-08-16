@@ -47,15 +47,20 @@ Per `skills/skill-evaluation`, a valid run needs two independent workers whose
 contexts do not contain the target skill. This repo uses **directory isolation +
 fresh subagents** (no OS jail required, but see hardening below):
 
-- Each case gets a directory **outside the repo** (session temp dir, e.g.
-  `/var/folders/.../kilo/eval-runs/<skill>/caseN/<cond>/`). Keeping it off-repo
-  avoids accidental catalog contamination.
-- `<cond>/with-skill/` contains: `task.md` (the prompt + scenario) and
-  `skills/<name>/SKILL.md` (plus its `references/` if present).
-- `<cond>/baseline/` contains **only** `task.md` — no skill file, no repo catalog.
-- Launch a **fresh subagent** per worker (the `task` tool). Subagents do not
-  inherit the parent's context, so the baseline genuinely never sees the skill.
-- Instruct each worker to operate *only* inside its directory and to edit nothing.
+- Each case gets a directory **outside the repo** with a **neutral, non-revealing
+  name** — e.g. a session temp dir like `/var/folders/.../kilo/runs/run_a/`. Never put
+  the skill name, `eval`, `with-skill`, or `baseline` in any path, filename, or task
+  text the worker can see; that leaks the condition and biases the worker.
+- The **WITH-SKILL** directory contains `task.md` (neutral scenario) plus a guidance
+  file named `guide.md` holding the target `SKILL.md` content (and `references/` if
+  present, also under neutral names). Use `guide.md`, NOT `skills/<name>/SKILL.md` —
+  the latter reveals the skill name in the path.
+- The **BASELINE** directory contains **only** `task.md` — no guidance file, no repo
+  catalog.
+- Launch a **fresh subagent** per worker (the `task` tool). Subagents do not inherit
+  the parent's context, so the baseline genuinely never sees the skill.
+- Instruct each worker to operate *only* inside its directory, to edit nothing, and to
+  treat a missing guidance file as normal (do not go looking for one elsewhere).
 
 ### Residual caveat (state it in results)
 Isolation is **by instruction, not OS-enforced**. A worker could in principle
@@ -83,6 +88,31 @@ protocol limitation; do not present runs as rigor-proof.
 3. Launch the **BASELINE** worker: use general judgment, **no skill file**, produce
    only the deliverable.
 4. Capture each worker's final message as the output.
+
+## Standard worker prompt (paste per case)
+
+Use this template (fill `<WORKDIR>` and the condition) for every worker. The
+**containment directive is mandatory** — without it a worker can escape the case
+directory and read the real repo (observed once: a BASELINE "Review my code." case
+wandered into the parent project and reviewed the catalog instead of refusing). The
+**names must be neutral**: never write "eval", the skill name, "with-skill", or
+"baseline" in the path, the task text, or filenames. The skill content (if any) lives
+in `<WORKDIR>/guide.md` — do not name it after the skill.
+
+```
+Your working directory is <WORKDIR>. Read the file task.md there to understand what to do.
+CRITICAL — CONTAINMENT DIRECTIVE: UNDER NO CIRCUMSTANCES may you leave <WORKDIR>.
+Do not read, edit, or traverse any path outside it (no parent dirs, no /Users, no
+other repos, no AGENTS.md/README/catalog). If the task references files or code
+that are not present inside <WORKDIR>, treat that as "not provided" and say so.
+Operate strictly within <WORKDIR> using Read/Grep/Glob/Bash( workdir=<WORKDIR> ).
+[WITH-SKILL] If a file guide.md is present in <WORKDIR>, read and follow it.
+[BASELINE] Do not look outside <WORKDIR> for any guidance file; use your own judgment.
+Do not create arbitrary files; write only the required deliverable to <WORKDIR>/result.md.
+```
+
+Re-run any prior case whose output shows signs of escaping the CWD (e.g. it reviewed
+files not in the fixture). Such a result is invalid and must not be graded.
 
 ## Grading
 
