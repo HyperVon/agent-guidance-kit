@@ -1,4 +1,0 @@
-interface:
-  display_name: "Documentation Review"
-  short_description: "Verify documentation against repository truth"
-  default_prompt: "Use $documentation-review to audit the project documentation against current source and configuration."

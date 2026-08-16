@@ -1,4 +1,0 @@
-interface:
-  display_name: "Skill Reviewer"
-  short_description: "Review skills and external candidates"
-  default_prompt: "Use $skill-reviewer to find concrete content gaps or evaluate external skill candidates safely."

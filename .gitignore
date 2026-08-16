@@ -1,28 +1,21 @@
-.DS_Store
+# Python
 __pycache__/
 *.py[cod]
 .coverage
+
+# Tooling caches
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+
+# Virtual environments / dependencies
 .venv/
 node_modules/
 build/
 dist/
+
+# Editor and local harness state
 .local/
 .idea/
 .vscode/
-
-# Agent Runtime Router — machine-local GENERATED state only.
-# The installed skills (.agents/skills/agent-runtime-router*) and the adapter
-# config (.agents/runtime-router/) are committed so a fresh checkout works;
-# only these regenerated-per-machine artifacts stay ignored.
-.agents/.agent-runtime-router/
-.agents/runtime-router/harnesses/
-.agents/runtime-router/adapters/*/kilo-resolved.json
-.agents/runtime-router/adapters/*/discovery.json
-.agents/runtime-router/adapters/*/discovery-last-report.json
-.agents/runtime-router/adapters/*/profile.json
-.agents/runtime-router/adapters/*/catalog-cache.json
-.agents/runtime-router/active-harness.json
-.agents/runtime-router/catalog-cache.json
-.agents/runtime-router/.state.lock
+.DS_Store
