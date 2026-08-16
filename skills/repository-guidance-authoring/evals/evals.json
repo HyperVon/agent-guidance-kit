@@ -1,0 +1,60 @@
+{
+  "skill_name": "repository-guidance-authoring",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "We just open-sourced our Go monorepo and have no AGENTS.md. Look at the actual repository and write one so agents know how to build, test, and contribute.",
+      "expected_output": "A drafted AGENTS.md generated from repository evidence, covering project purpose, setup commands, development workflow, testing commands, conventions, and agent-specific rules, with facts cited to files and any uncertain team policy left as placeholders.",
+      "assertions": [
+        "Includes setup and testing commands read from actual build/package files (e.g., go.mod / Makefile)",
+        "Separates discovered FACTS (with cited evidence files) from POLICY placeholders awaiting team confirmation",
+        "Does not assert team policy (merge strategy, review requirements) that the repository does not evidence"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "matching",
+      "prompt": "Our agent onboarding doc is stale. Update it to reflect that we now use pnpm and vitest, and that CI runs on GitHub Actions, based on what the repo actually shows.",
+      "expected_output": "Proposed edits to the existing guidance file, grounding each changed claim in repository evidence (package.json for pnpm/vitest, CI config for GitHub Actions), and linking to skills rather than copying their workflows; thin and accurate.",
+      "assertions": [
+        "Cites package.json and the CI configuration as evidence for pnpm/vitest and GitHub Actions",
+        "Points to/reuses skills via links instead of duplicating their procedures",
+        "Keeps the file thin and accurate and does not pad with unverified guesses"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "prompt": "Write me a reusable skill that teaches an agent how to perform zero-downtime database migrations, to be added under skills/.",
+      "expected_output": "Recognizes the deliverable is a reusable, portable skill under skills/, which belongs to skill-authoring, not a project-local guidance file. It routes to skill-authoring and does not author it as an AGENTS.md.",
+      "assertions": [
+        "States the deliverable is a reusable skill and belongs to skill-authoring",
+        "Hands off to skill-authoring rather than producing an AGENTS.md",
+        "Does not author a guidance file or claim to write the skill here"
+      ]
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "prompt": "I want our project's instructions to show up correctly in Claude Code and Cursor — wire up the agent guidance.",
+      "expected_output": "The request is ambiguous between writing/updating the guidance file (repository-guidance-authoring) and exposing existing guidance to a harness's discovery (harness-adaptation). The agent asks a clarifying question or picks harness-adaptation with justification, since 'wire up in a harness' is harness-adaptation's domain.",
+      "assertions": [
+        "Asks for clarification on whether the file needs to be written vs exposed to a harness, OR names the tie-breaker",
+        "If framed as exposing to a harness, routes to harness-adaptation with justification",
+        "Does not conflate authoring the file with harness discovery/hand-off"
+      ]
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "prompt": "Add to our AGENTS.md that all PRs must use squash merge and require two approvals, and that we follow trunk-based development with no release branches.",
+      "expected_output": "The skill must not invent team policy. With no contributing guide, CI config, or branch rule in evidence, it refuses to assert these as facts, marks them as policy placeholders awaiting team confirmation, and cites the absence of evidence rather than inventing the rules.",
+      "assertions": [
+        "Does not assert the squash-merge / two-approvals / trunk-based policy as a fact",
+        "Marks the unverified items as policy placeholders awaiting team confirmation",
+        "Cites the absence of repository evidence (contributing guide, CI, branch rules) rather than inventing the policy"
+      ]
+    }
+  ]
+}

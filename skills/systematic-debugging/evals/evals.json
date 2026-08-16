@@ -1,0 +1,66 @@
+{
+  "skill_name": "systematic-debugging",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "Our test suite fails on test_checkout_total with an AssertionError after last week's refactor. Find the root cause before I fix it.",
+      "expected_output": "A reproducible diagnosis: exact reproduction command/inputs, a single falsifiable root-cause hypothesis backed by evidence, the smallest safe correction, a regression test, and focused + complete verification results.",
+      "assertions": [
+        "Records the exact failing command, inputs, and expected vs observed result",
+        "States one falsifiable root-cause hypothesis ('X is the cause because Y')",
+        "Runs the smallest diagnostic that distinguishes the hypothesis from alternatives",
+        "Adds or updates a regression test at the failing seam and runs focused + relevant complete verification",
+        "Does not apply a fix before the cause is confirmed"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "matching",
+      "prompt": "The upload job fails about 1 in 10 CI runs with a connection-reset error. Diagnose why — and don't just slap a retry loop on it.",
+      "expected_output": "An investigation that reproduces the intermittent failure under a stress loop to establish a baseline rate, compares environment differences (OS, lockfiles, concurrency), identifies the root cause, and avoids retry-until-green or arbitrary sleeps.",
+      "assertions": [
+        "Establishes an empirical baseline failure rate via a stress loop rather than guessing",
+        "Compares environment differences (OS, architecture, lockfiles, concurrency) for the CI-only failure",
+        "Identifies a root cause with evidence rather than hiding it behind a retry or delay",
+        "Avoids arbitrary sleep or retry-until-green as the 'fix'",
+        "Stops and reports if the cause cannot be established after discriminating experiments"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "prompt": "Do a general review of the auth module for style issues and possible improvements.",
+      "expected_output": "Recognizes there is no observed failure (it's a general/planned review), and routes to code-review or the ordinary implementation workflow instead of inventing a reproduction or root cause.",
+      "assertions": [
+        "Recognizes the request lacks an observed failure and is a general review",
+        "Does not invent a reproduction, crash, or root cause for a non-failure request",
+        "Routes to code-review or the ordinary implementation workflow",
+        "Does not reframe the review as a debugging diagnosis"
+      ]
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "prompt": "The reports page feels slow — make it faster.",
+      "expected_output": "Recognizes ambiguity between a performance regression with an observed/measured slowdown (debugging) and a desire to optimize without an observed failure (ordinary implementation/quality work), and asks a clarifying question or states a routing tie-breaker.",
+      "assertions": [
+        "Notes the ambiguity between a measured performance regression (debugging) and general optimization (non-failure work)",
+        "Either asks whether there is a reproducible regression vs baseline or picks the right workflow with justification",
+        "Does not assume an observed failure exists before diagnosing"
+      ]
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "prompt": "The function crashes with a null value — just add `if obj is None: return` at the crash site so it stops erroring.",
+      "expected_output": "Refuses the null-check bandage (suppressing the symptom at the crash site) unless the contract explicitly allows null/empty input there, and instead traces upstream to find why the invariant was violated at the data origin.",
+      "assertions": [
+        "Refuses to fix the crash merely by suppressing the symptom at the crash site",
+        "Traces the bad value upstream to its first incorrect origin rather than adding a default/fallback",
+        "Does not add try/except: pass or a broad fallback as the 'fix'",
+        "Only accepts a null-handling guard if the component contract explicitly dictates null/empty input is valid at that layer"
+      ]
+    }
+  ]
+}

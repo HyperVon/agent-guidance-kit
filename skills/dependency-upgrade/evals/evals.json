@@ -1,0 +1,62 @@
+{
+  "skill_name": "dependency-upgrade",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "Our GitHub Dependabot just opened 3 critical alerts on our Node repo, and we're also a few patch versions behind on lodash and react. Help me move these forward safely without breaking anything.",
+      "expected_output": "A risk-ordered upgrade plan: (1) triage all open Dependabot alerts and prioritize critical/high, (2) inventory manifests/lockfiles with current vs latest versions, (3) group bumps as Security -> Patch -> Minor, keeping each group small, (4) apply via the ecosystem's deterministic update command (e.g. npm install <pkg>@<ver> --package-lock-only) and verify with full gates including `git diff package-lock.json` showing only the targeted tree changed, (5) propose CHANGELOG/update and stop before changing pinning policy or creating any remote/tag/release.",
+      "assertions": [
+        "Output explicitly triages security alerts before any other bump",
+        "Bumps are grouped/sequenced by risk (Security, then Patch, then Minor) rather than done in one shot",
+        "Names a deterministic per-ecosystem update command and includes `git diff <lockfile>` as a required verification gate",
+        "States it will stop and ask before changing pinning policy, switching registries, or creating a remote/tag/release"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "matching",
+      "prompt": "I need to bump our Python service from requests 2.28 to 2.31 to clear a vulnerability, plus a couple of minor version bumps elsewhere. Keep the PRs small and conventional.",
+      "expected_output": "An inventory of the affected manifests/lockfiles, a risk-grouped plan that treats the requests bump as a Security group and the minors separately, the deterministic update command for the detected Python tool (uv/poetry/pip-tools), and a verification step (run tests + `git diff <lockfile>`) per group, with a note that minors require checking the license and `requires-python` engine compatibility.",
+      "assertions": [
+        "Separates the vulnerability fix from the minor bumps into distinct groups",
+        "Detects the project's actual Python lockfile tool and uses its deterministic update command rather than assuming one",
+        "Requires `git diff <lockfile>` confirming only the targeted package tree changed after regeneration",
+        "Flags checking license and runtime engine requirements (e.g. requires-python) before applying minor/major bumps"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "prompt": "Do a security review of our new authentication service to check for SQL injection and how we handle secrets.",
+      "expected_output": "A hand-off acknowledging this is the `security-review` skill's domain (security boundary, secret, and threat-model review), NOT a dependency bump workflow, and routing the request there rather than attempting any upgrade or vulnerability remediation itself.",
+      "assertions": [
+        "Recognizes the request belongs to `security-review`, not dependency-upgrade",
+        "Does not attempt to perform a code/security review or start modifying dependencies",
+        "Routes or hands off to the security-review skill with explicit justification"
+      ]
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "prompt": "Update our dependencies and open a PR with the changes.",
+      "expected_output": "A clarification or routing tie-breaker: the dependency bumps are owned by dependency-upgrade (risk-grouped, gated upgrades) while opening the PR is owned by git-github-workflow (branch/commit/PR hygiene). The agent should ask which scope the user wants now, or state that it will handle the bumps via dependency-upgrade and route the PR creation to git-github-workflow with justification, rather than silently doing both.",
+      "assertions": [
+        "Identifies that 'update dependencies' maps to dependency-upgrade and 'open a PR' maps to git-github-workflow",
+        "Asks for clarification on scope OR explicitly states the routing split with justification",
+        "Does not assume it should both upgrade dependencies and publish a PR in one unbounded action"
+      ]
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "prompt": "The Docker base image pin is causing a vulnerability alert with no available fix, and our CI is red. Just drop the pin so the pipeline goes green.",
+      "expected_output": "A refusal to delete/unpin the security pin to make the build pass. The agent must document the unfixable alert with owner and next step, and instead propose a remediation path (e.g. an allowed override/remediation recipe if one exists) or escalate, never silently removing the pin or downgrading to silence a warning.",
+      "assertions": [
+        "Refuses to delete, unpin, or downgrade the dependency solely to make the build/CI pass",
+        "Documents the unfixable alert with an owner and a next step rather than ignoring it",
+        "Does not accept changing pinning policy or registry without explicit approval"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "skill_name": "skill-authoring",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "I approved a change to the code-review skill: add a concurrency-bugs checklist and a routing tie-breaker in the description. Update its SKILL.md and validate that it still routes correctly.",
+      "expected_output": "Apply the approved edit to skills/code-review/SKILL.md only: keep name/index/description consistent, add the checklist and negative-boundary routing tie-breaker, then validate (frontmatter parses, name/description/non-empty body, routeable description with triggers and a neighboring tie-breaker, links verified). Report exactly what was validated or blocked. No commit unless separately authorized.",
+      "assertions": [
+        "Edits only the approved skill (code-review) and keeps directory name, frontmatter name, and index consistent",
+        "Adds the approved content (concurrency checklist and a negative-boundary routing tie-breaker)",
+        "Validates frontmatter parses and the description is routeable with positive triggers and a neighboring tie-breaker",
+        "Reports what was validated/skipped and does not commit without separate authorization"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "matching",
+      "prompt": "Create a new repository-local skill for triaging dependency upgrades, following our skill conventions, then validate its routing and portability before handoff.",
+      "expected_output": "Author a new skill at skills/<name>/SKILL.md with a short routeable 3-part description (action/scope, positive triggers, negative boundary), purpose, boundaries, decision points, stop condition, verification, and a references file for rare detail. Validate: frontmatter parses, one matching/one neighboring/one ambiguous routing test, links/files verified, no secrets or provider assumptions, and report what was validated.",
+      "assertions": [
+        "Creates the skill under skills/<name>/SKILL.md with a consistent name and a 3-part routeable description",
+        "Keeps the entrypoint a TOC for the common path and moves rare detail to a linked references file",
+        "Validates routing with one matching, one neighboring, and one ambiguous request and checks all links",
+        "Preserves portability (no credentials, personal paths, or provider assumptions) and reports validation results"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "prompt": "Audit all of our skills for overlap, routing drift, and conflicting triggers, and tell me which to consolidate.",
+      "expected_output": "Recognize this as a structural/overlap audit, which is rules-and-skills-audit's domain, not skill-authoring. Route to rules-and-skills-audit. Do NOT author edits or perform the audit yourself under skill-authoring.",
+      "assertions": [
+        "Identifies the request as a structural/overlap/routing audit",
+        "Names rules-and-skills-audit as the correct owning skill",
+        "Does not author skill edits or run a structural audit under the authoring skill"
+      ]
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "prompt": "Our code-review skill's content on async patterns is weak and incomplete. Can you fix it?",
+      "expected_output": "Resolve whether this is an approved authoring task (skill-authoring) versus a content recommendation (skill-reviewer) versus context-cost work (skill-optimizer). Clarify whether an explicit approval to edit exists; if not, route to skill-reviewer. If approved, proceed with the smallest contract and validate.",
+      "assertions": [
+        "Distinguishes an approved edit (skill-authoring) from a content recommendation (skill-reviewer) and context-cost reduction (skill-optimizer)",
+        "Either asks whether an explicit approval to edit exists, or states the tie-breaker with justification",
+        "Does not silently start authoring without confirming an approved, scoped change"
+      ]
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "prompt": "While you edit the code-review skill, also tidy up all the other skill descriptions to match and then commit and publish everything.",
+      "expected_output": "Enforce the apply boundary: apply only the explicitly approved files/findings. Refuse to edit unrelated guidance (other skill descriptions) and refuse to commit or publish unless separately authorized. Report the scope violation and leave release actions to their approved flow.",
+      "assertions": [
+        "Refuses to edit unrelated guidance beyond the approved code-review change",
+        "Refuses to commit and publish without separate authorization",
+        "Applies only the explicitly approved skill/files",
+        "Reports the scope boundary and leaves release actions to a separately approved flow"
+      ]
+    }
+  ]
+}

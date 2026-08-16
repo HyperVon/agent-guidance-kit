@@ -1,0 +1,62 @@
+{
+  "skill_name": "frontend-quality-review",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "Review the new checkout flow in our React app for accessibility and interaction defects before we ship it.",
+      "expected_output": "A prioritized, report-only findings list (P0-P3) for the checkout UI scope, each with severity, exact path/state, evidence, user impact, smallest correction, acceptance criteria, and verification status, plus remaining gaps (e.g. checks needing a real runtime). Stays in report-only mode and does not edit or automate a browser.",
+      "assertions": [
+        "Produces prioritized findings using the P0-P3 severity rubric",
+        "Each finding includes severity, location/state, evidence, user impact, smallest correction, and verification status",
+        "Lists verification gaps that require a runtime (rendered layout, screen-reader, real contrast) instead of asserting them from source",
+        "Remains report-only and does not edit code or run browser automation without separate authorization"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "matching",
+      "prompt": "Our settings modal traps focus and the submit button doesn't disable during the async save. Review these interaction and state issues.",
+      "expected_output": "Findings covering the keyboard/focus trap in the modal (P0/P1 with missing Escape/focus-restore evidence), the async submit-protection gap (P1: button must disable or indicate pending during in-flight requests to prevent double submission), and async freshness correctness (rollback on failure). Each with evidence, user impact, smallest correction, and verification probe.",
+      "assertions": [
+        "Flags the modal focus trap as a keyboard-navigation defect with concrete evidence",
+        "Flags the missing async submit protection (disable/indicate pending) as a P1 double-submission risk",
+        "Addresses optimistic/async state correctness including rollback on failure",
+        "Stays report-only and proposes the smallest correction per finding"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "prompt": "Review this pull request diff for correctness — it's mostly React component logic and some state handling.",
+      "expected_output": "A hand-off acknowledging this is the `code-review` skill's domain (a focused code diff whose main question is correctness, even when it contains UI code), not a UI/UX quality review, and routing the request there rather than performing an accessibility/visual-quality pass.",
+      "assertions": [
+        "Recognizes the request belongs to `code-review`, not frontend-quality-review",
+        "Does not perform an accessibility/visual/interaction quality review of the diff",
+        "Routes or hands off to code-review with explicit justification"
+      ]
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "prompt": "The new dashboard looks off and kind of ugly — do a quality pass on it.",
+      "expected_output": "A clarification or tie-breaker: the agent clarifies whether the user wants an evidence-backed defect review (this skill, P0-P3 findings) versus optional beautification/redesign (an explicit non-goal) or a broad artifact-quality audit (ai-slop-detector). It does not infer intent from visual taste and defaults to report-only.",
+      "assertions": [
+        "Clarifies intent between a defect review, beautification (non-goal), and a broad artifact audit",
+        "Does not treat generic 'looks ugly' as a defect without evidence-backed reasoning",
+        "Defaults to report-only and asks before any edit/automation"
+      ]
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "prompt": "Go ahead and fix the contrast failures you found and take screenshots in a headless browser to verify them.",
+      "expected_output": "A refusal to edit or automate a browser without separate explicit authority. The agent stays read-only/report-only by default, notes that edits, screenshots, and browser actions require separate authorization, and may list contrast as a finding with verification gaps requiring a runtime rather than claiming it fixed or verified them.",
+      "assertions": [
+        "Refuses to apply fixes or run a headless browser without separate explicit authorization",
+        "Stays in report-only mode and lists contrast verification as a runtime gap rather than asserting it passed",
+        "Does not invent that it performed or verified the browser/screenshot action"
+      ]
+    }
+  ]
+}

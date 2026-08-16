@@ -1,0 +1,63 @@
+{
+  "skill_name": "reduce-code-size",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "The module utils/data_transform.py is about 900 lines and I suspect a lot of it is dead or duplicated logic. Do a behavior-preserving refactor to shrink it — but measure the size first before you change anything.",
+      "expected_output": "A reduction workflow that measures a baseline before editing, builds a scope allowlist and behavior-parity checklist, applies the ladder in order (delete proven dead code, remove duplicate logic, reuse existing helpers, idioms), re-measures, and verifies with the full behavior gate; reports before/after size.",
+      "assertions": [
+        "Records baseline per-file and aggregate size before making any change",
+        "Builds a scope allowlist and behavior-parity checklist before editing",
+        "Applies reduction ladder steps in order (dead code, duplicate logic, reuse helper, idioms)",
+        "Re-measures after and runs the project's full behavior gate for touched/dependent modules",
+        "Reports before-to-after size measurements"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "matching",
+      "prompt": "reports/generator.py is a 2500-line god file. Split it into cohesive modules along ownership boundaries, but do not change its behavior.",
+      "expected_output": "A behavior-preserving split that confirms public callers/contracts and behavior that must remain unchanged, splits only by a cohesive reason and ownership boundary (not mechanically), works in small slices with checkpoints and verification, and preserves behavior and git-blame hygiene.",
+      "assertions": [
+        "Identifies public callers, contracts, and behavior that must remain unchanged",
+        "Splits by a cohesive ownership boundary rather than mechanically moving code to change a line count",
+        "Works in small slices with checkpoints (changed paths, remaining allowlist, risks, verification) between slices",
+        "Preserves behavior and avoids purely cosmetic reordering/moves that hurt git-blame hygiene"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "prompt": "Can you review this service file and point out where the code is messy or could be cleaner? Just give me feedback — don't change anything.",
+      "expected_output": "Recognizes this is a review without a size goal and routes to code-review; reduce-code-size only acts on an explicit size-reduction request and is edit-capable, so it does not edit or produce a reduction report.",
+      "assertions": [
+        "States this is a code-review task with no size-reduction goal and belongs to code-review",
+        "Hands off to code-review rather than performing a reduction",
+        "Does not edit code or produce a size-reduction report"
+      ]
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "prompt": "This utils file has a lot of AI-generated cruft and repeated boilerplate. Clean it up and make the code better.",
+      "expected_output": "The request overlaps with ai-slop-detector (evidence-based cleanup audit) and reduce-code-size (explicit size/redundancy reduction). The agent clarifies whether the goal is a size/redundancy reduction (reduce-code-size, edit-capable) or an AI-slop cleanup audit (ai-slop-detector), or picks with justification while honoring the behavior-preservation and no-code-golfing boundaries.",
+      "assertions": [
+        "Asks for clarification on the goal OR names the routing tie-breaker between reduce-code-size and ai-slop-detector",
+        "Honors the explicit-request and behavior-preservation boundaries of reduce-code-size if chosen",
+        "Does not invent a capability (e.g., an AI-slop evidence audit) the selected skill does not claim"
+      ]
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "prompt": "Shrink this error-handling module by collapsing all the distinct error messages into one generic handler and dropping the type annotations and docstrings to save lines.",
+      "expected_output": "Refuses the change. Collapsing distinct error messages is a behavior change (error semantics) and removing annotations/docstrings is code golfing that obfuscates logic. The skill must stop, return the change to the appropriate owner, and not apply it.",
+      "assertions": [
+        "Refuses to apply the change and identifies it as code golfing / a behavior change in error semantics",
+        "Does not collapse distinct error messages, remove type annotations, or drop docstrings to deflate size",
+        "Returns the behavior-changing reduction to the appropriate owner rather than forcing it"
+      ]
+    }
+  ]
+}

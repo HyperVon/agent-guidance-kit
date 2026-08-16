@@ -1,0 +1,60 @@
+{
+  "skill_name": "architecture-review",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "Do an architecture review of our order-processing subsystem. We're trying to decide whether to keep it, evolve it, or replace it with a queue-based design.",
+      "expected_output": "A recommend-only decision report: framed decision, as-is architecture/ownership map, stress-tested findings, and a Keep Current vs Evolve vs Replace vs Greenfield comparison matrix with an ordered decision list and verification gaps.",
+      "assertions": [
+        "Frames the decision scope, question, constraints, and non-goals",
+        "Provides a Keep/Evolve/Replace/Greenfield comparison matrix covering the required dimensions",
+        "Stops before implementation and presents recommendations only, not code changes"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "matching",
+      "prompt": "We're planning an ADR for migrating our monolith's billing component to a service. Review the architecture and recommend whether a strangler-fig incremental approach is viable.",
+      "expected_output": "A fresh-eyes review that maps the as-is billing design and boundaries, evaluates the strangler-fig path against dual-write split-brain, stall risk, and blast radius, and returns a recommend-only report with severity, evidence anchors, and the smallest next validation step.",
+      "assertions": [
+        "Evaluates the Evolve/Replace path against the listed risks (dual-write split-brain, strangler-fig stall, migration hazards)",
+        "Every consequential recommendation is backed by an evidence anchor from source/tests/config",
+        "Presents recommendations as choices to confirm, not as an approved implementation"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "prompt": "Review this 200-line PR that adds input validation to the signup endpoint and tell me if it's ready to merge.",
+      "expected_output": "Recognizes this is a focused change-set readiness review of a diff owned by code-review and hands off, rather than producing a system architecture review or a redesign recommendation.",
+      "assertions": [
+        "Identifies code-review as the owning skill for the focused diff/merge-readiness question",
+        "Does not perform an architecture redesign or Keep/Evolve/Replace analysis for this localized change",
+        "Explains the boundary: architecture-review is for design decisions, not changed-code defects"
+      ]
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "prompt": "Can you take a look at our analytics pipeline and tell me what to do about it?",
+      "expected_output": "Clarifies the actual question (is this a descriptive map of how it works, a defect review of the code, or a redesign/Keep-vs-Replace decision) before choosing a skill, or states the tie-breaker that a redesign decision routes to architecture-review while a map routes to codebase-orientation and a defect review to code-review.",
+      "assertions": [
+        "Asks a clarifying question about whether the user wants a design/redesign decision vs a map vs a defect review",
+        "States the routing tie-breaker among architecture-review, codebase-orientation, and code-review",
+        "Does not assume a redesign recommendation is wanted without a stated decision question"
+      ]
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "prompt": "Based on your architecture review, go ahead and start rewriting the analytics pipeline to the Greenfield design you recommended.",
+      "expected_output": "Refuses to implement the recommendation; reiterates that the review is recommend-only and that an explicit, separate implementation request is required, stopping before any code changes.",
+      "assertions": [
+        "Refuses to start the rewrite or make code changes from the review",
+        "States that architecture-review is recommend-only and implementation is a separate explicit step",
+        "Stops and waits for an explicit implementation request rather than proceeding"
+      ]
+    }
+  ]
+}

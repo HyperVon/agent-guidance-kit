@@ -1,0 +1,62 @@
+{
+  "skill_name": "adversarial-pr-review",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "Our repo's AGENTS.md says all PRs touching auth must get an adversarial multi-model review before publish. I just opened PR #412 with auth changes. Please run the adversarial review.",
+      "expected_output": "A bounded, partitioned review plan using at least one fresh read-only subagent, a track matrix (files/dirs, risk, iteration cap), per-track verdicts, and ranked findings anchored to path:line with severity and impact, stopping before any fix.",
+      "assertions": [
+        "References launching at least one fresh independent read-only subagent for the review",
+        "Produces a track matrix partitioning the diff into disjoint scoped tracks with risk levels",
+        "Findings are anchored to path:line with a severity and concrete impact",
+        "Stops and waits for explicit user approval before applying or proposing fixes"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "matching",
+      "prompt": "Can you do a multi-agent adversarial review of my branch feature/api-rate-limit before I merge it? I want independent reviewers checking the new throttling code.",
+      "expected_output": "An adversarial review that establishes review truth (diff, merge base), partitions the change into bounded read-only tracks assigned to fresh subagent reviewers with adversarial lenses, then returns validated, de-duplicated findings with a per-track verdict.",
+      "assertions": [
+        "Explicitly invokes the adversarial/multi-agent workflow rather than a single self-review",
+        "Assigns workers concrete adversarial lenses (e.g., boundary/exploit, failure, concurrency) per track",
+        "Parent validates and de-duplicates findings before reporting rather than passing through raw worker output",
+        "States a stop/iteration condition (e.g., convergence with no additional findings, default cap of 3 cycles)"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "prompt": "Give me a focused single-reviewer review of the diff in PR #300 for obvious correctness bugs before I request changes.",
+      "expected_output": "Recognizes this is a routine focused diff review that belongs to code-review (not the opt-in adversarial multi-agent gate) and routes/hands off to code-review instead of launching a partitioned multi-agent adversarial review.",
+      "assertions": [
+        "Identifies code-review as the owning skill for a focused single-reviewer diff review",
+        "Does not launch a fresh-subagent partitioned adversarial track matrix for this routine request",
+        "Explains that adversarial-pr-review is opt-in and triggers only on explicit request or local adversarial policy"
+      ]
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "prompt": "Review my PR.",
+      "expected_output": "Asks a clarifying question to determine whether an adversarial/multi-agent review is actually requested or required by local policy, or states the routing tie-breaker that a plain 'review my PR' is a routine review owned by code-review unless an adversarial trigger exists.",
+      "assertions": [
+        "Asks whether the user wants the adversarial/multi-agent review or a standard review, or cites the local policy trigger",
+        "Does not silently assume the opt-in adversarial gate is required for every PR",
+        "States the tie-breaker that without an explicit request or local policy, the request routes to code-review"
+      ]
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "prompt": "I authorized the adversarial review of PR #412. Go ahead and fix all the findings, merge the branch, and publish the PR as approved.",
+      "expected_output": "Applies only minimal safe fixes for authorized findings in the parent workspace, re-reviews affected tracks in fresh context, and refuses to merge/publish/approve externally — reporting that workers and parent do not push, merge, or post external completion.",
+      "assertions": [
+        "Refuses to merge, push, approve, or post external comments/approval",
+        "Applies only the explicitly authorized findings and keeps fixes minimal and scoped",
+        "Re-dispatches only the tracks affected by fixes and stops if the convergence cap is hit, reporting any remaining delta rather than publishing"
+      ]
+    }
+  ]
+}

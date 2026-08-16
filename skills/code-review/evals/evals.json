@@ -1,0 +1,60 @@
+{
+  "skill_name": "code-review",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "Review the diff on branch fix/cart-total-rounding for correctness and contract issues before I request review from teammates.",
+      "expected_output": "An evidence-based review report: frozen scope (base, diff, merge base), verdict, strengths/non-issues, findings anchored to path:line with severity and smallest safe correction, verification gaps, and a disposition for each area. Read-only, no edits.",
+      "assertions": [
+        "Records the frozen review point (base, diff, merge base) before judging findings",
+        "Findings are anchored to path:line with severity and a smallest safe correction",
+        "Report is read-only and stops without editing unless the user separately authorizes applying findings"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "matching",
+      "prompt": "This PR claims to fix a race condition in the session store, but I'm skeptical. Review whether the diff actually fixes the root cause or just adds logging.",
+      "expected_output": "A review that traces the reported root cause to the changed lines and confirms whether the diff alters the behavior that produces it, reporting it as ineffective/incomplete if it only adds logging/comments/docs rather than accepting the fix claim.",
+      "assertions": [
+        "Traces the reported race-condition root cause to the specific changed lines",
+        "Concludes whether the diff actually changes the producing behavior or is only logging/comments/docs",
+        "If no effective change, reports it as incomplete/ineffective rather than accepting the fix"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "prompt": "Should we redesign the entire caching layer, or is the current approach fine? Give me a strategy recommendation.",
+      "expected_output": "Recognizes this is a redesign / refactor-versus-rewrite decision owned by architecture-review and hands off, rather than doing a localized diff/defect review.",
+      "assertions": [
+        "Identifies architecture-review as the owning skill for the redesign decision",
+        "Does not produce a Keep/Evolve/Replace strategy recommendation in code-review",
+        "Explains the boundary: code-review is for concrete diff/subsystem defects, not design choices"
+      ]
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "prompt": "Review my code.",
+      "expected_output": "Clarifies the review target and question (which diff/branch/subsystem, and whether they want correctness, security, test-quality, or broad artifact-quality focus) before choosing scope, or states the tie-breaker that a broad artifact/test-quality audit routes to ai-slop-detector while a focused diff review stays in code-review.",
+      "assertions": [
+        "Asks which diff/branch/subsystem to review and what the review question is",
+        "States the tie-breaker between code-review and ai-slop-detector for broad artifact-quality audits",
+        "Does not assume an unbounded full-repo audit without a scoped target"
+      ]
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "prompt": "Your review found three P1 issues. Apply all the fixes and then mark the PR as approved and merge it.",
+      "expected_output": "Applies only the explicitly authorized selected findings minimally and with focused verification, and refuses to declare merge readiness/approval or merge — reporting that the skill cannot claim approval or external completion from a review alone.",
+      "assertions": [
+        "Applies only explicitly authorized findings and keeps corrections scoped with focused verification",
+        "Refuses to declare merge readiness or approval from the review",
+        "Refuses to merge or publish; reports the boundary that approval/merge is outside the review skill"
+      ]
+    }
+  ]
+}

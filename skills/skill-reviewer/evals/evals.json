@@ -1,0 +1,67 @@
+{
+  "skill_name": "skill-reviewer",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "prompt": "Review our systematic-debugging skill for missing agent-failure traps like sycophantic agreement, premature stopping after one green test, and defensive exception suppression, and draft the improvements.",
+      "expected_output": "A content-mode review report (Verdict, Keep as-is, Content additions, Suggested apply order) with paste-ready draft text, severities P0–P3, exact paths/headings, and a validation probe — recommendations only, no edits.",
+      "assertions": [
+        "Uses the review report shape (Verdict, Keep as-is, Content additions, Suggested apply order)",
+        "Provides complete paste-ready draft text rather than vague suggestions",
+        "Assigns severities (P0–P3) and exact paths/headings for each finding",
+        "Includes a concrete validation or routing probe per finding",
+        "Stops at recommendations and does not edit the skill file"
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "matching",
+      "prompt": "Content-mode review of our new parallel-multi-agent skill: check it's grounded in the actual implementation, probes realistic agent failure modes, and gives ready-to-paste additions with target headings.",
+      "expected_output": "A content review that grounds claims by reading the actual skill body/references/code, probes domain and agent failure modes, and delivers paste-ready additions with severities and a routing probe, without editing.",
+      "assertions": [
+        "Grounds findings by inspecting the actual skill files/references rather than reviewing in a vacuum",
+        "Probes agent failure modes (e.g., tool hallucination, speculative editing, unverified claims)",
+        "Delivers paste-ready additions with exact target headings and severities",
+        "Does not claim a pattern is missing without checking the repository",
+        "Produces recommendations without editing guidance files"
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "prompt": "Review our README and architecture doc to confirm every claim matches the actual source code and that the documented build steps actually work.",
+      "expected_output": "Recognizes factual verification against source/build truth as owned by documentation-review, and routes there rather than performing a content review of guidance.",
+      "assertions": [
+        "Identifies factual agreement with source/build truth as documentation-review's domain",
+        "Does not perform factual accuracy verification of the docs itself",
+        "Hands off to documentation-review rather than doing the neighboring task",
+        "Does not manufacture a content-review report in place of the factual check"
+      ]
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "prompt": "Take a look at the dependency-upgrade skill and tell me if it's any good.",
+      "expected_output": "Recognizes ambiguity between a content review (missing depth/anti-patterns, skill-reviewer) and a structural/routing review (overlap/consolidation, rules-and-skills-audit), and asks a clarifying question or states a routing tie-breaker.",
+      "assertions": [
+        "Notes the ambiguity between content review (skill-reviewer) and structural/routing review (rules-and-skills-audit)",
+        "Either asks which review the user wants or picks the right skill with justification",
+        "Does not assume the premise that the skill is weak/redundant without verification"
+      ]
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "prompt": "Review the git-github-workflow skill and then just go ahead and edit the weak sections directly in the file to fix them.",
+      "expected_output": "Refuses to edit during review (review authorization is inspection only), produces recommendations with paste-ready drafts, and hands implementation to skill-authoring upon explicit approval rather than editing the file.",
+      "assertions": [
+        "Refuses to edit guidance files during the review pass",
+        "Treats review as inspection authority only, not edit authority",
+        "Produces recommendations with paste-ready draft text instead of applying changes",
+        "Routes implementation to skill-authoring and requires explicit approval of named findings",
+        "Never claims the report was applied"
+      ]
+    }
+  ]
+}
