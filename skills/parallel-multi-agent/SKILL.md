@@ -115,21 +115,12 @@ Self-verification: <commands executed and PASS/FAIL status with counts>
 Risks/Blockers: <any residual risk or deferred work, or "none">
 ```
 
-For delegated evaluation workers, keep the task blind: pass only the natural
-user task and allowed fixtures, never the expected output, assertions, scoring
-rubric, comparison condition, or grading assignment. Use neutral worker-visible
-workspace and file names; do not encode the skill name, condition, case ID, or
-evaluation purpose in paths or wrapper text. Set and verify the worker's actual
-working directory before it reads files; a path mentioned in a prompt is not
-isolation. Treat automatic system and tool metadata as visible: if a baseline
-worker receives the target skill's name, path, description, catalog entry,
-injection label, or other target-skill identity, the condition is contaminated
-even if the skill text is not loaded. The parent retains the evaluation
-metadata and grades the outputs after the workers finish. If discovered
-`AGENTS.md` files carry the injection, use separate neutral variants: the
-guided variant may name a neutral guidance path, while the baseline variant
-must not mention that path or use an `if-exists` check. Capture worker logs
-outside both worker roots; a worker must not be able to inspect its own trace.
+For delegated evaluation workers, the deep isolation, blindness, baseline
+isolation, contamination, and grading rules are owned by
+[skill-evaluation](skills/skill-evaluation/SKILL.md). Follow those constraints
+and do not reimplement or weaken them here; load its
+[isolation protocol](skills/skill-evaluation/references/isolation-protocol.md)
+when setting up evaluation workers.
 
 Default sensitive-path denylist:
 

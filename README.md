@@ -15,6 +15,7 @@ review-and-adopt workflow your agent should follow.
 | [adversarial-pr-review](skills/adversarial-pr-review/SKILL.md) | Parent-validated adversarial PR review using a fresh independent subagent; partitions large diffs into bounded tracks and re-reviews until convergence. |
 | [ai-slop-detector](skills/ai-slop-detector/SKILL.md) | Audit artifacts for plausible-but-harmful quality defects: AI slop, invented APIs, misleading tests/docs, needless complexity. |
 | [architecture-review](skills/architecture-review/SKILL.md) | Fresh-eyes architecture review comparing Keep / Evolve / Replace / Greenfield options; recommends only. |
+| [skill-discovery](skills/skill-discovery/SKILL.md) | Proactively search GitHub, harness docs, and public guidance for candidate agent workflows and map them to a project's existing skill catalog (evidence table for skill-reviewer intake). |
 | [code-review](skills/code-review/SKILL.md) | Evidence-based review of diffs, branches, and subsystems for correctness, contract, security, and test defects; report-first. |
 | [dependency-upgrade](skills/dependency-upgrade/SKILL.md) | Safely upgrade pinned dependencies: inventory, security-first, group by risk, verify after each group. |
 | [documentation-review](skills/documentation-review/SKILL.md) | Sync docs to implementation, build, config, tests, and CI truth; factual accuracy only. |
