@@ -17,6 +17,17 @@ Status dimensions are kept separate (per the corrected methodology):
 > **not** constitute validated evidence. No routing result exists for any skill
 > yet (all force-injected, so routing is unmeasured). No cross-skill "X/5"
 > comparison is a skill-quality score.
+>
+> **Phase 1 reassessment (2026-08-16):** the corrected pipeline was exercised in
+> this CLI environment. The fixture/hashing/catalog/validation half runs green
+> (fixtures idempotent, catalogs generate for both conditions, validator + 29 tests
+> pass). A **protocol-valid run is not possible here**: the harness (Kilo/CLI on a
+> macOS host) cannot capture routing selection as harness evidence, and cannot
+> create/verify independent OS-contained worker contexts (no container, host
+> `gitconfig`/`gh` token present). Therefore for the four pilot skills **routing =
+> `not_run` (blocked)** and **execution = `not_run` (blocked)**, protocol `not_run`,
+> repeats 0. See `phase1-environment.md`. The historical exploratory pilots remain
+> `invalid` and were not reused.
 
 **Target harness:** Kilo/CLI  |  **Model:** hy3-free  |  **Reasoning effort:** high
 **Isolation available here:** instruction-only (must be labeled `limited`); OS
@@ -55,6 +66,13 @@ Total: 26 skills, 130 designed cases. Fixtures frozen for 4/26 (the four pilot
 skills: code-review, git-github-workflow, review-feedback-resolution,
 security-review). Routing measured for 0/26. Execution validated for 0/26 (4
 exploratory invalid pilots only).
+
+**Phase 1 (2026-08-16), four pilot skills:** routing `not_run` (blocked — no
+harness selection capture in this CLI), execution `not_run` (blocked — no independent
+worker isolation), protocol `not_run`, repeats 0. No historical pilot reused. The
+validator rejects inflated `valid` claims (verified by negative test). The next phase
+requires a harness that captures routing selection and provides OS-contained or
+verified instruction-only worker isolation; see `phase1-environment.md` §6.
 
 ## Legend
 
