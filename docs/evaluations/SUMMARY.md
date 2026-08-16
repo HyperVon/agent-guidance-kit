@@ -68,6 +68,32 @@ The methodology has been corrected and is documented in:
 - **No OS-level isolation** was available in this CLI; runs here must be labeled
   `protocol_status: limited` even when rerun.
 
+## Phase 1 reassessment (2026-08-16)
+
+The corrected pipeline was exercised against the four pilot skills
+(`code-review`, `git-github-workflow`, `review-feedback-resolution`,
+`security-review`) in this CLI environment. Full write-up:
+`docs/evaluations/phase1-environment.md`.
+
+- **What ran green:** `hash_fixtures.py` (idempotent; 6 generator fixtures re-hash
+  under the full git-state algorithm), `build_routing_catalog.py` (target-present =
+  26 skills; each `--target-absent <skill>` = 25, dropping only the named target),
+  `validate_evaluations.py` (0 errors / 0 warnings), and `test_validate_evaluations.py`
+  (29 tests pass).
+- **What could NOT run:** a protocol-valid **routing** or **execution** run. This
+  environment (Kilo/CLI on a macOS laptop) is the harness itself, so it cannot capture
+  routing selection as harness evidence (no loaded-skill manifest / routing log / named
+  tool-call), and it cannot create or verify independent OS-contained worker contexts
+  (no container; host `~/.gitconfig` leaks the evaluator's personal `user.name` /
+  `user.email`; a live `gh`
+  token is present). Per `RUNBOOK.md` §3/§5 both are recorded `not_run` (blocked).
+- **No evidence invented; no historical pilot reused.** The four exploratory pilots
+  stay `protocol_status: invalid`.
+- **Gate enforcement proven:** a temporary result claiming `valid` + `both_pass` with
+  `instruction-only` isolation was rejected by `validate_evaluations.py` (then removed).
+  This confirms the pipeline blocks the weakening the rules forbid.
+- **Repeats:** 0. **Protocol status:** `not_run` for all four pilot skills.
+
 ## Case-set audit
 
 All 130 cases were audited against their `SKILL.md`. The main structural change in
