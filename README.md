@@ -1,9 +1,12 @@
 # Agent Guidance Kit
 
-A portable library of agent skills you **copy or adapt** into your own project.
-There is no installer and no adoption lifecycle — you read the skills here and
-adopt the ones that fit. Check out the repo, then ask your coding agent to
-review it and recommend what to adopt.
+A portable library of **software-engineering and development** agent skills you
+**copy or adapt** into your own project. Most skills here are built for
+engineering workflows — code review, testing, debugging, security, releases —
+though a few generalize to broader documentation and process work. There is no
+installer and no adoption lifecycle — you read the skills here and adopt the
+ones that fit. Check out the repo, then ask your coding agent to review it and
+recommend what to adopt.
 
 See [`docs/using-the-library.md`](docs/using-the-library.md) for the exact
 review-and-adopt workflow your agent should follow.

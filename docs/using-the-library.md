@@ -1,8 +1,11 @@
 # Using this library
 
-Agent Guidance Kit is a **portable library of agent skills**. There is no
-installer and no lifecycle machinery — you adopt guidance by reading it here and
-then copying or adapting the parts that fit your project.
+Agent Guidance Kit is a **portable library of software-engineering and
+development agent skills**. Most skills are built for engineering workflows —
+code review, testing, debugging, security, and releases — though a few
+generalize to broader documentation and process work. There is no installer and
+no lifecycle machinery — you adopt guidance by reading it here and then copying
+or adapting the parts that fit your project.
 
 ## The normal flow
 
