@@ -2,7 +2,7 @@
 
 A portable library of agent skills you **copy or adapt** into your own project.
 There is no installer and no adoption lifecycle — you read the skills here and
-decopt the ones that fit. Check out the repo, then ask your coding agent to
+adopt the ones that fit. Check out the repo, then ask your coding agent to
 review it and recommend what to adopt.
 
 See [`docs/using-the-library.md`](docs/using-the-library.md) for the exact
