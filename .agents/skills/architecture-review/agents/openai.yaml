@@ -1,4 +1,0 @@
-interface:
-  display_name: "Architecture Review"
-  short_description: "Review system architecture with fresh eyes"
-  default_prompt: "Use $architecture-review to assess this system and compare meaningful architectural options."
