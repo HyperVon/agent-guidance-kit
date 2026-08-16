@@ -50,7 +50,7 @@ history or publish without authority.
    - Confirm the email matches the user's intended public identity or GitHub privacy email (e.g. `<id>+<username>@users.noreply.github.com`).
    - If identity is unconfigured or misconfigured, propose the appropriate local config command (`git config user.name "..." && git config user.email "..."`) and wait for confirmation. Never commit with an auto-generated local hostname email.
 3. **Draft the change.** Keep PRs small, describe user-visible change,
-   motivation, scope/safety checklist, and verification (`make check`,
+   motivation, scope/safety checklist, and verification (the project's gate, such as `make test`,
    `gh pr checks`). Use `.github/pull_request_template.md` and
    `ISSUE_TEMPLATE/*` when present. Link issues, update `CHANGELOG.md` when
    user-visible.
@@ -65,14 +65,14 @@ history or publish without authority.
    state such as `.kilo` or `.idea`. Discover the target repository's own
    documented format, lint, test, build, and coverage commands from its local
    guidance and build files, then run the smallest complete relevant gate.
-    A project gate such as `make check` is an example, not a universal
+    A project's own verification command (for example a `make` target) is an example, not a universal
     commands: never assume a helper, path, language toolchain, or quality
     threshold from the source project or from another repository. If no
     complete gate is available, report the exact checks that were run and the
     limitation rather than inventing or importing one.
 
    - *Run the target's complete gate before commit and push:* Run the target
-     repository's full local verification gate (for example `make check` or its
+     repository's full local verification gate (for example a `make` target or CI command) or its
      equivalent) before committing and again before pushing. The gate typically
      runs Markdown/guidance lint, structural validation, and secret scans. Treat a
      failing or skipped gate as a blocker: resolve the findings (or, for a genuine
@@ -107,7 +107,7 @@ history or publish without authority.
 - Do not commit secrets, `.env`, `id_rsa`, `*.pem`, or personal filesystem
   paths. Redact examples.
 - Do not create a remote, tag, or release (`git tag`/`gh release`) without
-  separate explicit authorization per `docs/release.md`.
+  separate explicit authorization per the project's release documentation (for example `docs/release.md` when present).
 - When local policy requires adversarial review, do not push a branch intended
   to open or update a PR without a completed fresh-context review of its final
   diff and convergence evidence; a prior review does not cover later changes.

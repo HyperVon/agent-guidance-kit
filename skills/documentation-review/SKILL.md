@@ -83,7 +83,7 @@ path instead of the full workflow above:
 | Change | Update |
 | :----- | :----- |
 | Feature, stack, command, or layout | `README.md` (setup, usage, package tree) |
-| Architecture, protocol, or milestone order | Architecture doc and `docs/adr/` when the change is architectural |
+| Architecture, protocol, or milestone order | Architecture doc and an ADR (for example under `docs/adr/`) when the change is architectural |
 | Operation or troubleshooting command | Runbook or troubleshooting guide |
 | User-facing CLI, UI, or operator workflow | User guide and linked runbook sections |
 | Dependency or container version | Documentation that references the version or pin; use manifests and lockfiles as source-of-truth evidence |
