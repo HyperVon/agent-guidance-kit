@@ -1,9 +1,12 @@
 # Agent Guidance Kit
 
-A portable library of agent skills you **copy or adapt** into your own project.
-There is no installer and no adoption lifecycle — you read the skills here and
-adopt the ones that fit. Check out the repo, then ask your coding agent to
-review it and recommend what to adopt.
+A portable library of **software-engineering and development** agent skills you
+**copy or adapt** into your own project. Most skills here are built for
+engineering workflows — code review, testing, debugging, security, releases —
+though a few generalize to broader documentation and process work. There is no
+installer and no adoption lifecycle — you read the skills here and adopt the
+ones that fit. Check out the repo, then ask your coding agent to review it and
+recommend what to adopt.
 
 See [`docs/using-the-library.md`](docs/using-the-library.md) for the exact
 review-and-adopt workflow your agent should follow.
@@ -26,12 +29,13 @@ review-and-adopt workflow your agent should follow.
 | [parallel-multi-agent](skills/parallel-multi-agent/SKILL.md) | Partition work into bounded concurrent workers with disjoint ownership and parent-owned integration. |
 | [quality-hardening](skills/quality-hardening/SKILL.md) | Bounded evidence-first QA loop: baseline, find gaps, add regression tests, minimal fixes, re-verify. |
 | [reduce-code-size](skills/reduce-code-size/SKILL.md) | Shrink or split code while preserving behavior, contracts, and verification; measure first. |
-| [requirements-and-design](skills/requirements-and-design/SKILL.md) | Clarify desired behavior and design choices before implementation: outcome, requirements, constraints, acceptance criteria, approach. |
 | [repository-guidance-authoring](skills/repository-guidance-authoring/SKILL.md) | Create canonical agent instructions (AGENTS.md, onboarding) from repository reality; separate discovered facts from team policy. |
+| [requirements-and-design](skills/requirements-and-design/SKILL.md) | Clarify desired behavior and design choices before implementation: outcome, requirements, constraints, acceptance criteria, approach. |
 | [rules-and-skills-audit](skills/rules-and-skills-audit/SKILL.md) | Audit agent rules and skills for overlap, conflicts, unclear triggers, and consolidation opportunities. |
 | [review-feedback-resolution](skills/review-feedback-resolution/SKILL.md) | Resolve incoming review comments against repository evidence: disposition each item, apply accepted fixes, reject unsupported ones. |
 | [security-review](skills/security-review/SKILL.md) | Evidence-based review of changes, boundaries, and workflows for secrets, auth, input, data exposure, and dependency risks. |
 | [skill-authoring](skills/skill-authoring/SKILL.md) | Author or revise a repository-local agent skill after approval, preserving trigger, boundaries, and portability. |
+| [skill-discovery](skills/skill-discovery/SKILL.md) | Proactively search GitHub, harness docs, and public guidance for candidate agent workflows and map them to a project's existing skill catalog (evidence table for skill-reviewer intake). |
 | [skill-evaluation](skills/skill-evaluation/SKILL.md) | Design or run clean-context evaluations to decide whether a skill improves outcomes. |
 | [skill-optimizer](skills/skill-optimizer/SKILL.md) | Lower guidance context cost without weakening routing, safety, correctness, or verification. |
 | [skill-reviewer](skills/skill-reviewer/SKILL.md) | Review skills and guidance for missing, weak, or misleading content and recommend improvements. |

@@ -79,15 +79,15 @@ history or publish without authority.
      false positive, record the exact reason) before commit/push. Never commit or
      push with the gate red or skipped.
 6. **Apply repository-required adversarial review gates.** Inspect local
-   policy before pushing a branch that will open or update a pull request. When
-   that policy requires `adversarial-pr-review`, invoke it through at least one
-   fresh, independent read-only subagent on the final diff before the initial
-   PR push and every later update push. Parent-only self-review is insufficient.
-   After authorized fixes, rerun affected tracks in a new fresh context until a
-   final pass reports no additional findings; if the capability or convergence
-   evidence is missing, block the push. Record the review verdict, findings,
-   convergence pass, and any user decisions in the PR verification. This gate
-   does not replace the separate user authorization to push.
+    policy (for example `AGENTS.md` or `CONTRIBUTING.md`) before pushing a branch
+    that will open or update a pull request. When that policy requires
+    `adversarial-pr-review`, invoke it on the final diff before the initial push
+    and every later update push, and require a completed fresh-context review
+    (verdict, findings, and convergence evidence) before pushing. If the
+    reviewer-independence or convergence evidence is missing, block the push. The
+    reviewer-independence, convergence, track-iteration, and grading mechanics are
+    owned by [adversarial-pr-review](skills/adversarial-pr-review/SKILL.md); this
+    gate does not replace the separate user authorization to push.
 7. **Publish only with approval.** Push to the approved remote/branch, set
    upstream only when requested, and open the PR with `gh pr create` using the
    approved body. Report branch, commit, remote, and checks.
