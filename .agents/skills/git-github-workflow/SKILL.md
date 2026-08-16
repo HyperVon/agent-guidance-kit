@@ -65,11 +65,22 @@ history or publish without authority.
    state such as `.kilo` or `.idea`. Discover the target repository's own
    documented format, lint, test, build, and coverage commands from its local
    guidance and build files, then run the smallest complete relevant gate.
-   `make check` and `scripts/check.py --quick` are examples, not universal
-   commands: never assume a helper, path, language toolchain, or quality
-   threshold from the source project or from another repository. If no
-   complete gate is available, report the exact checks that were run and the
-   limitation rather than inventing or importing one.
+    `make check` and `scripts/check.py` are examples, not universal
+    commands: never assume a helper, path, language toolchain, or quality
+    threshold from the source project or from another repository. If no
+    complete gate is available, report the exact checks that were run and the
+    limitation rather than inventing or importing one.
+
+   - *Mandatory full gate before commit and push:* For this kit, the complete gate
+     is `make check` (or `python scripts/check.py`), which runs Markdown lint,
+     the repository validator, Agent Skills validation, and secret scans. Run it in
+     full before committing and again before pushing. If the Markdown linter or
+     agentskills binary is missing, install the dev environment first with
+     `python scripts/setup_dev.py`; do not fall back to `scripts/check.py --quick`,
+     which intentionally skips Markdown lint and Agent Skills validation — precisely
+     the checks guidance edits most often break. Treat a failing or skipped gate as a
+     blocker: resolve the findings (or, for a genuine false positive, record the exact
+     reason) before commit/push. Never commit or push with the gate red or skipped.
 6. **Apply repository-required adversarial review gates.** Inspect local
    policy before pushing a branch that will open or update a pull request. When
    that policy requires `adversarial-pr-review`, invoke it through at least one
@@ -91,6 +102,12 @@ history or publish without authority.
 - Use explicit issue closing keywords in PR bodies (`Fixes #123`, `Closes #456`) rather than vague issue references.
 - Do not `push --force`, `push --force-with-lease` on `main`, or rewrite
   published history without explicit approval and a backup branch.
+- Do not use `scripts/check.py --quick` as the pre-commit or pre-push gate: it
+  skips Markdown linting and Agent Skills validation, which is where guidance
+  edits most often fail. Run the full `make check` (or `python scripts/check.py`)
+  and confirm it passes before committing or pushing.
+- Before any `push --force-with-lease` (non-main) or history rewrite, create an explicit backup branch (`git branch backup/<branch>-<date>`) and name it in the report; never rely on the reflog alone.
+- Before opening or updating a PR, `git fetch <remote> <base>` and reconcile the branch with the current base (merge or rebase) so the PR diff is against latest `main`; report the base SHA you rebased onto.
 - Do not commit secrets, `.env`, `id_rsa`, `*.pem`, or personal filesystem
   paths. Redact examples.
 - Do not create a remote, tag, or release (`git tag`/`gh release`) without

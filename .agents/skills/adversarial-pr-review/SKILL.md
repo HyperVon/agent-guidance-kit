@@ -35,6 +35,13 @@ For ordinary PR creation or updates without either trigger, continue through
 When the branch has no open PR and the user is only committing WIP without
 opening one, skip unless explicitly requested.
 
+**Scope note for this kit repository:** The opt-in framing above applies to
+*adopted* targets. Within the Agent Guidance Kit repository itself,
+`.agents/AGENTS.md` overrides this and makes the adversarial-pr-review gate
+**mandatory** before any push that would open or update a pull request. Treat the
+kit's AGENTS.md invariant as authoritative here; for other repositories the skill
+remains opt-in unless their local policy adopts it.
+
 ## Core operating model
 
 - **Parent owns integration and validation.** Workers are bounded, read-only

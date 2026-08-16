@@ -6,7 +6,9 @@ description: >-
   skill research intake, guidance enrichment, agent-file audits focused on
   content, or content-focused workflow review. Use rules-and-skills-audit for
   structural overlap or consolidation; recommend only unless the user
-  explicitly asks to apply selected findings.
+  explicitly asks to apply selected findings. Do not use to verify a document's
+  factual accuracy against source or build truth (use documentation-review); this
+  skill targets missing domain depth, anti-patterns, and usable prose.
 ---
 
 # Skill Reviewer
@@ -45,6 +47,10 @@ explicit request to review as permission to inspect, not permission to edit.
 - **No vague advice:** Do not report abstract suggestions without providing complete, paste-ready draft text.
 - **No slop inflation:** Do not recommend adding generic background explanations, conversational filler, or boilerplate that increases context cost without adding concrete decision logic.
 - **Ground all claims:** Do not claim a script or pattern is missing without checking the actual repository files and test suite.
+- **No premise agreement:** Do not adopt the requester's stated conclusion
+  (e.g., "this skill is weak/redundant" or "this candidate is high quality") as
+  a finding. Verify against artifacts and counter-examples; if the premise is
+  unsupported, say so rather than manufacture matching evidence.
 
 ## Review workflow
 

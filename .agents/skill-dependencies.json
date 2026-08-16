@@ -131,7 +131,8 @@
     "security-review": {
       "related": [
         "code-review",
-        "systematic-debugging"
+        "systematic-debugging",
+        "threat-modeling"
       ],
       "requires": [],
       "route": "Review security boundaries, authority, secrets, and sensitive data flows"

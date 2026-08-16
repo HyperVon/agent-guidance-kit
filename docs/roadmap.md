@@ -87,8 +87,9 @@ update it in the same PR that implements each item and keep `make check` green.
 - [x] **3B** `catalog-discovery` (**SOURCE_ONLY**, not shipped to targets) —
   proactive GitHub/harness-docs search for candidate workflows, provenance-tracked
   evidence table → `IMPROVE_EXISTING`/`NEW_SKILL`/`PROJECT_SPECIFIC`/`DEFER`/`REJECT`
-  handoff to `skill-reviewer` (`references/external-skill-intake.md`). Enforces
-  `docs/roadmap.md:14` 8-step gate, no execution of fetched content, no network
+   handoff to `skill-reviewer`
+   (`.agents/skills/skill-reviewer/references/external-skill-intake.md`). Enforces
+   `docs/roadmap.md:16` 8-step gate, no execution of fetched content, no network
   in deterministic helpers.
 - [x] **3C** `upstream-contribution` (distributed proposer + maintainer intake) —
   let a kit adopter scan its local `.agents/skills/` and diverged receipts,

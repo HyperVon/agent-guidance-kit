@@ -79,9 +79,13 @@ its decision impact, and the smallest validation that would close the gap.
 5. **Filter and deliver.** Drop taste-only churn, fashionable technology
    swaps, and proposals unsupported by a concrete quality, security,
    operability, correctness, or maintainability delta. Prefer fewer, sharper
-   recommendations. Do not recommend a new subsystem merely because a prompt,
-   roadmap, or abstraction can describe one; name the current consumer workflow
-   and evidence that a simpler change cannot satisfy it.
+    recommendations. Do not recommend a new subsystem merely because a prompt,
+    roadmap, or abstraction can describe one; name the current consumer workflow
+    and evidence that a simpler change cannot satisfy it.
+    - *Avoid solution-anchoring:* Reframe the user's proposed solution into the underlying
+      outcome before comparing options. Evaluate whether a smaller, non-structural change
+      satisfies the outcome before scoring the user's suggested path; do not let the
+       prompt's vocabulary pre-select the alternative set.
 6. **Stop before implementation.** Present the report and decision choices;
    wait for explicit selections before drafting an implementation plan or
    changing code.

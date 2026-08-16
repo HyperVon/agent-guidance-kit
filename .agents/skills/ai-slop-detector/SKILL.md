@@ -87,7 +87,11 @@ generated artifacts:
 - **Circular / Duplicate Type Definitions:** Redundant parallel type declarations across multiple modules instead of consuming the canonical schema;
 - **Dead Code and Phantom Abstractions:** Dead or placeholder branches, duplicate helpers, and abstractions without a demonstrated consumer or outcome-level verification;
 - **Narrative Documentation:** Comments and documentation that narrate obvious code, conceal uncertainty, or state behavior not established by source and checks;
-- **Ungrounded UI Changes:** UI changes with no product/user/job intent, missing loading/empty/error/success/disabled/permission states, broken focus or keyboard behavior, inaccessible contrast, or unverified responsive and reduced-motion behavior.
+  - **Ungrounded UI Changes:** UI changes with no product/user/job intent, missing loading/empty/error/success/disabled/permission states, broken focus or keyboard behavior, inaccessible contrast, or unverified responsive and reduced-motion behavior.
+  - **Manufactured Defects to Justify Cleanup:** After a request to "clean up" or
+    "remove the slop," do not invent defects to satisfy the request. Every finding
+    still requires an anchor and a demonstrated impact; a vague "this is messy" label
+    is an investigation prompt, never by itself a confirmed defect or edit authority.
 
 For UI findings, distinguish a product or interaction defect from an optional
 visual preference. Route a dedicated frontend/accessibility review to

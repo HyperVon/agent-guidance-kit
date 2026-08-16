@@ -39,6 +39,8 @@ scope unless the user explicitly authorizes a safe, bounded check.
    Read an existing quality backlog if the repository has one. Run the smallest
    relevant baseline checks before changing tests or code and record failures,
    skips, versions, and test counts.
+
+   - If baseline is already FAILING on unrelated paths, record the pre-existing failures as out-of-scope, state that the new regression test will be evaluated against a focused run, and do not silently fold unrelated fixes into the hardening slice.
 2. **Discover.** Review the changed surface and nearby contracts. Deliberately
    probe boundaries, empty/null input, failures and recovery, retries and
    timeouts, ordering and concurrency, idempotence, persistence, and mode
@@ -61,6 +63,8 @@ scope unless the user explicitly authorizes a safe, bounded check.
    coverage for behavior that must remain stable. Consider property-based or
    mutation testing when example tests could remain tautological; choose the
    cheapest probe that can distinguish the likely wrong behavior.
+
+   - **Confirm the test is red first.** Run the new regression test in isolation and confirm it FAILS for the reported defect (not a typo or unrelated error) before any production change. A test that already passes has not reproduced the bug; a test that passes for a plausible wrong result is tautological. Only after a genuine red do you apply the minimal fix and confirm green.
 
    **Flakiness and timing anti-patterns:**
    Never resolve a flaky test or race condition by adding arbitrary `sleep()` delays, bumping timeout thresholds, or reordering tests until they happen to pass. Harden timing and concurrency defects deterministically:

@@ -37,6 +37,9 @@ Apply **STRIDE** systematically across every identified trust boundary:
 - **D**enial of Service: Exhausting API rate limits, computational budgets, worker memory, or token context windows.
 - **E**levation of Privilege: Escaping container/sandbox boundaries, escalating API roles, or executing unauthorized agent tools.
 
+- **Privacy (LINDDUN):** Where personal data is collected or shared, assess
+  linkability, identifiability, and data-minimization non-compliance as abuse paths.
+
 For **AI and Agentic Workflows**, explicitly evaluate:
 
 1. *Indirect Prompt Injection:* Untrusted inputs (user tickets, scraped web pages, third-party files) overriding agent instructions.
@@ -52,8 +55,13 @@ For **AI and Agentic Workflows**, explicitly evaluate:
    preserve unresolved assumptions if the user cannot answer.
 2. **Extract the system model from evidence.** Identify components, entrypoints,
    data stores, external integrations, runtime versus CI/dev/test tooling, and
-   source-of-truth architecture. Do not claim a component or control from a
-   filename or generic framework expectation.
+   source-of-truth architecture.
+   - *Enumerate data flows before boundaries:* For each component, list the concrete
+     flows (external input → validation/processing → datastore/downstream/exit),
+     including async jobs, webhooks, caches, and background workers. Derive trust
+     boundaries from where each flow crosses a trust change, not from component names.
+   - Do not claim a component or control from a
+     filename or generic framework expectation.
 3. **Map boundaries and assets.** Record concrete edges between components with
    protocol, identity, encryption, validation, rate-limit, or serialization
    details. Identify credentials, sensitive data, integrity-critical state,

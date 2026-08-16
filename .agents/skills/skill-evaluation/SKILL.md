@@ -234,6 +234,11 @@ outputs or private fixtures. Results must distinguish `protocol_status` from
 `measurement_status`: a valid isolated run may still be `inconclusive` when the
 cases or assertions do not discriminate the conditions.
 
+> The harness/model/effort values below are examples from this kit's own eval
+> harness. In a target project, substitute the actual harness, record runtime
+> metadata when available, and generalize the result-schema paths; keep
+> kit-specific filenames in evidence-only material, not portable core.
+
 When a run is executed, the agent records it in the repository so the validation matrix
 stays current — the human interface is conversation only (e.g., “run evals,”
 “evaluate a skill,” or “update the eval summary”); the agent runs all
