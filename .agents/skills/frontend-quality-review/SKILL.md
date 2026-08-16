@@ -43,8 +43,8 @@ description: >-
    - *Keyboard navigation:* Focus traps in modals/dialogs (missing `Escape` listener, missing focus restore on close); interactive elements reachable and operable via `Tab`/`Enter`/`Space`.
    - *Form controls:* Every input/select/textarea must have a programmatic label (`<label for="...">`, `aria-label`, or `aria-labelledby`); placeholder text is not an accessible label.
    - *Dynamic state & alerts:* Async status, error banners, and toast notifications must announce via `aria-live="polite"` or `role="alert"`.
-    - *Semantic interactive elements:* Buttons and links must use `<button>` and `<a>` (or explicit `role="button"` with `tabIndex="0"` and keyboard handlers); do not use bare `<div onClick=...>` without keyboard equivalents.
-    - *Visible focus:* `outline: none` (or `box-shadow`/`border` removal) on `:focus` without an equally visible `:focus-visible` or `:focus` replacement makes keyboard focus invisible. Treat removal of the native focus indicator as a P1 defect unless a clearly visible focus style is provided.
+   - *Semantic interactive elements:* Buttons and links must use `<button>` and `<a>` (or explicit `role="button"` with `tabIndex="0"` and keyboard handlers); do not use bare `<div onClick=...>` without keyboard equivalents.
+   - *Visible focus:* `outline: none` (or `box-shadow`/`border` removal) on `:focus` without an equally visible `:focus-visible` or `:focus` replacement makes keyboard focus invisible. Treat removal of the native focus indicator as a P1 defect unless a clearly visible focus style is provided.
    - *Async form protection:* Submit buttons must disable or indicate pending state during in-flight async requests to prevent duplicate submission or double charging.
    - *Form error recovery:* On validation failure, focus must be programmatically moved to the error summary or first invalid field, and invalid inputs must declare `aria-invalid="true"`.
 4. **Review responsive and accessible behavior.** Check semantic controls,

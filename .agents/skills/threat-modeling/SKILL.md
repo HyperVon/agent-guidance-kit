@@ -35,10 +35,10 @@ Apply **STRIDE** systematically across every identified trust boundary:
 - **R**epudiation: Performing sensitive or destructive actions without immutable audit logs.
 - **I**nformation Disclosure: Exposing credentials, PII, cross-tenant data, internal stack traces, or system prompts.
 - **D**enial of Service: Exhausting API rate limits, computational budgets, worker memory, or token context windows.
-    - **E**levation of Privilege: Escaping container/sandbox boundaries, escalating API roles, or executing unauthorized agent tools.
+- **E**levation of Privilege: Escaping container/sandbox boundaries, escalating API roles, or executing unauthorized agent tools.
 
-    - **Privacy (LINDDUN):** Where personal data is collected or shared, assess
-      linkability, identifiability, and data-minimization non-compliance as abuse paths.
+- **Privacy (LINDDUN):** Where personal data is collected or shared, assess
+  linkability, identifiability, and data-minimization non-compliance as abuse paths.
 
 For **AI and Agentic Workflows**, explicitly evaluate:
 

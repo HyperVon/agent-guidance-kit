@@ -86,7 +86,7 @@ its decision impact, and the smallest validation that would close the gap.
       outcome before comparing options. Evaluate whether a smaller, non-structural change
       satisfies the outcome before scoring the user's suggested path; do not let the
        prompt's vocabulary pre-select the alternative set.
- 6. **Stop before implementation.** Present the report and decision choices;
+6. **Stop before implementation.** Present the report and decision choices;
    wait for explicit selections before drafting an implementation plan or
    changing code.
 

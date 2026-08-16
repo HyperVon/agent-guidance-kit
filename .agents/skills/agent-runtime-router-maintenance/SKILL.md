@@ -35,6 +35,7 @@ directories or fetch a replacement.
 ## Audit and refresh
 
 ### Prerequisite: confirm the installer exists
+
 The plan/apply commands below invoke
 `<router-root>/.agents/skills/bootstrap-runtime-router/scripts/install_runtime.py`.
 This script is **not** part of this kit; it ships in the resolved Agent Runtime
