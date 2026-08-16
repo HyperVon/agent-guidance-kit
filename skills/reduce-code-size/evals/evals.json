@@ -12,7 +12,12 @@
         "Applies reduction ladder steps in order (dead code, duplicate logic, reuse helper, idioms)",
         "Re-measures after and runs the project's full behavior gate for touched/dependent modules",
         "Reports before-to-after size measurements"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 2,
@@ -24,7 +29,12 @@
         "Splits by a cohesive ownership boundary rather than mechanically moving code to change a line count",
         "Works in small slices with checkpoints (changed paths, remaining allowlist, risks, verification) between slices",
         "Preserves behavior and avoids purely cosmetic reordering/moves that hurt git-blame hygiene"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 3,
@@ -35,7 +45,12 @@
         "States this is a code-review task with no size-reduction goal and belongs to code-review",
         "Hands off to code-review rather than performing a reduction",
         "Does not edit code or produce a size-reduction report"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 4,
@@ -46,7 +61,12 @@
         "Asks for clarification on the goal OR names the routing tie-breaker between reduce-code-size and ai-slop-detector",
         "Honors the explicit-request and behavior-preservation boundaries of reduce-code-size if chosen",
         "Does not invent a capability (e.g., an AI-slop evidence audit) the selected skill does not claim"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 5,
@@ -57,7 +77,12 @@
         "Refuses to apply the change and identifies it as code golfing / a behavior change in error semantics",
         "Does not collapse distinct error messages, remove type annotations, or drop docstrings to deflate size",
         "Returns the behavior-changing reduction to the appropriate owner rather than forcing it"
-      ]
+      ],
+      "evaluation_modes": ["execution"],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "designed_only"
+      }
     }
   ]
 }

@@ -5,14 +5,23 @@
       "id": 1,
       "kind": "matching",
       "prompt": "Our test suite fails on test_checkout_total with an AssertionError after last week's refactor. Find the root cause before I fix it.",
-      "expected_output": "A reproducible diagnosis: exact reproduction command/inputs, a single falsifiable root-cause hypothesis backed by evidence, the smallest safe correction, a regression test, and focused + complete verification results.",
+      "expected_output": "A reproducible diagnosis: exact reproduction command/inputs and expected vs observed result, evidence traced through the recent refactor diff/history, a single falsifiable root-cause hypothesis confirmed by the smallest discriminating diagnostic, plus the proposed smallest correction, the regression test that should guard the failing seam, and the verification commands to run — stopping before applying the fix the user reserved.",
       "assertions": [
         "Records the exact failing command, inputs, and expected vs observed result",
         "States one falsifiable root-cause hypothesis ('X is the cause because Y')",
         "Runs the smallest diagnostic that distinguishes the hypothesis from alternatives",
-        "Adds or updates a regression test at the failing seam and runs focused + relevant complete verification",
-        "Does not apply a fix before the cause is confirmed"
-      ]
+        "Traces the regression through the recent refactor diff or commit history (e.g., diff inspection or bisection) and leaves the repository in its starting state",
+        "Proposes the smallest root-cause correction plus a regression test at the failing seam and the focused + relevant complete verification to run, instead of applying the fix the user reserved",
+        "Does not propose a fix before the cause is confirmed by evidence"
+      ],
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 2,
@@ -23,9 +32,17 @@
         "Establishes an empirical baseline failure rate via a stress loop rather than guessing",
         "Compares environment differences (OS, architecture, lockfiles, concurrency) for the CI-only failure",
         "Identifies a root cause with evidence rather than hiding it behind a retry or delay",
-        "Avoids arbitrary sleep or retry-until-green as the 'fix'",
-        "Stops and reports if the cause cannot be established after discriminating experiments"
-      ]
+        "Waits on an observable condition with a bounded timeout instead of an arbitrary sleep or retry-until-green loop",
+        "Stops and reports the missing evidence if the cause cannot be established after discriminating experiments"
+      ],
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 3,
@@ -37,18 +54,32 @@
         "Does not invent a reproduction, crash, or root cause for a non-failure request",
         "Routes to code-review or the ordinary implementation workflow",
         "Does not reframe the review as a debugging diagnosis"
-      ]
+      ],
+      "evaluation_modes": [
+        "routing"
+      ],
+      "requires_catalog": true,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 4,
       "kind": "ambiguous",
       "prompt": "The reports page feels slow — make it faster.",
-      "expected_output": "Recognizes ambiguity between a performance regression with an observed/measured slowdown (debugging) and a desire to optimize without an observed failure (ordinary implementation/quality work), and asks a clarifying question or states a routing tie-breaker.",
+      "expected_output": "Recognizes ambiguity between a performance regression with an observed/measured slowdown (debugging) and a desire to optimize without an observed failure (quality-hardening or the ordinary implementation workflow), and asks a clarifying question or states a routing tie-breaker.",
       "assertions": [
         "Notes the ambiguity between a measured performance regression (debugging) and general optimization (non-failure work)",
         "Either asks whether there is a reproducible regression vs baseline or picks the right workflow with justification",
         "Does not assume an observed failure exists before diagnosing"
-      ]
+      ],
+      "evaluation_modes": [
+        "routing"
+      ],
+      "requires_catalog": true,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 5,
@@ -60,7 +91,14 @@
         "Traces the bad value upstream to its first incorrect origin rather than adding a default/fallback",
         "Does not add try/except: pass or a broad fallback as the 'fix'",
         "Only accepts a null-handling guard if the component contract explicitly dictates null/empty input is valid at that layer"
-      ]
+      ],
+      "evaluation_modes": [
+        "execution"
+      ],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "designed_only"
+      }
     }
   ]
 }

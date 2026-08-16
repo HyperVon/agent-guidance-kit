@@ -12,7 +12,10 @@
         "Contains a dependency ordering section describing which tasks precede others",
         "Includes interfaces/contracts, migration considerations with rollback, task breakdown, verification strategy, and risks sections",
         "Does not begin editing or writing code and states execution is handed to the implementation step"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 2,
@@ -24,7 +27,10 @@
         "Explains the planning impact of the drift before producing the plan",
         "Produces the full required plan sections anchored to the current repo (not stale assumptions)",
         "Avoids arbitrary file guesses not grounded in the actual repository"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 3,
@@ -35,7 +41,10 @@
         "States the requirements/approach are undecided and routes the work to requirements-and-design",
         "Does not relitigate or produce a full execution plan",
         "Does not begin writing or editing code"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 4,
@@ -46,7 +55,10 @@
         "Asks for clarification about whether an approved design or recorded decision exists, OR explicitly names the routing tie-breaker",
         "States implementation-planning only plans from an already-approved design",
         "Does not silently produce a plan or start implementation"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 5,
@@ -57,7 +69,10 @@
         "Refuses to begin editing or writing code as part of planning",
         "States planning is complete and execution is handed to the implementation step",
         "Does not relitigate the design or expand scope into implementation"
-      ]
+      ],
+      "evaluation_modes": ["execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     }
   ]
 }

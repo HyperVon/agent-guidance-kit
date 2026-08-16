@@ -10,7 +10,12 @@
         "Includes setup and testing commands read from actual build/package files (e.g., go.mod / Makefile)",
         "Separates discovered FACTS (with cited evidence files) from POLICY placeholders awaiting team confirmation",
         "Does not assert team policy (merge strategy, review requirements) that the repository does not evidence"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 2,
@@ -21,7 +26,12 @@
         "Cites package.json and the CI configuration as evidence for pnpm/vitest and GitHub Actions",
         "Points to/reuses skills via links instead of duplicating their procedures",
         "Keeps the file thin and accurate and does not pad with unverified guesses"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 3,
@@ -32,7 +42,12 @@
         "States the deliverable is a reusable skill and belongs to skill-authoring",
         "Hands off to skill-authoring rather than producing an AGENTS.md",
         "Does not author a guidance file or claim to write the skill here"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 4,
@@ -43,7 +58,12 @@
         "Asks for clarification on whether the file needs to be written vs exposed to a harness, OR names the tie-breaker",
         "If framed as exposing to a harness, routes to harness-adaptation with justification",
         "Does not conflate authoring the file with harness discovery/hand-off"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 5,
@@ -54,7 +74,12 @@
         "Does not assert the squash-merge / two-approvals / trunk-based policy as a fact",
         "Marks the unverified items as policy placeholders awaiting team confirmation",
         "Cites the absence of repository evidence (contributing guide, CI, branch rules) rather than inventing the policy"
-      ]
+      ],
+      "evaluation_modes": ["execution"],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "designed_only"
+      }
     }
   ]
 }

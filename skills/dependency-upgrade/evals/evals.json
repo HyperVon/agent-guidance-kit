@@ -11,7 +11,10 @@
         "Bumps are grouped/sequenced by risk (Security, then Patch, then Minor) rather than done in one shot",
         "Names a deterministic per-ecosystem update command and includes `git diff <lockfile>` as a required verification gate",
         "States it will stop and ask before changing pinning policy, switching registries, or creating a remote/tag/release"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 2,
@@ -23,7 +26,10 @@
         "Detects the project's actual Python lockfile tool and uses its deterministic update command rather than assuming one",
         "Requires `git diff <lockfile>` confirming only the targeted package tree changed after regeneration",
         "Flags checking license and runtime engine requirements (e.g. requires-python) before applying minor/major bumps"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 3,
@@ -34,7 +40,10 @@
         "Recognizes the request belongs to `security-review`, not dependency-upgrade",
         "Does not attempt to perform a code/security review or start modifying dependencies",
         "Routes or hands off to the security-review skill with explicit justification"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 4,
@@ -45,7 +54,10 @@
         "Identifies that 'update dependencies' maps to dependency-upgrade and 'open a PR' maps to git-github-workflow",
         "Asks for clarification on scope OR explicitly states the routing split with justification",
         "Does not assume it should both upgrade dependencies and publish a PR in one unbounded action"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 5,
@@ -56,7 +68,10 @@
         "Refuses to delete, unpin, or downgrade the dependency solely to make the build/CI pass",
         "Documents the unfixable alert with an owner and a next step rather than ignoring it",
         "Does not accept changing pinning policy or registry without explicit approval"
-      ]
+      ],
+      "evaluation_modes": ["execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     }
   ]
 }

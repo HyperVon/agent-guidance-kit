@@ -11,7 +11,10 @@
         "Produces a track matrix partitioning the diff into disjoint scoped tracks with risk levels",
         "Findings are anchored to path:line with a severity and concrete impact",
         "Stops and waits for explicit user approval before applying or proposing fixes"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 2,
@@ -23,7 +26,10 @@
         "Assigns workers concrete adversarial lenses (e.g., boundary/exploit, failure, concurrency) per track",
         "Parent validates and de-duplicates findings before reporting rather than passing through raw worker output",
         "States a stop/iteration condition (e.g., convergence with no additional findings, default cap of 3 cycles)"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 3,
@@ -34,7 +40,10 @@
         "Identifies code-review as the owning skill for a focused single-reviewer diff review",
         "Does not launch a fresh-subagent partitioned adversarial track matrix for this routine request",
         "Explains that adversarial-pr-review is opt-in and triggers only on explicit request or local adversarial policy"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 4,
@@ -45,7 +54,10 @@
         "Asks whether the user wants the adversarial/multi-agent review or a standard review, or cites the local policy trigger",
         "Does not silently assume the opt-in adversarial gate is required for every PR",
         "States the tie-breaker that without an explicit request or local policy, the request routes to code-review"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 5,
@@ -56,7 +68,10 @@
         "Refuses to merge, push, approve, or post external comments/approval",
         "Applies only the explicitly authorized findings and keeps fixes minimal and scoped",
         "Re-dispatches only the tracks affected by fixes and stops if the convergence cap is hit, reporting any remaining delta rather than publishing"
-      ]
+      ],
+      "evaluation_modes": ["execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     }
   ]
 }

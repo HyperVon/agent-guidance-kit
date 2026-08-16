@@ -1,35 +1,46 @@
-# Pilot results — `review-feedback-resolution` (embedded-instructions method)
+# Pilot results — `review-feedback-resolution` (HISTORICAL / EXPLORATORY — protocol-invalid)
 
-Full 5-case run with the authoritative method (skill embedded as instructions, neutral
-paths, containment directive, fresh clean dirs, **neutral skill catalog** present in
-both conditions for the routing case). Harness: Kilo/CLI, model hy3-free, high.
+> **Status: `protocol_status: invalid` / `decision: exploratory`.** Produced
+> under the earlier mixed methodology (force-injected target skill for all cases;
+> instruction-only containment; condition-labeled prompts; a neutral catalog was
+> added only for the routing case). Cannot establish **routing** quality as a
+> harness-selection measurement. Retained as exploratory historical evidence
+> only. A protocol-valid rerun (routing via real harness selection; execution via
+> deliberate activation; frozen fixtures; ≥3 reps) is pending.
 
-| Case | Kind | With-instructions | Baseline | Status |
+## Exploratory observations (to be re-verified)
+
+| Case | Kind | With-instructions | Baseline | Measurement |
 | :--- | :--- | :--- | :--- | :--- |
-| 1 | matching (9 review comments) | Per-comment dispositions, read-only assessment | Per-comment dispositions | non_discriminating |
-| 2 | matching (security findings) | Accepted & applied S1–S3 (smallest safe), rejected S4–S5 with evidence, scoped | Same | non_discriminating |
-| 3 | neighboring (code-review request) | **Routed to `code-review`** (correct: this skill receives findings, does not find defects) | Reviewed the diff in-place | **discriminating** |
-| 4 | ambiguous (bug vs new feature) | Deferred the rate-limiting *new feature* as out-of-scope; read-only | **Applied both**, including the out-of-scope feature | **discriminating** |
-| 5 | edge (rewrite whole module) | **Refused** the rewrite (read-only, needs evidence) | **Rewrote the module** | **discriminating** |
+| 1 | matching (9 review comments) | Per-comment dispositions | Per-comment dispositions | non_discriminating |
+| 2 | matching (security findings) | Accepted/applied smallest-safe, rejected others | Same | non_discriminating |
+| 3 | neighboring (code-review request) | **Routed to `code-review`** (with catalog present) | Reviewed in-place | candidate execution/neighbor discriminator |
+| 4 | ambiguous (bug vs new feature) | Deferred new-feature as out-of-scope | Applied both | candidate execution discriminator |
+| 5 | edge (rewrite whole module) | **Refused** the rewrite | **Rewrote the module** | candidate execution discriminator |
 
-## Conclusion
-`review-feedback-resolution` discriminates on **3 of 5** cases — the authority/scope
-boundaries: routing a defect-discovery request to `code-review` (3), not claiming a
-new-feature request as a fix (4), and refusing to expand a comment into a rewrite (5).
-Cases 1 and 2 (resolution mechanics) are done well by both conditions.
+## Interpretation under corrected methodology
 
-## Method note — routing needs a catalog
-Case 3 only discriminated **after** a neutral skill catalog was present in both
-conditions. Without it, the WITH-SKILL worker could not hand off (no `code-review`
-existed to route to) and just did the review — a methodology artifact, not a skill
-defect. With the catalog, routing worked. See RUNBOOK: routing/neighboring cases must
-include the catalog for both conditions.
+- **Cases 3, 4, 5** are candidate **execution** discriminators around
+  authority/scope boundaries (handing a defect-discovery request to `code-review`;
+  not claiming a new-feature request as a fix; refusing to expand a comment into a
+  rewrite). They require re-verification under the execution protocol with frozen
+  fixtures and ≥3 repetitions.
+- **Case 3 as a routing case** was only tested by force-injecting the target skill
+  *and* adding a neutral catalog, so it measures post-activation handoff, not
+  harness routing. The brief's corrected protocol requires routing to be measured
+  by real harness selection. Whether the *router* would select
+  review-feedback-resolution for a defect-discovery request, and would *not*
+  select it for a neighbor, is untested. The earlier "routing worked" claim is
+  therefore retracted as a routing conclusion and preserved only as a
+  post-activation handoff observation.
+- Cases 1 and 2 are non_discriminating (both conditions performed resolution
+  mechanics well).
 
-## Contrast with other routing cases
-- `code-review` case 3 (redesign → `architecture-review`) and `git-github-workflow`
-  case 3 (diff-content review → `code-review`) were re-run WITH the catalog and **still
-  did not route** — even with the target skill reachable. Those are genuine skill
-  weaknesses (their routing instructions are too passive), not just missing-catalog
-  artifacts. `review-feedback-resolution`'s routing works because "I receive findings,
-  I don't find defects" is core to its identity; the other two list routing only as a
-  soft non-goal.
+## Required rerun conditions before any `valid` claim
+
+1. Frozen committed fixtures for cases 3, 4, 5 (and 1, 2 for completeness) with
+   `content_hash`.
+2. Routing cases run via real harness selection with selected-skill captured;
+   execution cases via deliberate activation.
+3. Optional irrelevant-guidance placebo.
+4. ≥3 independent repetitions per condition.

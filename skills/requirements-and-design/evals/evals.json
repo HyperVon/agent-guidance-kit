@@ -12,7 +12,12 @@
         "Defines testable acceptance criteria tied to the outcome",
         "Enumerates at least two alternative approaches and states why each was or was not chosen",
         "States a recommended approach and lists unresolved decisions that block implementation"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 2,
@@ -24,7 +29,12 @@
         "Includes acceptance criteria that measure the reduction in support load or successful self-resets",
         "Considers plausible approaches including doing less or nothing and records the reason each was set aside",
         "Produces a recommended approach rather than an execution/implementation plan"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 3,
@@ -35,7 +45,12 @@
         "Identifies the request as evaluating an existing system or design, not defining new requirements",
         "Names architecture-review as the correct skill for judging an existing design",
         "Does not redefine requirements or select a net-new approach as if no design existed"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 4,
@@ -46,7 +61,12 @@
         "Recognizes the request could be either requirements/approach selection or an implementation/execution plan",
         "Either asks a clarifying question about which phase the user wants, or states a tie-breaker naming implementation-planning as the downstream owner",
         "Does not silently produce a full implementation plan while claiming to do requirements-and-design"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 5,
@@ -58,7 +78,12 @@
         "Refuses to redesign/refactor the existing billing architecture",
         "Hands off to implementation-planning for the execution plan",
         "States that requirements-and-design stops at a settled requirements/approach record"
-      ]
+      ],
+      "evaluation_modes": ["execution"],
+      "requires_catalog": true,
+      "fixture": {
+        "status": "designed_only"
+      }
     }
   ]
 }

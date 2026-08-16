@@ -5,14 +5,23 @@
       "id": 1,
       "kind": "matching",
       "prompt": "Design a five-case evaluation pack for our code-review skill that compares it against a no-skill baseline, then tell me whether to keep, revise, merge, or reject it.",
-      "expected_output": "An evals/evals.json case set (two matching, one neighboring, one ambiguous, one edge) with frozen expected outcomes and verifiable assertions, plus a keep/revise/merge/reject recommendation; design cases before seeing condition outputs.",
+      "expected_output": "An evals/evals.json case set (two matching, one neighboring, one ambiguous, one edge) with frozen expected outcomes and verifiable assertions, plus the WITH-SKILL vs BASELINE run plan and the decision rule that would produce a keep/revise/merge/reject call; the verdict itself is withheld because the cases are designed only, not executed and graded, and the baseline is labelled accurately (harness-default unless the harness is genuinely skill-free).",
       "assertions": [
         "Freezes expected outcomes and assertions before any condition output is observed",
         "Includes at least the required case kinds: two matching, one neighboring, one ambiguous, and one edge",
         "Outputs a structured case set consistent with evals.json shape (id, kind, prompt, expected_output, assertions)",
         "Defines a WITH-SKILL vs BASELINE comparison rather than a single-run judgment",
-        "Concludes with a keep/revise/merge/reject recommendation, not just a case list"
-      ]
+        "States the keep/revise/merge/reject decision rule and defers the verdict until both conditions are executed and graded, instead of issuing a decision from designed-only cases",
+        "Labels the comparison baseline accurately (harness-default vs a genuinely skill-free no-skill context) rather than implying the default harness is empty"
+      ],
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 2,
@@ -25,7 +34,15 @@
         "Grades assertions against observable artifacts with quoted evidence spans rather than worker self-assertions",
         "Reports both protocol_status and measurement_status, distinguishing valid isolation from inconclusive measurement",
         "Does not reveal expected_output, assertions, or the comparison design to the workers"
-      ]
+      ],
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 3,
@@ -37,18 +54,32 @@
         "Does not design or run an evaluation case set in response",
         "Hands off to skill-authoring and/or skill-reviewer rather than performing evaluation",
         "Respects the scope gate by not imposing measurement on a request that did not ask for it"
-      ]
+      ],
+      "evaluation_modes": [
+        "routing"
+      ],
+      "requires_catalog": true,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 4,
       "kind": "ambiguous",
       "prompt": "Is the threat-modeling skill actually helping our agents, or should we cut it?",
-      "expected_output": "Recognizes this could be a structured eval (measure routing/output value) or a content review (what's weak), and asks a clarifying question or states a routing tie-breaker before designing an eval.",
+      "expected_output": "Recognizes this could be a structured eval (measure routing/output value) or a content review (what's weak, owned by skill-reviewer), and asks a clarifying question or states a routing tie-breaker before designing an eval.",
       "assertions": [
         "Notes the ambiguity between a clean-context evaluation and a content review of the skill",
         "Either asks whether the user wants measurement vs. a content review, or picks the right skill with justification",
         "Does not silently begin designing evaluation cases without resolving the ambiguity"
-      ]
+      ],
+      "evaluation_modes": [
+        "routing"
+      ],
+      "requires_catalog": true,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 5,
@@ -61,7 +92,14 @@
         "Requires two fresh independent WITH-SKILL and BASELINE workers with verified boundaries",
         "Marks the condition contaminated / untested if independent contexts cannot be created and verified",
         "Does not record a keep/revise/reject decision from a contaminated comparison"
-      ]
+      ],
+      "evaluation_modes": [
+        "execution"
+      ],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "designed_only"
+      }
     }
   ]
 }

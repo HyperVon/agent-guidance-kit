@@ -1,0 +1,45 @@
+Subject: [PATCH] Harden user lookup (partial export: 2 of 4 changed files)
+
+Export truncated at size limit after validation.py; hunks for users.py and
+auth.py were not written.
+
+---
+ app.py        | 8 ++++++--
+ validation.py | 7 +++++++
+ 2 files changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/app.py b/app.py
+index 7c1f3aa..b41d0e9 100644
+--- a/app.py
++++ b/app.py
+@@ -52,12 +52,18 @@ def session_context():
+     user_id = validation.coerce_positive_int(request.args.get("user_id"))
+     if user_id is None:
+         return jsonify({"error": "invalid_request", "detail": "user_id"}), 400
+     profile = users.get_user_profile(user_id)
+     return (
+         jsonify(
+             {
+                 "user_id": user_id,
+-                "locale": profile.locale,
++                "locale": profile.locale if profile else settings.DEFAULT_LOCALE,
++                "profile_present": profile is not None,
+             }
+         ),
+         200,
+     )
+diff --git a/validation.py b/validation.py
+index 2ab9c41..d5e77b2 100644
+--- a/validation.py
++++ b/validation.py
+@@ -63,3 +63,10 @@ def parse_id_list(raw: str, limit: int) -> Optional[Sequence[int]]:
+     if len(ids) > limit:
+         return None
+     return ids
++
++
++def clamp_page_size(raw: object, default: int, maximum: int) -> int:
++    value = coerce_positive_int(raw)
++    if value is None:
++        return default
++    return min(value, maximum)

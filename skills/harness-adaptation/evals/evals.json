@@ -11,7 +11,10 @@
         "Prefers native discovery and adds at most a thin pointer without duplicating skill content",
         "Keeps one canonical source (AGENTS.md/skills/) and does not create a parallel source of truth",
         "Stops for approval before mutating the target and reports a capability table"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 2,
@@ -23,7 +26,10 @@
         "Respects the adapter size budget (under 40 lines / 2 KB) and uses pointer syntax, not copied skill bodies",
         "Keeps the pointer delegating to the canonical guidance rather than becoming a second source of truth",
         "Stops for approval before applying and plans a verification step from the harness boundary"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 3,
@@ -34,7 +40,10 @@
         "Recognizes the request belongs to `skill-authoring`, not harness-adaptation",
         "Does not attempt to author or write a new skill itself",
         "Routes or hands off to skill-authoring with explicit justification"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 4,
@@ -45,7 +54,10 @@
         "Identifies that adoption/discovery maps to harness-adaptation and conciseness maps to skill-optimizer",
         "Asks for clarification on scope OR states the routing split with justification",
         "Does not silently take on the skill-optimizer conciseness work"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 5,
@@ -56,7 +68,10 @@
         "Refuses to copy full skill bodies into the always-loaded CLAUDE.md entrypoint",
         "Enforces the size budget and pointer pattern (thin pointer, not duplicated content)",
         "Keeps one canonical source and stops for approval before changing the target"
-      ]
+      ],
+      "evaluation_modes": ["execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     }
   ]
 }

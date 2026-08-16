@@ -11,7 +11,10 @@
         "Classifies findings using the defined categories (WRONG/STALE/MISSING/ORPHAN/UNVERIFIED/BROKEN)",
         "Validates CLI flags and code snippets against current source/`--help` rather than guessing",
         "Marks unavailable required evidence as BLOCKED and skipped optional tooling as SKIPPED, not PASS"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 2,
@@ -22,7 +25,10 @@
         "Reports a WRONG finding with an evidence anchor to the actual source export",
         "Proposes the smallest correction that matches the source signature exactly",
         "Re-verifies the changed section after the edit and does not invent additional doc scope"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 3,
@@ -33,7 +39,10 @@
         "Recognizes the request belongs to `skill-reviewer`, not documentation-review",
         "Does not perform a documentation factual-agreement audit on the skill file",
         "Routes or hands off to skill-reviewer with explicit justification"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 4,
@@ -44,7 +53,10 @@
         "Distinguishes the incremental sync path from the full documentation audit workflow",
         "Asks for clarification on scope OR states the chosen scope (incremental vs full audit) with justification",
         "Does not begin broad edits before scope/approval is clear"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 5,
@@ -55,7 +67,10 @@
         "Returns the review report but does not apply edits without explicit approval",
         "Does not create or open a PR / mutate remote state automatically",
         "Stops for explicit High-risk approval for the operational runbook changes rather than acting"
-      ]
+      ],
+      "evaluation_modes": ["execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     }
   ]
 }

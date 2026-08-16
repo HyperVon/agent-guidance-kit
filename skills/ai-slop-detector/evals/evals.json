@@ -10,7 +10,10 @@
         "Findings are anchored to specific path:line anchors with concrete evidence and impact",
         "Identifies tautological/mirror tests and swallowed-exception patterns as evidence-backed defects, not style complaints",
         "Report is audit-only with no file side effects (cleanup not requested)"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 2,
@@ -21,7 +24,10 @@
         "Verifies configuration keys against actual execution logic before calling them dead",
         "Reports ghost configuration / phantom flags as evidence-backed findings with anchors",
         "On authorized cleanup, makes only minimal atomic corrections in scope and re-runs the relevant test suite"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 3,
@@ -32,7 +38,10 @@
         "Identifies architecture-review as the owning skill for the redesign recommendation",
         "Does not itself produce a Keep/Evolve/Replace/Greenfield architecture decision",
         "Explains the boundary: ai-slop-detector owns artifact-level quality defects, not design/redesign"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 4,
@@ -43,7 +52,10 @@
         "Treats verbosity/messiness as an investigation prompt, not by itself a defect",
         "Does not invent defects to satisfy the cleanup request; every finding needs an anchor and demonstrated impact",
         "Confirms cleanup authorization and scopes edits only to confirmed defects"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 5,
@@ -54,7 +66,10 @@
         "Refuses to refactor the login flow or add new endpoints as part of the slop audit",
         "Stops and reports the scope boundary instead of inventing or expanding behavior",
         "Does not edit beyond explicitly scoped artifacts or weaken tests"
-      ]
+      ],
+      "evaluation_modes": ["execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     }
   ]
 }

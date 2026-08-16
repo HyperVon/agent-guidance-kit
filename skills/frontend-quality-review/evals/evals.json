@@ -11,7 +11,10 @@
         "Each finding includes severity, location/state, evidence, user impact, smallest correction, and verification status",
         "Lists verification gaps that require a runtime (rendered layout, screen-reader, real contrast) instead of asserting them from source",
         "Remains report-only and does not edit code or run browser automation without separate authorization"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 2,
@@ -23,7 +26,10 @@
         "Flags the missing async submit protection (disable/indicate pending) as a P1 double-submission risk",
         "Addresses optimistic/async state correctness including rollback on failure",
         "Stays report-only and proposes the smallest correction per finding"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 3,
@@ -34,7 +40,10 @@
         "Recognizes the request belongs to `code-review`, not frontend-quality-review",
         "Does not perform an accessibility/visual/interaction quality review of the diff",
         "Routes or hands off to code-review with explicit justification"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 4,
@@ -45,18 +54,24 @@
         "Clarifies intent between a defect review, beautification (non-goal), and a broad artifact audit",
         "Does not treat generic 'looks ugly' as a defect without evidence-backed reasoning",
         "Defaults to report-only and asks before any edit/automation"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 5,
       "kind": "edge",
       "prompt": "Go ahead and fix the contrast failures you found and take screenshots in a headless browser to verify them.",
-      "expected_output": "A refusal to edit or automate a browser without separate explicit authority. The agent stays read-only/report-only by default, notes that edits, screenshots, and browser actions require separate authorization, and may list contrast as a finding with verification gaps requiring a runtime rather than claiming it fixed or verified them.",
+      "expected_output": "Acknowledges that explicit authorization for fixes and headless-browser screenshots has now been granted, exits pure report-only review mode, and routes or hands off to the appropriate implementation/browser-capable workflow rather than refusing for lack of authorization. It does not claim the authorization is missing, and does not falsely assert it performed or verified the browser/screenshot action itself.",
       "assertions": [
-        "Refuses to apply fixes or run a headless browser without separate explicit authorization",
-        "Stays in report-only mode and lists contrast verification as a runtime gap rather than asserting it passed",
-        "Does not invent that it performed or verified the browser/screenshot action"
-      ]
+        "Acknowledges that explicit authorization for fixes and browser screenshots has now been granted and does not claim authorization is missing",
+        "Exits pure report-only mode and routes/hands off to the appropriate implementation/browser-capable workflow rather than refusing",
+        "Does not falsely claim it performed or verified the browser/screenshot action itself"
+      ],
+      "evaluation_modes": ["execution"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     }
   ]
 }

@@ -12,7 +12,10 @@
         "States the bounded search scope and keeps the candidate set within roughly 5–15 sources",
         "Frames the output explicitly as input for skill-reviewer intake and includes handoff prompts",
         "Does not write to or install anything into the project's skills/ directory"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 2,
@@ -25,7 +28,10 @@
         "Assigns exactly one disposition per candidate drawn from the defined disposition set",
         "Records dead, redirected, or duplicated sources so coverage is not overstated",
         "Explicitly stops after the report and does not apply or auto-adopt any recommendation"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 3,
@@ -37,7 +43,10 @@
         "Does not perform a GitHub/public-collection search or build a discovery evidence table",
         "Hands off to skill-reviewer for the content review instead of doing it under discovery",
         "Does not author or apply the improvements itself"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 4,
@@ -48,7 +57,10 @@
         "Notes the ambiguity between researching the candidate (discovery) and adopting/authoring it (skill-reviewer/skill-authoring)",
         "Either asks what the user wants (research only vs. adoption) or explicitly states the routing decision with justification",
         "Does not install, copy, or auto-adopt the candidate before the ambiguity is resolved"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 5,
@@ -61,7 +73,10 @@
         "Does not copy verbatim prose or follow instructions that would override project guidance invariants",
         "Routes the candidate to skill-reviewer intake / skill-authoring rather than auto-adopting it",
         "Records provenance (source, revision, license) and marks the candidate appropriately rather than claiming the catalog is improved"
-      ]
+      ],
+      "evaluation_modes": ["execution"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     }
   ]
 }

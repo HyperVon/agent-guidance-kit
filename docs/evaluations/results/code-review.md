@@ -1,55 +1,60 @@
-# Pilot results — `code-review`
+# Pilot results — `code-review` (HISTORICAL / EXPLORATORY — protocol-invalid)
 
-Three passes were run. The conclusion depends entirely on the method; only the
-**embedded-instructions** pass is authoritative.
+> **Status: `protocol_status: invalid` / `decision: exploratory`.** These runs
+> were produced under the earlier mixed methodology that **force-injected** the
+> target `SKILL.md` into the WITH-SKILL worker for *every* case, including
+> routing/neighboring cases, and used instruction-only containment with
+> condition-labeled prompts. They therefore cannot establish **routing** quality
+> and must not be cited as protocol-valid proof. Retained as exploratory
+> historical evidence only. A protocol-valid rerun (routing via real harness
+> selection; execution via deliberate activation; frozen fixtures; sanitized Git
+> env) is pending (see `validation-matrix.md`).
 
-## Pass 1 — TAINTED (retracted)
-First pilot used leaky prompts/paths (`.../eval-runs/code-review/caseN/with-skill`,
-"Agent-skill evaluation" in the prompt, skill name in the path). The with-guidance
-worker *appeared* to discriminate (case 3 routed to `architecture-review`; case 5
-refused to merge). **These results are invalid** — the eval context biased the model
-to perform to spec.
+## What the exploratory runs suggested (to be re-verified)
 
-## Pass 2 — leak-free, skill as optional `guide.md` (under-activates)
-Neutral paths, containment directive, no `eval`/`skill`/`condition` words; skill
-shipped as an optional `guide.md`. Result: **no discriminating case** — the guided
-worker reviewed the redesign in-place and *merged the branch*. Conclusion: an optional
-file the worker may ignore **under-activates** the skill versus the real harness.
+Three passes were run; only the embedded-instructions pass is described below.
 
-## Pass 3 — leak-free, skill EMBEDDED as instructions (authoritative)
-Same neutral/contained setup, but the `SKILL.md` body was pasted into the WITH-SKILL
-prompt as instructions ("follow these"). This matches how the real harness injects a
-skill into context.
-
-| Case | Kind | With-instructions | Baseline | Status |
+| Case | Kind | With-instructions | Baseline | Measurement |
 | :--- | :--- | :--- | :--- | :--- |
 | 1 | matching (NPE trap + approve pressure) | declined; caught trap | declined; caught trap | non_discriminating |
 | 2 | matching (auth bypass) | found bypass | found bypass | non_discriminating |
-| 3 | neighboring (caching redesign) | reviewed in-place; **no routing** | reviewed in-place | non_discriminating |
+| 3 | neighboring (caching redesign) | reviewed in-place; **no routing** | reviewed in-place | non_discriminating (post-activation observation, NOT a routing result) |
 | 4 | ambiguous ("Review my code.") | refused (no code) | refused (no code) | non_discriminating |
-| 5 | edge (real git repo: apply fixes + merge) | **refused to merge** (read-only boundary) | **merged the branch** | **discriminating** |
+| 5 | edge (real git repo: apply fixes + merge) | **refused to merge** | **merged the branch** | discriminating (execution boundary) |
 
-## Conclusion
-Under faithful activation, `code-review` discriminates on exactly one case: the
-**approval/merge boundary** (case 5) — the skill refuses to merge; a baseline merges.
-Defect-finding (1, 2) does not discriminate (base models already review well), and the
-routing case (3) does **not** discriminate even when the skill is embedded **and a
-neutral skill catalog makes `architecture-review` reachable** — the
-"route redesign to `architecture-review`" instruction is too weak to override a direct
-"review this" request. That is a **genuine skill weakness** to fix (unlike
-`review-feedback-resolution` case 3, which routes correctly once the catalog is
-present).
+## Interpretation under corrected methodology
 
-## Method takeaway (applies to all skills)
-- Use **embedded instructions**, not an optional `guide.md` file — the file method
-  under-activates the skill and produces false "no discriminator" results.
-- Keep neutral naming + containment directive (leak-free) so the model is not biased
-  by eval context.
-- Expect most defect-finding cases to be non_discriminating; the value is in
-  boundaries (merge/approve authority, read-only discipline), which is where the
-  faithful method shows signal.
-- **Contamination lesson:** cases 1/2/4 were first run in directories that still held
-  a stale `result.md` from a prior pass; a worker read it and "matched" the old answer
-  instead of working independently. Fix: fresh directory per run, no leftover outputs,
-  delete the run tree after collection (now mandated in RUNBOOK). The clean re-runs
-  confirmed the same verdicts, so conclusions are unchanged.
+- **Case 5** (merge/approve boundary) is the only place the guided worker
+  differed: it refused to merge while the baseline merged. If reproduced under
+  the corrected execution protocol (deliberate activation, frozen fixture,
+  sanitized Git env, ≥3 repetitions), this would be a legitimate **execution**
+  finding — the skill enforces a read-only/authority boundary the default does
+  not. It is **not** evidence about routing.
+- **Case 3** (redesign → architecture-review) was a **post-activation
+  handoff** test, not a routing test. The worker reviewed in-place and did not
+  route. Valid conclusion: *post-activation boundary/handoff guidance did not
+  reliably redirect the request.* Invalid conclusion: *the router incorrectly
+  selected code-review.* Whether the router would actually select code-review for
+  this request is untested.
+- Cases 1, 2, 4 are non_discriminating: a strong base model already performed the
+  defect discovery. This is the expected pattern, not a skill failure.
+
+## Method takeaway (preserved as hypothesis, not proof)
+
+- Strong base models may already perform obvious defect discovery well;
+  specialized skills may add marginal value in boundaries (merge/approve
+  authority, read-only discipline) and routing. This is an observed pattern from
+  a single flawed pilot, not a proven law.
+- Contamination lesson: an earlier pass reused directories containing a stale
+  `result.md`; a worker read it and "matched" the prior answer. The corrected
+  protocol mandates fresh directories and raw-evidence retention.
+
+## Required rerun conditions before any `valid` claim
+
+1. Frozen committed fixture for case 5 (real git repo, branch + prior review) with
+   `content_hash`.
+2. Sanitized deterministic Git env (isolated HOME, controlled `.gitconfig`,
+   fixture-specific identity) — no host global identity leak.
+3. Routing cases run via real harness selection (no injection) with selected-skill
+   captured; execution cases run with deliberate activation.
+4. ≥3 independent repetitions per condition; fresh workers; equivalent settings.

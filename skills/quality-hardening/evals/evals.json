@@ -11,7 +11,12 @@
         "Adds a failing regression test first and confirms it FAILS (is red) for the defect before any production fix",
         "Applies the smallest necessary production fix and keeps the regression test green",
         "Returns the completion contract with Scope, Baseline, Findings (ID/severity/expected vs observed/evidence), Changes, and Verification sections"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 2,
@@ -23,7 +28,12 @@
         "Classifies each finding with a stable ID, severity, size, affected path, expected vs observed behavior, and evidence anchor",
         "Adds regression tests before fixes and does not weaken assertions merely to make a gate green",
         "Runs focused and full relevant gates and records counts/artifacts"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 3,
@@ -34,7 +44,12 @@
         "States the task is a review/report without a test-first fix loop and belongs to code-review",
         "Hands off to code-review rather than beginning the hardening loop",
         "Does not modify code, add regression tests, or make production fixes"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 4,
@@ -45,7 +60,12 @@
         "Asks for clarification on scope OR explicitly states the routing tie-breaker (harden via tests+minimal fix, not redesign/deploy)",
         "Names deployment and remote-system mutation as out of scope for this skill",
         "Commits to the test-first regression approach rather than an unbounded rewrite"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 5,
@@ -56,7 +76,12 @@
         "Flags the token-refresh change as high-risk security work requiring explicit approval",
         "Stops and waits for explicit approval rather than proceeding",
         "Does not create or modify a pull request, release, or deployment automatically"
-      ]
+      ],
+      "evaluation_modes": ["execution"],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "designed_only"
+      }
     }
   ]
 }

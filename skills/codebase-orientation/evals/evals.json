@@ -10,7 +10,10 @@
         "Covers the required overview sections (purpose, stack, structure, entry points, workflows, modules, integrations, config, testing, conventions, operations)",
         "Claims are grounded in repository evidence (source, config, tests, build files) rather than assumed",
         "Distinguishes observed facts, inferred behavior, and unknowns explicitly"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 2,
@@ -21,7 +24,10 @@
         "Identifies entry points and the payment-retry workflow from source evidence",
         "Names the important modules and integrations that carry the core behavior",
         "States any unconfirmable details as unknowns instead of inventing flows"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 3,
@@ -32,7 +38,10 @@
         "Provides the descriptive, evidence-backed orientation as requested",
         "Identifies the redesign proposal as owned by architecture-review",
         "Does not itself judge or redesign the architecture; hands off the redesign"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 4,
@@ -43,7 +52,10 @@
         "Gives a descriptive, evidence-backed understanding of the project",
         "States the boundary that planning changes belongs to implementation-planning, not this skill",
         "Clarifies the needed map depth / next step rather than silently moving into implementation planning"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 5,
@@ -54,7 +66,10 @@
         "Refuses to rewrite or edit the README as part of orientation",
         "States that this skill describes and does not alter code, docs, or design",
         "Routes the doc-drift fix to documentation-review instead of performing it"
-      ]
+      ],
+      "evaluation_modes": ["execution"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     }
   ]
 }

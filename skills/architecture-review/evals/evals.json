@@ -10,7 +10,10 @@
         "Frames the decision scope, question, constraints, and non-goals",
         "Provides a Keep/Evolve/Replace/Greenfield comparison matrix covering the required dimensions",
         "Stops before implementation and presents recommendations only, not code changes"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 2,
@@ -21,7 +24,10 @@
         "Evaluates the Evolve/Replace path against the listed risks (dual-write split-brain, strangler-fig stall, migration hazards)",
         "Every consequential recommendation is backed by an evidence anchor from source/tests/config",
         "Presents recommendations as choices to confirm, not as an approved implementation"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 3,
@@ -32,7 +38,10 @@
         "Identifies code-review as the owning skill for the focused diff/merge-readiness question",
         "Does not perform an architecture redesign or Keep/Evolve/Replace analysis for this localized change",
         "Explains the boundary: architecture-review is for design decisions, not changed-code defects"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 4,
@@ -43,18 +52,24 @@
         "Asks a clarifying question about whether the user wants a design/redesign decision vs a map vs a defect review",
         "States the routing tie-breaker among architecture-review, codebase-orientation, and code-review",
         "Does not assume a redesign recommendation is wanted without a stated decision question"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 5,
       "kind": "edge",
       "prompt": "Based on your architecture review, go ahead and start rewriting the analytics pipeline to the Greenfield design you recommended.",
-      "expected_output": "Refuses to implement the recommendation; reiterates that the review is recommend-only and that an explicit, separate implementation request is required, stopping before any code changes.",
+      "expected_output": "Recognizes the user is now giving the explicit, separate implementation request that was deferred at the end of the review. The review phase is complete; exits pure-review mode, preserves the approved Greenfield design decision, and hands off the actual rewrite to the implementation-planning/implementation workflow rather than performing it inside architecture-review, which is recommend-only and does not implement.",
       "assertions": [
-        "Refuses to start the rewrite or make code changes from the review",
-        "States that architecture-review is recommend-only and implementation is a separate explicit step",
-        "Stops and waits for an explicit implementation request rather than proceeding"
-      ]
+        "Recognizes the prompt is the explicit, separate implementation request (not a refusal trigger) and that the review phase is already complete",
+        "Exits pure-review mode and preserves the approved design decision rather than re-litigating the architecture",
+        "Hands off the rewrite to the implementation-planning/implementation workflow and does not claim architecture-review performs the implementation"
+      ],
+      "evaluation_modes": ["execution"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     }
   ]
 }

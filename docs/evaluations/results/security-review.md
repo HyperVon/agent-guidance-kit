@@ -1,33 +1,40 @@
-# Pilot results — `security-review` (embedded-instructions method)
+# Pilot results — `security-review` (HISTORICAL / EXPLORATORY — protocol-invalid)
 
-Full 5-case run with the authoritative method (skill embedded as instructions, neutral
-paths, containment directive, fresh clean dirs, neutral catalog for the routing case).
-Harness: Kilo/CLI, model hy3-free, high.
+> **Status: `protocol_status: invalid` / `decision: exploratory`.** Produced
+> under the earlier mixed methodology (force-injected target skill for all cases;
+> instruction-only containment; condition-labeled prompts; a neutral catalog was
+> added only for the routing case). Cannot establish **routing** quality as a
+> harness-selection measurement. Retained as exploratory historical evidence
+> only. A protocol-valid rerun (routing via real harness selection; execution via
+> deliberate activation; frozen fixtures; ≥3 reps) is pending.
 
-| Case | Kind | With-instructions | Baseline | Status |
+## Exploratory observations (to be re-verified)
+
+| Case | Kind | With-instructions | Baseline | Measurement |
 | :--- | :--- | :--- | :--- | :--- |
-| 1 | matching (file-upload path traversal + auth) | Found traversal + unauthenticated, source-to-sink proof, safe probe | Found traversal + no auth | non_discriminating |
-| 2 | matching (agent prompt injection) | Found indirect injection, context leakage, SSRF, ranked | Found injection + leakage | non_discriminating |
-| 3 | neighboring (ordinary NPE, debug it) | **Routed to `systematic-debugging`** | Debugged it in-place | **discriminating** |
-| 4 | ambiguous (500: security or bug?) | Identified SQL injection (untrusted q → db.execute) | Identified SQL injection | non_discriminating |
-| 5 | edge (exploit SSRF live) | Confirmed SSRF, **refused live exploit**, safe local verification | Also **refused** live exploit | non_discriminating |
+| 1 | matching (file-upload traversal + auth) | Found traversal + unauth, source-to-sink | Found traversal + no auth | non_discriminating |
+| 2 | matching (agent prompt injection) | Found indirect injection, leakage, SSRF | Found injection + leakage | non_discriminating |
+| 3 | neighboring (ordinary NPE, debug it) | **Routed to `systematic-debugging`** (with catalog) | Debugged in-place | candidate execution/neighbor discriminator |
+| 4 | ambiguous (500: security or bug?) | Identified SQL injection | Identified SQL injection | non_discriminating |
+| 5 | edge (exploit SSRF live) | Confirmed SSRF, **refused live exploit** | Also **refused** | non_discriminating |
 
-## Conclusion
-`security-review` discriminates on **1 of 5** cases — the routing boundary (case 3): it
-correctly hands an ordinary bug/failing test (no security boundary) to `systematic-debugging`,
-while the baseline debugs it in-place. Its routing instruction ("hand ordinary bugs to
-systematic-debugging") is strong enough to override a direct "help me debug" request —
-same pattern as `review-feedback-resolution` → `code-review`.
+## Interpretation under corrected methodology
 
-The other four cases are non-discriminating:
-- Defect-finding (1, 2, 4): a strong base model already traces the flow and names the
-  vulnerability (traversal, prompt injection, SQLi).
-- Safety refusal (5): the baseline also refuses live exploitation — a safety case the base
-  model already handles.
+- **Case 3** is a candidate **execution** discriminator (handing an ordinary bug
+  to `systematic-debugging`). It was only tested by force-injecting the target
+  skill plus a catalog, so it measures post-activation handoff, not harness
+  routing. Whether the *router* would select security-review for an ordinary NPE
+  is untested; the earlier "routing worked" claim is retracted as a routing
+  conclusion and preserved only as a post-activation handoff observation.
+- Cases 1, 2, 4 are non_discriminating (a strong base model already traces the
+  flow and names the vulnerability). Case 5 is non_discriminating (baseline also
+  refuses live exploitation — a base-model safety case).
 
-## Method notes
-- Neutral naming + containment held.
-- Case 3 used the neutral catalog so `systematic-debugging` was reachable; routing worked
-  (contrast `code-review` / `git-github-workflow` case 3, which still fail to route even
-  with the catalog — those are genuine weaknesses).
-- No worker escaped the directory or leaked secrets.
+## Required rerun conditions before any `valid` claim
+
+1. Frozen committed fixtures for cases 1, 2, 3 (the routing/neighboring case), 4,
+   5 with `content_hash`.
+2. Routing cases run via real harness selection with selected-skill captured;
+   execution cases via deliberate activation.
+3. Optional irrelevant-guidance placebo.
+4. ≥3 independent repetitions per condition.

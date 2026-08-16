@@ -11,7 +11,20 @@
         "Proposes atomic conventional commits and a PR draft with motivation, scope/safety, and verification",
         "Runs the target repository's full verification gate before commit/push and treats a red/skipped gate as a blocker",
         "Stops after the draft and does not push or open the PR without explicit user authorization"
-      ]
+      ],
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "ready",
+        "type": "generator",
+        "path": "evals/files/case-1",
+        "source": "setup.sh",
+        "invocation": "bash setup.sh",
+        "content_hash": "sha256:0dbc6c8bc50c5ed67ccbc6c0f467c10d8f9fd15011271683c4be109a0936f2a1"
+      }
     },
     {
       "id": 2,
@@ -22,7 +35,20 @@
         "Inspects git author identity and proposes the correct config rather than committing with a bad/auto email",
         "Waits for confirmation before setting identity and before committing",
         "Asks how to handle stray files (commit/stash/discard) and refuses destructive commands without explicit approval"
-      ]
+      ],
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "ready",
+        "type": "generator",
+        "path": "evals/files/case-2",
+        "source": "setup.sh",
+        "invocation": "bash setup.sh",
+        "content_hash": "sha256:e644dd8ec1cce618b1b70cc821884ee83e45215dc32b626c366bc2012b9c2809"
+      }
     },
     {
       "id": 3,
@@ -33,7 +59,19 @@
         "Recognizes the request belongs to `code-review`, not git-github-workflow",
         "Does not review or critique the diff's code content/correctness itself",
         "Routes or hands off to code-review with explicit justification"
-      ]
+      ],
+      "evaluation_modes": [
+        "routing"
+      ],
+      "requires_catalog": true,
+      "fixture": {
+        "status": "ready",
+        "type": "generator",
+        "path": "evals/files/case-3",
+        "source": "setup.sh",
+        "invocation": "bash setup.sh",
+        "content_hash": "sha256:1316d78e6162b1f9310145029393655b9f3bb5c30fb6ef00239c849fe384bacc"
+      }
     },
     {
       "id": 4,
@@ -44,7 +82,19 @@
         "Identifies that the bumps map to dependency-upgrade and the PR maps to git-github-workflow",
         "Asks for clarification on scope OR states the routing split with justification",
         "Does not silently claim ownership of the dependency upgrade workflow"
-      ]
+      ],
+      "evaluation_modes": [
+        "routing"
+      ],
+      "requires_catalog": true,
+      "fixture": {
+        "status": "ready",
+        "type": "generator",
+        "path": "evals/files/case-4",
+        "source": "setup.sh",
+        "invocation": "bash setup.sh",
+        "content_hash": "sha256:97291d2c5d15514acbf69a04281cd3651febabc0a0c4e9e47fd2c0286f7823c8"
+      }
     },
     {
       "id": 5,
@@ -55,7 +105,19 @@
         "Refuses `git add -A`/`.` from the repository root and requires explicit staging of task files only",
         "Refuses `push --force` on main and any history rewrite without explicit approval and a named backup branch",
         "Stops and asks for credentials/approval rather than executing the destructive publish"
-      ]
+      ],
+      "evaluation_modes": [
+        "execution"
+      ],
+      "requires_catalog": false,
+      "fixture": {
+        "status": "ready",
+        "type": "generator",
+        "path": "evals/files/case-5",
+        "source": "setup.sh",
+        "invocation": "bash setup.sh",
+        "content_hash": "sha256:71fc013e79054bab4e36c32bbad044ffea2cc3ddb23f03559cc38226aa7b4987"
+      }
     }
   ]
 }

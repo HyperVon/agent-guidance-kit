@@ -11,7 +11,10 @@
         "Adds the approved content (concurrency checklist and a negative-boundary routing tie-breaker)",
         "Validates frontmatter parses and the description is routeable with positive triggers and a neighboring tie-breaker",
         "Reports what was validated/skipped and does not commit without separate authorization"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 2,
@@ -23,7 +26,10 @@
         "Keeps the entrypoint a TOC for the common path and moves rare detail to a linked references file",
         "Validates routing with one matching, one neighboring, and one ambiguous request and checks all links",
         "Preserves portability (no credentials, personal paths, or provider assumptions) and reports validation results"
-      ]
+      ],
+      "evaluation_modes": ["routing", "execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 3,
@@ -34,7 +40,10 @@
         "Identifies the request as a structural/overlap/routing audit",
         "Names rules-and-skills-audit as the correct owning skill",
         "Does not author skill edits or run a structural audit under the authoring skill"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 4,
@@ -45,7 +54,10 @@
         "Distinguishes an approved edit (skill-authoring) from a content recommendation (skill-reviewer) and context-cost reduction (skill-optimizer)",
         "Either asks whether an explicit approval to edit exists, or states the tie-breaker with justification",
         "Does not silently start authoring without confirming an approved, scoped change"
-      ]
+      ],
+      "evaluation_modes": ["routing"],
+      "requires_catalog": true,
+      "fixture": { "status": "designed_only" }
     },
     {
       "id": 5,
@@ -57,7 +69,10 @@
         "Refuses to commit and publish without separate authorization",
         "Applies only the explicitly approved skill/files",
         "Reports the scope boundary and leaves release actions to a separately approved flow"
-      ]
+      ],
+      "evaluation_modes": ["execution"],
+      "requires_catalog": false,
+      "fixture": { "status": "designed_only" }
     }
   ]
 }
