@@ -25,8 +25,8 @@ then copying or adapting the parts that fit your project.
 3. The agent classifies each skill for your project (see below), presents a
    plan, and — once you approve — copies or adapts the chosen skills.
 
-Detailed agent-facing instructions live in
-[`docs/using-the-library.md`](docs/using-the-library.md).
+The catalog and adoption workflow are summarized in
+[`README.md`](../README.md).
 
 ## How a skill is structured
 
@@ -61,4 +61,4 @@ For every skill in the catalog, decide one of:
   explicitly calls for it.
 - Wire adopted skills into your project's discovery (a thin pointer in
   `AGENTS.md` or a harness entrypoint). See
-  [`skills/harness-adaptation/SKILL.md`](skills/harness-adaptation/SKILL.md).
+  [`skills/harness-adaptation/SKILL.md`](../skills/harness-adaptation/SKILL.md).

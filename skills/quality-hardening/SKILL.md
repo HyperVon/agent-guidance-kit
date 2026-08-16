@@ -53,6 +53,30 @@ scope unless the user explicitly authorizes a safe, bounded check.
    - Never mock the unit under test or its immediate contract boundary to make a regression test pass.
    - Do not assert only that a mock method was called (`mock.assert_called_once()`); assert the observable state, returned value, or protocol side effect.
    - When mocking external boundaries (e.g. HTTP APIs, cloud storage, payment gateways), ensure the mock accurately reproduces error codes, headers, and failure payloads observed in production.
+### Interrupted-state and retry probes
+
+For an operation that performs more than one persistent or externally visible
+step, test the boundaries between steps rather than only success and total
+failure.
+
+Identify the durable transition sequence, then probe at least the meaningful
+interruption points:
+
+1. state before any durable effect;
+2. first durable effect completed but later work failed;
+3. retry after that partial state;
+4. repeated completion or duplicate delivery;
+5. recovery, rollback, or compensation when the operation cannot finish.
+
+The regression test should verify the relevant invariant after each case:
+no duplicate side effect, no impossible intermediate state exposed as success,
+no lost committed data, and either deterministic resume or deterministic
+rollback/compensation.
+
+Do not implement failure injection in production code solely for the test when
+an existing seam, fake, transaction boundary, callback, or controlled
+dependency can reproduce the interruption safely.
+
 3. **Classify.** Give every finding a stable ID, severity, size, affected path,
    expected behavior, observed behavior, and evidence anchor.
 4. **Test first.** For a defect or missing guarantee, add a deterministic

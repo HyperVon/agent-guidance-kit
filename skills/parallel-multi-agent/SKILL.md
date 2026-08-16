@@ -56,6 +56,28 @@ workers the same file or generated output directory.
 
 - Treat manifest + lockfile pairs as implicit shared state even when workers edit disjoint source. A dependency add or install in any track rewrites the lockfile. Make lockfile regeneration a parent-owned serial step: let workers finish, then run the single package-manager update/regenerate in the integrated state and review the diff.
 
+### Freeze the fan-out base
+
+Before launching editing workers, record one integration-base commit SHA and
+the parent's working-tree state.
+
+- Start independent editing work from that same committed base whenever the
+  harness/worktree model permits it.
+- Do not let one worker merge, rebase, cherry-pick, or otherwise consume a
+  sibling worker's unpublished changes; sibling tracks must remain independent
+  unless the track matrix explicitly declares a dependency.
+- If the parent advances shared contracts while workers are active, mark
+  affected worker results stale and revalidate them against the new contract.
+- A disjoint file set does not prove semantic independence. Treat schemas,
+  public interfaces, generated contracts, registries, shared configuration,
+  and cross-file invariants as shared integration state even when the physical
+  write paths do not overlap.
+- Record the base SHA in each editing-worker brief and compare the returned
+  result against that base before accepting it.
+
+Integrate dependent tracks in declared dependency order, then run final
+verification only from the fully integrated state.
+
 ## 3. Select workers honestly
 
 - Use an exact model/provider/effort only when the harness exposes and supports

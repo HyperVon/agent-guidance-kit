@@ -39,7 +39,29 @@ description: >-
    disabled, permission, validation, focus, keyboard, navigation, and recovery
    states. Trace the primary task through normal, boundary, and failure paths.
 
-   **Core interaction & accessibility checklist:**
+### Async freshness and optimistic-state correctness
+
+For UI state driven by asynchronous work, review correctness across overlapping
+requests, not only the single-request happy path.
+
+- When a newer request supersedes an older one, verify that a late response
+  cannot overwrite newer state. Use cancellation, request identity/versioning,
+  or an equivalent "latest applicable result wins" rule.
+- Verify that navigation, account/tenant changes, filter changes, and component
+  disposal invalidate work that no longer belongs to the visible state.
+- For optimistic mutations, verify both reconciliation on success and rollback
+  or explicit recovery on failure. Do not leave locally invented state visible
+  after the authoritative operation was rejected.
+- Check that retrying a mutation cannot duplicate an already-completed side
+  effect.
+- Do not infer async correctness merely because loading indicators and disabled
+  buttons exist; inspect the state transition when responses complete in a
+  different order than they were started.
+
+Treat a reproducible stale-response overwrite, cross-context update, or failed
+optimistic rollback as a correctness defect rather than visual polish.
+
+    **Core interaction & accessibility checklist:**
    - *Keyboard navigation:* Focus traps in modals/dialogs (missing `Escape` listener, missing focus restore on close); interactive elements reachable and operable via `Tab`/`Enter`/`Space`.
    - *Form controls:* Every input/select/textarea must have a programmatic label (`<label for="...">`, `aria-label`, or `aria-labelledby`); placeholder text is not an accessible label.
    - *Dynamic state & alerts:* Async status, error banners, and toast notifications must announce via `aria-live="polite"` or `role="alert"`.
