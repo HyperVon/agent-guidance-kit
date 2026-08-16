@@ -1,0 +1,169 @@
+{
+  "skill_name": "architecture-review",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "prompt": "Do an architecture review of our order-processing subsystem. We're trying to decide whether to keep it, evolve it, or replace it with a queue-based design.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "architecture-review"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "architecture-review",
+        "target_present": {
+          "expected_selected_skill": "architecture-review"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A recommend-only decision report: framed decision, as-is architecture/ownership map, stress-tested findings, and a Keep Current vs Evolve vs Replace vs Greenfield comparison matrix with an ordered decision list and verification gaps.",
+        "assertions": [
+          "Frames the decision scope, question, constraints, and non-goals",
+          "Provides a Keep/Evolve/Replace/Greenfield comparison matrix covering the required dimensions",
+          "Stops before implementation and presents recommendations only, not code changes"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 2,
+      "kind": "matching",
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "prompt": "We're planning an ADR for migrating our monolith's billing component to a service. Review the architecture and recommend whether a strangler-fig incremental approach is viable.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "architecture-review"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "architecture-review",
+        "target_present": {
+          "expected_selected_skill": "architecture-review"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A fresh-eyes review that maps the as-is billing design and boundaries, evaluates the strangler-fig path against dual-write split-brain, stall risk, and blast radius, and returns a recommend-only report with severity, evidence anchors, and the smallest next validation step.",
+        "assertions": [
+          "Evaluates the Evolve/Replace path against the listed risks (dual-write split-brain, strangler-fig stall, migration hazards)",
+          "Every consequential recommendation is backed by an evidence anchor from source/tests/config",
+          "Presents recommendations as choices to confirm, not as an approved implementation"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "evaluation_modes": [
+        "routing"
+      ],
+      "prompt": "Review this 200-line PR that adds input validation to the signup endpoint and tell me if it's ready to merge.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "architecture-review"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "architecture-review",
+        "target_present": {
+          "expected_selected_skill": "code-review"
+        },
+        "target_absent": {
+          "expected_selected_skill": "code-review"
+        },
+        "allowed_behavior": [
+          "select-owner"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "evaluation_modes": [
+        "routing"
+      ],
+      "prompt": "Can you take a look at our analytics pipeline and tell me what to do about it?",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "architecture-review"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "architecture-review",
+        "target_present": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        }
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "evaluation_modes": [
+        "execution"
+      ],
+      "prompt": "Based on your architecture review, go ahead and start rewriting the analytics pipeline to the Greenfield design you recommended.",
+      "execution": {
+        "expected_output": "Recognizes the user is now giving the explicit, separate implementation request that was deferred at the end of the review. The review phase is complete; exits pure-review mode, preserves the approved Greenfield design decision, and hands off the actual rewrite to the implementation-planning/implementation workflow rather than performing it inside architecture-review, which is recommend-only and does not implement.",
+        "assertions": [
+          "Recognizes the prompt is the explicit, separate implementation request (not a refusal trigger) and that the review phase is already complete",
+          "Exits pure-review mode and preserves the approved design decision rather than re-litigating the architecture",
+          "Hands off the rewrite to the implementation-planning/implementation workflow and does not claim architecture-review performs the implementation"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    }
+  ]
+}

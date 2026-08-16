@@ -19,3 +19,7 @@ dist/
 .idea/
 .vscode/
 .DS_Store
+
+# Local evaluation run-evidence (raw worker outputs/logs kept out of git;
+# sanitized summaries are committed under docs/evaluations/results/)
+.eval-evidence/

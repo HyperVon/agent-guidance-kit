@@ -1,0 +1,21 @@
+{
+  "name": "meadowlark-admin-ui",
+  "private": true,
+  "version": "0.4.2",
+  "scripts": {
+    "test": "vitest run",
+    "lint": "eslint src",
+    "build": "tsc -b && vite build"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.3",
+    "eslint": "8.57.0",
+    "typescript": "5.4.5",
+    "vite": "5.2.11",
+    "vitest": "1.6.0"
+  }
+}

@@ -1,0 +1,176 @@
+{
+  "skill_name": "skill-evaluation",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "prompt": "Design a five-case evaluation pack for our code-review skill that compares it against a no-skill baseline, then tell me whether to keep, revise, merge, or reject it.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "skill-evaluation"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "skill-evaluation",
+        "target_present": {
+          "expected_selected_skill": "skill-evaluation"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "An evals/evals.json case set (two matching, one neighboring, one ambiguous, one edge) with frozen expected outcomes and verifiable assertions, plus the WITH-SKILL vs BASELINE run plan and the decision rule that would produce a keep/revise/merge/reject call; the verdict itself is withheld because the cases are designed only, not executed and graded, and the baseline is labelled accurately (harness-default unless the harness is genuinely skill-free).",
+        "assertions": [
+          "Freezes expected outcomes and assertions before any condition output is observed",
+          "Includes at least the required case kinds: two matching, one neighboring, one ambiguous, and one edge",
+          "Outputs a structured case set consistent with evals.json shape (id, kind, prompt, expected_output, assertions)",
+          "Defines a WITH-SKILL vs BASELINE comparison rather than a single-run judgment",
+          "States the keep/revise/merge/reject decision rule and defers the verdict until both conditions are executed and graded, instead of issuing a decision from designed-only cases",
+          "Labels the comparison baseline accurately (harness-default vs a genuinely skill-free no-skill context) rather than implying the default harness is empty"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 2,
+      "kind": "matching",
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "prompt": "Run the evals for our retry-handling skill: set up isolated worker roots, spin up two independent workers (one loading the skill, one without it), grade the frozen assertions with quoted evidence, and report protocol and measurement status.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "skill-evaluation"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "skill-evaluation",
+        "target_present": {
+          "expected_selected_skill": "skill-evaluation"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "An executed evaluation using genuinely independent WITH-SKILL and BASELINE workers in isolated roots, with evidence-backed assertion grades (quoted spans/diffs), recorded protocol_status and measurement_status, and a contamination check on the baseline.",
+        "assertions": [
+          "Uses two genuinely independent workers (WITH-SKILL and BASELINE) in isolated, fixture-only roots",
+          "Verifies the baseline receives no target-skill identity (name, path, description, or catalog metadata)",
+          "Grades assertions against observable artifacts with quoted evidence spans rather than worker self-assertions",
+          "Reports both protocol_status and measurement_status, distinguishing valid isolation from inconclusive measurement",
+          "Does not reveal expected_output, assertions, or the comparison design to the workers"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "evaluation_modes": [
+        "routing"
+      ],
+      "prompt": "The security-review skill feels thin on secret-leak checks \u2014 rewrite it to add more guidance about credential handling.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "skill-evaluation"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "skill-evaluation",
+        "target_present": {
+          "expected_selected_skill": "skill-authoring"
+        },
+        "target_absent": {
+          "expected_selected_skill": "skill-authoring"
+        },
+        "allowed_behavior": [
+          "select-owner"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "evaluation_modes": [
+        "routing"
+      ],
+      "prompt": "Is the threat-modeling skill actually helping our agents, or should we cut it?",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "skill-evaluation"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "skill-evaluation",
+        "target_present": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        }
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "evaluation_modes": [
+        "execution"
+      ],
+      "prompt": "Evaluate our skill by comparing it with and without the skill, but it's fine to just tell the baseline worker to ignore the skill and reuse the transcript from last week's run to save time.",
+      "execution": {
+        "expected_output": "Refuses the contaminated setup: a baseline is not an instruction to ignore the skill, and reusing a prior transcript/context is contamination. Insists on two fresh independent workers and marks the condition invalid if isolation cannot be verified.",
+        "assertions": [
+          "Rejects instructing the baseline to 'ignore' the skill as a valid baseline condition",
+          "Rejects reusing a prior transcript, context, or worker as contamination",
+          "Requires two fresh independent WITH-SKILL and BASELINE workers with verified boundaries",
+          "Marks the condition contaminated / untested if independent contexts cannot be created and verified",
+          "Does not record a keep/revise/reject decision from a contaminated comparison"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    }
+  ]
+}

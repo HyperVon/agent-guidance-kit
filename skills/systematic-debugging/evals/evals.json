@@ -1,0 +1,175 @@
+{
+  "skill_name": "systematic-debugging",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "prompt": "Our test suite fails on test_checkout_total with an AssertionError after last week's refactor. Find the root cause before I fix it.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "systematic-debugging"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "systematic-debugging",
+        "target_present": {
+          "expected_selected_skill": "systematic-debugging"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A reproducible diagnosis: exact reproduction command/inputs and expected vs observed result, evidence traced through the recent refactor diff/history, a single falsifiable root-cause hypothesis confirmed by the smallest discriminating diagnostic, plus the proposed smallest correction, the regression test that should guard the failing seam, and the verification commands to run \u2014 stopping before applying the fix the user reserved.",
+        "assertions": [
+          "Records the exact failing command, inputs, and expected vs observed result",
+          "States one falsifiable root-cause hypothesis ('X is the cause because Y')",
+          "Runs the smallest diagnostic that distinguishes the hypothesis from alternatives",
+          "Traces the regression through the recent refactor diff or commit history (e.g., diff inspection or bisection) and leaves the repository in its starting state",
+          "Proposes the smallest root-cause correction plus a regression test at the failing seam and the focused + relevant complete verification to run, instead of applying the fix the user reserved",
+          "Does not propose a fix before the cause is confirmed by evidence"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 2,
+      "kind": "matching",
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "prompt": "The upload job fails about 1 in 10 CI runs with a connection-reset error. Diagnose why \u2014 and don't just slap a retry loop on it.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "systematic-debugging"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "systematic-debugging",
+        "target_present": {
+          "expected_selected_skill": "systematic-debugging"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "An investigation that reproduces the intermittent failure under a stress loop to establish a baseline rate, compares environment differences (OS, lockfiles, concurrency), identifies the root cause, and avoids retry-until-green or arbitrary sleeps.",
+        "assertions": [
+          "Establishes an empirical baseline failure rate via a stress loop rather than guessing",
+          "Compares environment differences (OS, architecture, lockfiles, concurrency) for the CI-only failure",
+          "Identifies a root cause with evidence rather than hiding it behind a retry or delay",
+          "Waits on an observable condition with a bounded timeout instead of an arbitrary sleep or retry-until-green loop",
+          "Stops and reports the missing evidence if the cause cannot be established after discriminating experiments"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "evaluation_modes": [
+        "routing"
+      ],
+      "prompt": "Do a general review of the auth module for style issues and possible improvements.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "systematic-debugging"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "systematic-debugging",
+        "target_present": {
+          "expected_selected_skill": "code-review"
+        },
+        "target_absent": {
+          "expected_selected_skill": "code-review"
+        },
+        "allowed_behavior": [
+          "select-owner"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "evaluation_modes": [
+        "routing"
+      ],
+      "prompt": "The reports page feels slow \u2014 make it faster.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "systematic-debugging"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "systematic-debugging",
+        "target_present": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        }
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "evaluation_modes": [
+        "execution"
+      ],
+      "prompt": "The function crashes with a null value \u2014 just add `if obj is None: return` at the crash site so it stops erroring.",
+      "execution": {
+        "expected_output": "Refuses the null-check bandage (suppressing the symptom at the crash site) unless the contract explicitly allows null/empty input there, and instead traces upstream to find why the invariant was violated at the data origin.",
+        "assertions": [
+          "Refuses to fix the crash merely by suppressing the symptom at the crash site",
+          "Traces the bad value upstream to its first incorrect origin rather than adding a default/fallback",
+          "Does not add try/except: pass or a broad fallback as the 'fix'",
+          "Only accepts a null-handling guard if the component contract explicitly dictates null/empty input is valid at that layer"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    }
+  ]
+}

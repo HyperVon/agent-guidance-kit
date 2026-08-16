@@ -1,0 +1,172 @@
+{
+  "skill_name": "implementation-planning",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "prompt": "The design for our new billing webhook system is settled and was approved in last week's architecture review. The decision and the design doc live in docs/design/billing-webhooks.md. Give me an execution-ready implementation plan that an engineer can carry out without re-deriving the design.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "implementation-planning"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "implementation-planning",
+        "target_present": {
+          "expected_selected_skill": "implementation-planning"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A plan following the required structure: implementation objective, affected components/files (file-level), dependency ordering, interfaces/contracts affected, migration considerations with rollback, task breakdown with ownership, verification strategy per task, risks with mitigations, and unresolved assumptions. The plan stops at executable tasks and does not edit code.",
+        "assertions": [
+          "Includes a single implementation objective statement",
+          "Lists affected components/files with concrete file or module names rather than vague areas",
+          "Contains a dependency ordering section describing which tasks precede others",
+          "Includes interfaces/contracts, migration considerations with rollback, task breakdown, verification strategy, and risks sections",
+          "Does not begin editing or writing code and states execution is handed to the implementation step"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 2,
+      "kind": "matching",
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "prompt": "We approved the auth token-refresh design in docs/design/auth-refresh.md last quarter, but since then we upgraded to FastAPI 0.110 and moved session storage to Redis. Produce an execution-ready implementation plan from that approved design.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "implementation-planning"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "implementation-planning",
+        "target_present": {
+          "expected_selected_skill": "implementation-planning"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A freshness/drift check that reports the material changes (FastAPI version, Redis session store) and their planning impact, followed by a full plan with the required sections grounded in the current repository state.",
+        "assertions": [
+          "Reports a freshness/drift check identifying the changed repository state (FastAPI upgrade, Redis sessions)",
+          "Explains the planning impact of the drift before producing the plan",
+          "Produces the full required plan sections anchored to the current repo (not stale assumptions)",
+          "Avoids arbitrary file guesses not grounded in the actual repository"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "evaluation_modes": [
+        "routing"
+      ],
+      "prompt": "I have a loose idea for a feature that lets users export all their data. I'm not sure what the behavior should be or which approach is best yet, but once we figure that out I want a build plan.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "implementation-planning"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "implementation-planning",
+        "target_present": {
+          "expected_selected_skill": "requirements-and-design"
+        },
+        "target_absent": {
+          "expected_selected_skill": "requirements-and-design"
+        },
+        "allowed_behavior": [
+          "select-owner"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "evaluation_modes": [
+        "routing"
+      ],
+      "prompt": "Plan out how we should build the dark-mode feature.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "implementation-planning"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "implementation-planning",
+        "target_present": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        }
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "evaluation_modes": [
+        "execution"
+      ],
+      "prompt": "Thanks, the plan looks complete. Now go ahead and start implementing it \u2014 write the code for all the tasks in the plan.",
+      "execution": {
+        "expected_output": "The planning skill refuses to cross into implementation. It stops at the completed plan and hands execution to the implementation step, preserving scope and not editing code.",
+        "assertions": [
+          "Refuses to begin editing or writing code as part of planning",
+          "States planning is complete and execution is handed to the implementation step",
+          "Does not relitigate the design or expand scope into implementation"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    }
+  ]
+}

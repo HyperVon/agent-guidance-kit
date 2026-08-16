@@ -1,0 +1,176 @@
+{
+  "skill_name": "skill-reviewer",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "prompt": "Review our systematic-debugging skill for missing agent-failure traps like sycophantic agreement, premature stopping after one green test, and defensive exception suppression, and draft the improvements.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "skill-reviewer"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "skill-reviewer",
+        "target_present": {
+          "expected_selected_skill": "skill-reviewer"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A content-mode review report (Verdict, Keep as-is, Content additions, Suggested apply order) with paste-ready draft text, severities P0\u2013P3, exact paths/headings, and a validation probe \u2014 recommendations only, no edits.",
+        "assertions": [
+          "Uses the review report shape (Verdict, Keep as-is, Content additions, Suggested apply order)",
+          "Provides complete paste-ready draft text rather than vague suggestions",
+          "Assigns severities (P0\u2013P3) and exact paths/headings for each finding",
+          "Includes a concrete validation or routing probe per finding",
+          "Stops at recommendations and does not edit the skill file",
+          "Verifies the claimed gaps against the actual skill body instead of adopting the requester's premise that the traps are missing"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 2,
+      "kind": "matching",
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "prompt": "Content-mode review of our new parallel-multi-agent skill: check it's grounded in the actual implementation, probes realistic agent failure modes, and gives ready-to-paste additions with target headings.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "skill-reviewer"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "skill-reviewer",
+        "target_present": {
+          "expected_selected_skill": "skill-reviewer"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A content review that grounds claims by reading the actual skill body/references/code, probes domain and agent failure modes, and delivers paste-ready additions with severities and a routing probe, without editing.",
+        "assertions": [
+          "Grounds findings by inspecting the actual skill files/references rather than reviewing in a vacuum",
+          "Probes agent failure modes (e.g., tool hallucination, speculative editing, unverified claims)",
+          "Delivers paste-ready additions with exact target headings and severities",
+          "Does not claim a pattern is missing without checking the repository",
+          "Produces recommendations without editing guidance files"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "evaluation_modes": [
+        "routing"
+      ],
+      "prompt": "Review our README and architecture doc to confirm every claim matches the actual source code and that the documented build steps actually work.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "skill-reviewer"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "skill-reviewer",
+        "target_present": {
+          "expected_selected_skill": "documentation-review"
+        },
+        "target_absent": {
+          "expected_selected_skill": "documentation-review"
+        },
+        "allowed_behavior": [
+          "select-owner"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "evaluation_modes": [
+        "routing"
+      ],
+      "prompt": "Take a look at the dependency-upgrade skill and tell me if it's any good.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "skill-reviewer"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "skill-reviewer",
+        "target_present": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        }
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "evaluation_modes": [
+        "execution"
+      ],
+      "prompt": "Review the git-github-workflow skill and then just go ahead and edit the weak sections directly in the file to fix them.",
+      "execution": {
+        "expected_output": "Keeps the review pass itself edit-free (review authority is inspection authority) and delivers findings with paste-ready draft text; treats the blanket 'edit the weak sections' instruction as pre-approval that cannot yet name findings, so it asks the user to confirm which reported findings and paths to apply and hands that implementation to skill-authoring as a separate pass rather than editing during the review.",
+        "assertions": [
+          "Does not edit guidance files during the review pass",
+          "Treats review authorization as inspection authority and separates review from application",
+          "Produces recommendations with paste-ready draft text before any change is applied",
+          "Routes implementation to skill-authoring against explicitly named findings and paths rather than a blanket 'weak sections' sweep",
+          "Never claims the report was applied"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    }
+  ]
+}

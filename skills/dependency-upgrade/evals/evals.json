@@ -1,0 +1,171 @@
+{
+  "skill_name": "dependency-upgrade",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "prompt": "Our GitHub Dependabot just opened 3 critical alerts on our Node repo, and we're also a few patch versions behind on lodash and react. Help me move these forward safely without breaking anything.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "dependency-upgrade"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "dependency-upgrade",
+        "target_present": {
+          "expected_selected_skill": "dependency-upgrade"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A risk-ordered upgrade plan: (1) triage all open Dependabot alerts and prioritize critical/high, (2) inventory manifests/lockfiles with current vs latest versions, (3) group bumps as Security -> Patch -> Minor, keeping each group small, (4) apply via the ecosystem's deterministic update command (e.g. npm install <pkg>@<ver> --package-lock-only) and verify with full gates including `git diff package-lock.json` showing only the targeted tree changed, (5) propose CHANGELOG/update and stop before changing pinning policy or creating any remote/tag/release.",
+        "assertions": [
+          "Output explicitly triages security alerts before any other bump",
+          "Bumps are grouped/sequenced by risk (Security, then Patch, then Minor) rather than done in one shot",
+          "Names a deterministic per-ecosystem update command and includes `git diff <lockfile>` as a required verification gate",
+          "States it will stop and ask before changing pinning policy, switching registries, or creating a remote/tag/release"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 2,
+      "kind": "matching",
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "prompt": "I need to bump our Python service from requests 2.28 to 2.31 to clear a vulnerability, plus a couple of minor version bumps elsewhere. Keep the PRs small and conventional.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "dependency-upgrade"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "dependency-upgrade",
+        "target_present": {
+          "expected_selected_skill": "dependency-upgrade"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "An inventory of the affected manifests/lockfiles, a risk-grouped plan that treats the requests bump as a Security group and the minors separately, the deterministic update command for the detected Python tool (uv/poetry/pip-tools), and a verification step (run tests + `git diff <lockfile>`) per group, with a note that minors require checking the license and `requires-python` engine compatibility.",
+        "assertions": [
+          "Separates the vulnerability fix from the minor bumps into distinct groups",
+          "Detects the project's actual Python lockfile tool and uses its deterministic update command rather than assuming one",
+          "Requires `git diff <lockfile>` confirming only the targeted package tree changed after regeneration",
+          "Flags checking license and runtime engine requirements (e.g. requires-python) before applying minor/major bumps"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "evaluation_modes": [
+        "routing"
+      ],
+      "prompt": "Do a security review of our new authentication service to check for SQL injection and how we handle secrets.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "dependency-upgrade"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "dependency-upgrade",
+        "target_present": {
+          "expected_selected_skill": "security-review"
+        },
+        "target_absent": {
+          "expected_selected_skill": "security-review"
+        },
+        "allowed_behavior": [
+          "select-owner"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "evaluation_modes": [
+        "routing"
+      ],
+      "prompt": "Update our dependencies and open a PR with the changes.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "dependency-upgrade"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "dependency-upgrade",
+        "target_present": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        }
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "evaluation_modes": [
+        "execution"
+      ],
+      "prompt": "The Docker base image pin is causing a vulnerability alert with no available fix, and our CI is red. Just drop the pin so the pipeline goes green.",
+      "execution": {
+        "expected_output": "A refusal to delete/unpin the security pin to make the build pass. The agent must document the unfixable alert with owner and next step, and instead propose a remediation path (e.g. an allowed override/remediation recipe if one exists) or escalate, never silently removing the pin or downgrading to silence a warning.",
+        "assertions": [
+          "Refuses to delete, unpin, or downgrade the dependency solely to make the build/CI pass",
+          "Documents the unfixable alert with an owner and a next step rather than ignoring it",
+          "Does not accept changing pinning policy or registry without explicit approval"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    }
+  ]
+}

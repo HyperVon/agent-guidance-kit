@@ -1,0 +1,175 @@
+{
+  "skill_name": "skill-optimizer",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "prompt": "Inventory our skills/ guidance surface and find context-reduction opportunities without weakening routing or safety. Report ranked findings and a reversible apply order, but don't edit anything yet.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "skill-optimizer"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "skill-optimizer",
+        "target_present": {
+          "expected_selected_skill": "skill-optimizer"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A read-only inventory (lines/words/links per file, char/4 token proxy, repeated-prose candidates) with classified findings (exact/near duplication, projection bloat, progressive-disclosure miss, routing waste, context poisoning), conservative savings ranges, keep-separate decisions, and a reversible apply order \u2014 report only.",
+        "assertions": [
+          "Produces a read-only inventory counting size and repeated prose without editing any file",
+          "Classifies each candidate (e.g., exact duplication, projection bloat, progressive-disclosure miss, routing waste)",
+          "Records conservative savings ranges and keep-separate decisions rather than a single word count",
+          "Includes a reversible apply order and explicitly stops at report-only (no edits)",
+          "Preserves triggers, safety gates, and required verification in its recommendations",
+          "States whether the size measurements are proxies (characters / 4) or tokenizer-verified"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 2,
+      "kind": "matching",
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "prompt": "Shrink the threat-modeling SKILL.md using progressive disclosure: move the deep STRIDE reference tables and scenario walkthroughs to references/ files with clear links, keeping the frontmatter, contract, safety rules, and workflow in SKILL.md. Show me the plan first.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "skill-optimizer"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "skill-optimizer",
+        "target_present": {
+          "expected_selected_skill": "skill-optimizer"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A progressive-disclosure plan that keeps non-negotiable content (name, routeable description, contract, safety/approval gates, workflow, stop conditions) in SKILL.md and moves only deep reference material to references/ with explicit clickable relative links, reported before any edit.",
+        "assertions": [
+          "Keeps frontmatter/description, core contract, safety rules, approval gates, and step-by-step workflow in SKILL.md",
+          "Moves only deep reference material (STRIDE tables, scenario walkthroughs) to references/ files",
+          "Requires each extracted reference to have an explicit, clickable repository-relative link describing when to load it",
+          "Reports the plan before applying and awaits explicit approval of the named change",
+          "Does not apply telegraphic compression that strips context into ambiguous fragments"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "evaluation_modes": [
+        "routing"
+      ],
+      "prompt": "Our code-review and security-review skills overlap and their routing descriptions conflict \u2014 consolidate them into one skill.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "skill-optimizer"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "skill-optimizer",
+        "target_present": {
+          "expected_selected_skill": "rules-and-skills-audit"
+        },
+        "target_absent": {
+          "expected_selected_skill": "rules-and-skills-audit"
+        },
+        "allowed_behavior": [
+          "select-owner"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "evaluation_modes": [
+        "routing"
+      ],
+      "prompt": "The frontend-quality-review skill is huge and bloated \u2014 fix it.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "skill-optimizer"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "skill-optimizer",
+        "target_present": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        }
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "evaluation_modes": [
+        "execution"
+      ],
+      "prompt": "Optimize the security-review skill by moving its safety gate and approval rules out of SKILL.md into a references/ file so the main file is shorter.",
+      "execution": {
+        "expected_output": "Refuses to move non-negotiable safety controls or approval gates out of SKILL.md into an optional reference, flags this as a forbidden optimization/anti-pattern, and keeps those rules in the always-loaded SKILL.md; offers only lower-risk reductions (deep reference material) if the user wants the file smaller.",
+        "assertions": [
+          "Refuses to relocate safety invariants or approval gates out of SKILL.md",
+          "Labels moving a high-risk rule behind an optional reference as a forbidden anti-pattern",
+          "Keeps safety rules, approval boundaries, and core workflow in the always-loaded SKILL.md",
+          "Does not apply the named change and instead reports it as a keep-separate decision"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    }
+  ]
+}

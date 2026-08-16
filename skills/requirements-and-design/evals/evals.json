@@ -1,0 +1,173 @@
+{
+  "skill_name": "requirements-and-design",
+  "evals": [
+    {
+      "id": 1,
+      "kind": "matching",
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "prompt": "Our customers keep asking to download their invoices as PDF, but we're not sure whether to build it in-app, email it, or use a third-party service. Help us figure out what to build.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "requirements-and-design"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "requirements-and-design",
+        "target_present": {
+          "expected_selected_skill": "requirements-and-design"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A requirements-and-design record: framed user/business outcome, functional and non-functional requirements, constraints, assumptions, testable acceptance criteria, alternatives considered (including build-in-app / email / third-party and doing nothing), a recommended approach with trade-offs, and unresolved decisions. No code or execution plan.",
+        "assertions": [
+          "Names the user/business outcome in user terms (e.g. customers can obtain their invoices) rather than prescribing a mechanism",
+          "Lists functional requirements, non-functional requirements, and constraints as separate sections",
+          "Defines testable acceptance criteria tied to the outcome",
+          "Enumerates at least two alternative approaches and states why each was or was not chosen",
+          "States a recommended approach and lists unresolved decisions that block implementation"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 2,
+      "kind": "matching",
+      "evaluation_modes": [
+        "routing",
+        "execution"
+      ],
+      "prompt": "Support is drowning in calls about password resets. We want to reduce that load but haven't decided on any approach yet. What should we design?",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "requirements-and-design"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "requirements-and-design",
+        "target_present": {
+          "expected_selected_skill": "requirements-and-design"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A requirements-and-design record reframing the support-call symptom into the underlying need, with requirements, acceptance criteria, alternatives (e.g. self-service reset, magic links, support tooling), a recommendation, and open decisions. Scaled to a moderate-risk change.",
+        "assertions": [
+          "Reframes the request from 'reduce calls' into the underlying user outcome (reliable self-service account recovery)",
+          "Includes acceptance criteria that measure the reduction in support load or successful self-resets",
+          "Considers plausible approaches including doing less or nothing and records the reason each was set aside",
+          "Produces a recommended approach rather than an execution/implementation plan"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 3,
+      "kind": "neighboring",
+      "evaluation_modes": [
+        "routing"
+      ],
+      "prompt": "Take a look at our existing payments microservice architecture and tell me whether the current design is any good and what we should change about it.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "requirements-and-design"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "requirements-and-design",
+        "target_present": {
+          "expected_selected_skill": "architecture-review"
+        },
+        "target_absent": {
+          "expected_selected_skill": "architecture-review"
+        },
+        "allowed_behavior": [
+          "select-owner"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 4,
+      "kind": "ambiguous",
+      "evaluation_modes": [
+        "routing"
+      ],
+      "prompt": "We decided to build a recommendation engine for the store. How should we set it up?",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "requirements-and-design"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "requirements-and-design",
+        "target_present": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        }
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    },
+    {
+      "id": 5,
+      "kind": "edge",
+      "evaluation_modes": [
+        "execution"
+      ],
+      "prompt": "Great, your requirements for the invoice export look solid. Now go ahead and write the code for it and refactor the existing billing module to match.",
+      "execution": {
+        "expected_output": "Enforce the scope boundary: do NOT start coding or redesign existing architecture. Hand the settled requirements/approach record to implementation-planning. The skill defines what to build and how to approach it, not the implementation or execution plan.",
+        "assertions": [
+          "Refuses to write implementation code within this skill",
+          "Refuses to redesign/refactor the existing billing architecture",
+          "Hands off to implementation-planning for the execution plan",
+          "States that requirements-and-design stops at a settled requirements/approach record"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
+    }
+  ]
+}
