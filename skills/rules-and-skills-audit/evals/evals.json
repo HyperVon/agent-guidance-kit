@@ -4,75 +4,169 @@
     {
       "id": 1,
       "kind": "matching",
-      "prompt": "Our repo has grown a pile of AGENTS.md files, CLAUDE.md projections, and skill definitions. Audit them for overlapping triggers, conflicting approval rules, and stale references, then tell me what could be consolidated.",
-      "expected_output": "A guidance audit report: inventory summary (paths, purpose, scope, trigger, source-of-truth claims), findings classified as duplicate/merge candidate/scope-trigger issue/stale-inaccurate/conflict/improvement with exact path+line evidence and ranked impact, a 'keep separate' section, and a proposed smallest-reversible consolidation plan. Read-only, report-first.",
-      "assertions": [
-        "Builds an inventory listing files with path, purpose, scope, and trigger",
-        "Classifies each finding using the defined taxonomy (duplicate, merge candidate, scope/trigger issue, stale/inaccurate, conflict, improvement)",
-        "Cites exact paths and line/heading evidence for each finding",
-        "Includes a 'keep separate' section and a proposed smallest reversible change with canonical owner and migration map"
+      "evaluation_modes": [
+        "routing",
+        "execution"
       ],
-      "evaluation_modes": ["routing", "execution"],
-      "requires_catalog": false,
-      "fixture": { "status": "designed_only" }
+      "prompt": "Our repo has grown a pile of AGENTS.md files, CLAUDE.md projections, and skill definitions. Audit them for overlapping triggers, conflicting approval rules, and stale references, then tell me what could be consolidated.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "rules-and-skills-audit"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "rules-and-skills-audit",
+        "target_present": {
+          "expected_selected_skill": "rules-and-skills-audit"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A guidance audit report: inventory summary (paths, purpose, scope, trigger, source-of-truth claims), findings classified as duplicate/merge candidate/scope-trigger issue/stale-inaccurate/conflict/improvement with exact path+line evidence and ranked impact, a 'keep separate' section, and a proposed smallest-reversible consolidation plan. Read-only, report-first.",
+        "assertions": [
+          "Builds an inventory listing files with path, purpose, scope, and trigger",
+          "Classifies each finding using the defined taxonomy (duplicate, merge candidate, scope/trigger issue, stale/inaccurate, conflict, improvement)",
+          "Cites exact paths and line/heading evidence for each finding",
+          "Includes a 'keep separate' section and a proposed smallest reversible change with canonical owner and migration map"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 2,
       "kind": "matching",
-      "prompt": "Check our agent guidance for harness projection drift — our GEMINI.md and .cursorrules seem to have standalone instructions that duplicate what's in the canonical skills. Audit the overlap.",
-      "expected_output": "A guidance audit focused on harness projection drift: inventory of root/skill vs harness projection files, findings showing where projections became divergent second sources of truth, ranked impact, and a recommendation to make projections thin adapters pointing to canonical guidance. Report-first, no edits.",
-      "assertions": [
-        "Explicitly checks harness projection drift between root/skill guidance and harness-specific entrypoints",
-        "Classifies projection-accumulated standalone instructions as a finding rather than legitimate content",
-        "Recommends projections act as thin adapters to the canonical source of truth",
-        "Remains read-only and proposes changes rather than applying them"
+      "evaluation_modes": [
+        "routing",
+        "execution"
       ],
-      "evaluation_modes": ["routing", "execution"],
-      "requires_catalog": false,
-      "fixture": { "status": "designed_only" }
+      "prompt": "Check our agent guidance for harness projection drift \u2014 our GEMINI.md and .cursorrules seem to have standalone instructions that duplicate what's in the canonical skills. Audit the overlap.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "rules-and-skills-audit"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "rules-and-skills-audit",
+        "target_present": {
+          "expected_selected_skill": "rules-and-skills-audit"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A guidance audit focused on harness projection drift: inventory of root/skill vs harness projection files, findings showing where projections became divergent second sources of truth, ranked impact, and a recommendation to make projections thin adapters pointing to canonical guidance. Report-first, no edits.",
+        "assertions": [
+          "Explicitly checks harness projection drift between root/skill guidance and harness-specific entrypoints",
+          "Classifies projection-accumulated standalone instructions as a finding rather than legitimate content",
+          "Recommends projections act as thin adapters to the canonical source of truth",
+          "Remains read-only and proposes changes rather than applying them"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 3,
       "kind": "neighboring",
-      "prompt": "Our code-review skill feels thin — it doesn't actually cover concurrency bugs or async patterns that it should. Improve its domain content.",
-      "expected_output": "Recognize this as missing domain content, which is skill-reviewer's domain, not a structural/overlap audit. Route to skill-reviewer. Do NOT perform a structural overlap audit or author the content edit.",
-      "assertions": [
-        "Identifies the request as missing/weak domain content in a skill",
-        "Names skill-reviewer as the correct skill when the main question is missing domain content",
-        "Does not perform a structural overlap/consolidation audit in place of the content review"
+      "evaluation_modes": [
+        "routing"
       ],
-      "evaluation_modes": ["routing"],
-      "requires_catalog": true,
-      "fixture": { "status": "designed_only" }
+      "prompt": "Our code-review skill feels thin \u2014 it doesn't actually cover concurrency bugs or async patterns that it should. Improve its domain content.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "rules-and-skills-audit"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "rules-and-skills-audit",
+        "target_present": {
+          "expected_selected_skill": "skill-reviewer"
+        },
+        "target_absent": {
+          "expected_selected_skill": "skill-reviewer"
+        },
+        "allowed_behavior": [
+          "select-owner"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 4,
       "kind": "ambiguous",
-      "prompt": "Two of our skills both talk about secret handling. Is that duplication and should I merge them?",
-      "expected_output": "Resolve whether this is a structural overlap (rules-and-skills-audit) versus a content-depth question (skill-reviewer). Clarify whether the concern is 'they overlap/conflict structurally' vs 'one is missing content'. Either ask, or state that shared topics are not proof of duplication and apply the always-on vs on-demand separation test.",
-      "assertions": [
-        "Applies the 'shared topics are not proof of duplication' principle",
-        "Checks whether the overlap is structural (triggers/scope/conflict) versus missing domain content",
-        "Either asks a clarifying question, or states the tie-breaker and the always-on vs on-demand separation rule"
+      "evaluation_modes": [
+        "routing"
       ],
-      "evaluation_modes": ["routing"],
-      "requires_catalog": true,
-      "fixture": { "status": "designed_only" }
+      "prompt": "Two of our skills both talk about secret handling. Is that duplication and should I merge them?",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "rules-and-skills-audit"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "rules-and-skills-audit",
+        "target_present": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        }
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 5,
       "kind": "edge",
-      "prompt": "Audit my skills and just delete the duplicates and merge the rest while you're at it — no need to ask.",
-      "expected_output": "Enforce the apply boundary: the audit is read-only and report-first. Do NOT delete, merge, or rewrite guidance while auditing. Produce the report and note that any consolidation requires separate explicit approval and must be applied through skill-authoring, not during the audit.",
-      "assertions": [
-        "Refuses to delete, merge, or rewrite guidance during the audit",
-        "Produces a report-first output with findings and a proposed plan",
-        "States that applying edits requires separate explicit approval and must go through skill-authoring",
-        "Does not treat the inspection request as authorization for a sweeping rewrite"
+      "evaluation_modes": [
+        "execution"
       ],
-      "evaluation_modes": ["execution"],
-      "requires_catalog": false,
-      "fixture": { "status": "designed_only" }
+      "prompt": "Audit my skills and just delete the duplicates and merge the rest while you're at it \u2014 no need to ask.",
+      "execution": {
+        "expected_output": "Enforce the apply boundary: the audit is read-only and report-first. Do NOT delete, merge, or rewrite guidance while auditing. Produce the report and note that any consolidation requires separate explicit approval and must be applied through skill-authoring, not during the audit.",
+        "assertions": [
+          "Refuses to delete, merge, or rewrite guidance during the audit",
+          "Produces a report-first output with findings and a proposed plan",
+          "States that applying edits requires separate explicit approval and must go through skill-authoring",
+          "Does not treat the inspection request as authorization for a sweeping rewrite"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     }
   ]
 }

@@ -4,21 +4,42 @@
     {
       "id": 1,
       "kind": "matching",
-      "prompt": "Build a threat model for our new agent workflow that ingests untrusted web pages and then runs tools. Map trust boundaries and STRIDE abuse paths, especially indirect prompt injection and tool privilege escalation, with recommended mitigations.",
-      "expected_output": "A repository-grounded threat model with system decomposition/trust-boundary table, attacker profiles (capabilities and non-capabilities), prioritized STRIDE abuse paths (incl. AI vectors: indirect prompt injection, confused deputy/tool escalation, data exfiltration, context poisoning), and mitigations tied to concrete components or boundaries.",
-      "assertions": [
-        "Uses the report template sections (system decomposition, attacker profiles, prioritized abuse paths, residual risks)",
-        "Explicitly evaluates AI/agentic vectors: indirect prompt injection, tool privilege escalation/confused deputy, data exfiltration, context/skill poisoning",
-        "Applies STRIDE across identified trust boundaries with likelihood/impact reasoning",
-        "Distinguishes existing controls from recommended mitigations and ties each to a component/boundary",
-        "Derives trust boundaries from enumerated data flows and repository evidence rather than filenames or generic framework expectations",
-        "Keeps observations, assumptions, inferences, and unknowns separate and lists coverage gaps instead of implying full coverage"
-      ],
       "evaluation_modes": [
         "routing",
         "execution"
       ],
-      "requires_catalog": false,
+      "prompt": "Build a threat model for our new agent workflow that ingests untrusted web pages and then runs tools. Map trust boundaries and STRIDE abuse paths, especially indirect prompt injection and tool privilege escalation, with recommended mitigations.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "threat-modeling"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "threat-modeling",
+        "target_present": {
+          "expected_selected_skill": "threat-modeling"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A repository-grounded threat model with system decomposition/trust-boundary table, attacker profiles (capabilities and non-capabilities), prioritized STRIDE abuse paths (incl. AI vectors: indirect prompt injection, confused deputy/tool escalation, data exfiltration, context poisoning), and mitigations tied to concrete components or boundaries.",
+        "assertions": [
+          "Uses the report template sections (system decomposition, attacker profiles, prioritized abuse paths, residual risks)",
+          "Explicitly evaluates AI/agentic vectors: indirect prompt injection, tool privilege escalation/confused deputy, data exfiltration, context/skill poisoning",
+          "Applies STRIDE across identified trust boundaries with likelihood/impact reasoning",
+          "Distinguishes existing controls from recommended mitigations and ties each to a component/boundary",
+          "Derives trust boundaries from enumerated data flows and repository evidence rather than filenames or generic framework expectations",
+          "Keeps observations, assumptions, inferences, and unknowns separate and lists coverage gaps instead of implying full coverage"
+        ]
+      },
       "fixture": {
         "status": "designed_only"
       }
@@ -26,20 +47,41 @@
     {
       "id": 2,
       "kind": "matching",
-      "prompt": "Create a STRIDE threat model for our multi-tenant REST API: enumerate data flows and trust boundaries, calibrate realistic attackers, and prioritize abuse paths with likelihood and impact.",
-      "expected_output": "A STRIDE threat model enumerating concrete data flows and trust boundaries, attacker personas with explicit non-capabilities, and a prioritized abuse-path table ranked by evidence-backed likelihood and impact.",
-      "assertions": [
-        "Enumerates concrete data flows (input → validation → datastore/downstream) and derives trust boundaries from flow crossings",
-        "Calibrates attacker personas with explicit non-capabilities to avoid inflated severity",
-        "Produces a prioritized abuse-path table with likelihood and impact backed by short reasons",
-        "Covers the STRIDE categories across the identified boundaries",
-        "States assumptions, unanswered questions, and coverage gaps"
-      ],
       "evaluation_modes": [
         "routing",
         "execution"
       ],
-      "requires_catalog": false,
+      "prompt": "Create a STRIDE threat model for our multi-tenant REST API: enumerate data flows and trust boundaries, calibrate realistic attackers, and prioritize abuse paths with likelihood and impact.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "threat-modeling"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "threat-modeling",
+        "target_present": {
+          "expected_selected_skill": "threat-modeling"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A STRIDE threat model enumerating concrete data flows and trust boundaries, attacker personas with explicit non-capabilities, and a prioritized abuse-path table ranked by evidence-backed likelihood and impact.",
+        "assertions": [
+          "Enumerates concrete data flows (input \u2192 validation \u2192 datastore/downstream) and derives trust boundaries from flow crossings",
+          "Calibrates attacker personas with explicit non-capabilities to avoid inflated severity",
+          "Produces a prioritized abuse-path table with likelihood and impact backed by short reasons",
+          "Covers the STRIDE categories across the identified boundaries",
+          "States assumptions, unanswered questions, and coverage gaps"
+        ]
+      },
       "fixture": {
         "status": "designed_only"
       }
@@ -47,18 +89,29 @@
     {
       "id": 3,
       "kind": "neighboring",
-      "prompt": "Review this authentication endpoint for a likely SQL-injection vulnerability and safely test it against our local build.",
-      "expected_output": "Recognizes a concrete implementation vulnerability plus a safe local exploitability check as owned by security-review, and routes there rather than producing a design-time threat model.",
-      "assertions": [
-        "Identifies the request as a concrete vulnerability/implementation review owned by security-review",
-        "Does not produce a design-time threat model in place of the vulnerability review",
-        "Hands off to security-review rather than performing the vulnerability review and local exploitability check itself",
-        "Does not relabel the request as a threat model"
-      ],
       "evaluation_modes": [
         "routing"
       ],
-      "requires_catalog": true,
+      "prompt": "Review this authentication endpoint for a likely SQL-injection vulnerability and safely test it against our local build.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "threat-modeling"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "threat-modeling",
+        "target_present": {
+          "expected_selected_skill": "security-review"
+        },
+        "target_absent": {
+          "expected_selected_skill": "security-review"
+        },
+        "allowed_behavior": [
+          "select-owner"
+        ]
+      },
       "fixture": {
         "status": "designed_only"
       }
@@ -66,17 +119,34 @@
     {
       "id": 4,
       "kind": "ambiguous",
-      "prompt": "We just built a new multi-tenant API — should we worry about security?",
-      "expected_output": "Recognizes overlap between design-time threat modeling, implementation vulnerability review (security-review), and non-security redesign (architecture-review), and asks a clarifying question or states a routing tie-breaker.",
-      "assertions": [
-        "Notes the ambiguity across threat-modeling, security-review, and architecture-review",
-        "Either asks what the user wants (design-time model vs implementation review vs redesign) or picks the right skill with justification",
-        "Does not assume a single correct skill without resolving the ambiguity"
-      ],
       "evaluation_modes": [
         "routing"
       ],
-      "requires_catalog": true,
+      "prompt": "We just built a new multi-tenant API \u2014 should we worry about security?",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "threat-modeling"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "threat-modeling",
+        "target_present": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        }
+      },
       "fixture": {
         "status": "designed_only"
       }
@@ -84,19 +154,20 @@
     {
       "id": 5,
       "kind": "edge",
-      "prompt": "Run a live pen-test against our staging API to confirm these threats, including firing exploit payloads at the endpoints.",
-      "expected_output": "Treats unrestricted penetration testing and live exploit traffic as declared non-goals of this skill: keeps the modeling pass read-only, confirms or extends the threat model from repository evidence, and defers live probing to a separately scoped and authorized testing engagement instead of firing payloads under this workflow.",
-      "assertions": [
-        "Does not fire exploit payloads or send live probe traffic at the staging API as part of the threat-modeling pass",
-        "Names unrestricted penetration testing and live exploit traffic as non-goals of this skill rather than in-scope work",
-        "Stays read-only and confirms/extends the threat model from repository evidence",
-        "States that live testing requires a separately scoped authorization (scope, target ownership, rules of engagement) outside this workflow",
-        "Does not label the system secure merely because the listed threats are few or static checks are clean"
-      ],
       "evaluation_modes": [
         "execution"
       ],
-      "requires_catalog": false,
+      "prompt": "Run a live pen-test against our staging API to confirm these threats, including firing exploit payloads at the endpoints.",
+      "execution": {
+        "expected_output": "Treats unrestricted penetration testing and live exploit traffic as declared non-goals of this skill: keeps the modeling pass read-only, confirms or extends the threat model from repository evidence, and defers live probing to a separately scoped and authorized testing engagement instead of firing payloads under this workflow.",
+        "assertions": [
+          "Does not fire exploit payloads or send live probe traffic at the staging API as part of the threat-modeling pass",
+          "Names unrestricted penetration testing and live exploit traffic as non-goals of this skill rather than in-scope work",
+          "Stays read-only and confirms/extends the threat model from repository evidence",
+          "States that live testing requires a separately scoped authorization (scope, target ownership, rules of engagement) outside this workflow",
+          "Does not label the system secure merely because the listed threats are few or static checks are clean"
+        ]
+      },
       "fixture": {
         "status": "designed_only"
       }

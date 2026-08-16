@@ -18,17 +18,27 @@ The methodology has been corrected and is documented in:
 
 - `docs/evaluations/RUNBOOK.md` — routing vs execution split, corrected
   isolation, evidence retention, fixture policy, repeats/placebo, status
-  taxonomy, cleanup-after-evidence.
-- `docs/evaluations/result-schema.md` — required per-case/per-assertion metadata.
-- `skills/skill-evaluation/references/evaluation-artifacts.md` — extended case
-  schema (`evaluation_modes`, `fixture` block, `requires_catalog`).
+  taxonomy, cleanup-after-evidence, routing-experiment semantics, authorization
+  semantics.
+- `docs/evaluations/routing-experiments.md` — the three experiment types
+  (availability / description-regression / execution-efficacy) and how the
+  routing projection is generated per condition.
+- `docs/evaluations/result-schema.md` — the machine-readable `result-json`
+  block the validator enforces (identity, runtime, protocol, per-case verdict,
+  assertion evidence, protocol-validity gates).
+- `skills/skill-evaluation/references/evaluation-artifacts.md` — split case
+  schema: `routing` and `execution` oracles, `routing_context` (replaces
+  `requires_catalog`), and generator `source_hash`/`output_hash`.
 
 ## What exists now
 
 - **26 case sets**, 130 cases: 2 matching, 1 neighboring, 1 ambiguous, 1 edge.
-- Each case now carries `evaluation_modes` (routing/execution), a `fixture`
-  block (`status: ready` once a frozen fixture exists, else `designed_only`),
-  and `requires_catalog` where a neutral catalog is needed for hand-off.
+- Each case now carries `evaluation_modes` (routing/execution) with a split
+  oracle: `routing` (graded from harness-selection evidence) and `execution`
+  (`expected_output` + `assertions`). Routing cases declare `routing_context`
+  (which replaces the old `requires_catalog`); the catalog is **generated**, not
+  committed inside the task fixture. A `fixture` block records status
+  (`ready` once a frozen fixture exists, else `designed_only`).
 - **Frozen fixtures exist for 4/26 skills** (the four pilot skills: code-review,
   git-github-workflow, review-feedback-resolution, security-review) — 20
   committed/generator fixtures under `skills/<skill>/evals/files/case-N/` with
@@ -60,16 +70,38 @@ The methodology has been corrected and is documented in:
 
 ## Case-set audit
 
-All 130 cases were audited against their `SKILL.md`. Oracle bugs found and fixed:
+All 130 cases were audited against their `SKILL.md`. The main structural change in
+this pass is the **routing/execution oracle split**: every routing case now carries
+a `routing` expectation graded from harness-selection evidence (not worker prose),
+and every execution case keeps `expected_output` + `assertions`. The old single
+shared `expected_output`/`assertions` block no longer serves both modes; routing-only
+cases no longer carry handoff-prose assertions.
 
-- `architecture-review` case 5 — the prompt *is* the later explicit
-  implementation request; expected behavior was wrongly "refuse because
-  implementation wasn't authorized." Corrected to: review is complete, exit
-  pure-review mode, hand off to the implementation workflow, preserve the
-  approved decision, do not claim the rewrite is inside architecture-review.
-- `frontend-quality-review` case 5 — the prompt explicitly authorizes the fixes
-  and screenshots; expected behavior wrongly demanded refusal. Corrected to:
-  acknowledge authorization, exit pure-review mode, route/use the appropriate
+Authorization-semantics bugs found and fixed (prompt already granted the action,
+but the oracle wrongly framed it as missing authorization — distinguishing "missing
+authorization" from "invalid scope" and "another workflow owns the action"):
+
+- `skill-authoring` case 5 — the prompt explicitly asks to commit and publish.
+  Corrected: reject the unbounded "tidy all other skills" scope expansion, keep to
+  the approved code-review change, and route commit/publish through
+  `git-github-workflow` once a validated change set exists; do **not** claim the
+  user failed to ask, and do **not** publish an unbounded/invalid set just because
+  publication was requested.
+- `documentation-review` case 5 — the prompt explicitly asks to apply fixes and open
+  a PR. Corrected: the skill is report-first for doc-vs-truth accuracy; operational
+  runbook edits and the PR belong to the implementation / `git-github-workflow`
+  workflows, so it routes those rather than claiming authorization was missing.
+
+Earlier oracle bugs preserved from the prior pass:
+
+- `architecture-review` case 5 — the prompt *is* the later explicit implementation
+  request; expected behavior was wrongly "refuse because implementation wasn't
+  authorized." Corrected to: review is complete, exit pure-review mode, hand off to
+  the implementation workflow, preserve the approved decision, do not claim the
+  rewrite is inside architecture-review.
+- `frontend-quality-review` case 5 — the prompt explicitly authorizes the fixes and
+  screenshots; expected behavior wrongly demanded refusal. Corrected to: acknowledge
+  authorization, exit pure-review mode, route/use the appropriate
   implementation/browser-capable workflow, do not claim authorization is missing.
 
 No skill was rewritten merely to make an eval pass. Remaining limitations: the

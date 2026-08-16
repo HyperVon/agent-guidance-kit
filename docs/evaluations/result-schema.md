@@ -5,102 +5,124 @@ sanitized summaries: keep enough quoted evidence to justify every assertion
 decision, but store raw worker outputs, session logs, and tool trajectories in
 the ignored local run-evidence directory (see `.gitignore`), not in Git.
 
-A result file MUST contain, per case, the fields below. The
-`scripts/validate_evaluations.py` validator enforces the required metadata so a
-protocol-invalid run cannot automatically generate a validated checkmark.
+A result file MUST contain, in addition to any prose, a fenced
+`result-json` block that the validator (`scripts/validate_evaluations.py`)
+parses and checks. The block is JSON:
 
-## Required top-level metadata
+```result-json
+{
+  "skill": "code-review",
+  "evaluation_mode": "execution",
+  "method": "prompt-injection-approximation",
+  "case_revision": "sha256:…",
+  "fixture_revision": "sha256:…",
+  "target_skill_revision": "sha256:…",
+  "runtime": {
+    "harness": "kilo",
+    "harness_version": "unknown",
+    "model": "hy3-free",
+    "reasoning_effort": "high",
+    "tool_policy": "sandbox",
+    "network_policy": "none",
+    "isolation_method": "instruction-only (limited)"
+  },
+  "protocol": {
+    "status": "limited",
+    "worker_isolation_verified": true,
+    "target_loaded_in_guided": "manifest shows code-review/SKILL.md loaded",
+    "target_absent_in_baseline": "baseline manifest contained no code-review entry",
+    "contamination": "none",
+    "routing_mechanism": null
+  },
+  "cases": [
+    {
+      "case_id": 1,
+      "outcome": {
+        "category": "skill_only_pass",
+        "measurement_status": "discriminating",
+        "protocol_status": "limited"
+      },
+      "verdict": { "guided_pass": true, "baseline_pass": false },
+      "assertions": [
+        {
+          "assertion": "<frozen assertion text, verbatim from evals.json>",
+          "guided":   { "pass": true,  "evidence": "quoted span / diff line / exit code" },
+          "baseline": { "pass": false, "evidence": "quoted span / diff line / exit code" }
+        }
+      ]
+    }
+  ]
+}
+```
 
-- `skill` — skill name (matches `evals.json` `skill_name`).
-- `evaluation_mode` — `routing` or `execution` (or both, in separate sections).
-- `method` — how the guided condition was activated: `harness-routing`,
-  `harness-injection`, or `prompt-injection-approximation`.
-- `case_revision` — commit hash / content hash of the `evals.json` used.
-- `fixture_revision` — commit hash / content hash of the fixture used (or
-  `designed_only`).
+## Required identity
+
+- `skill` — must match a discovered `evals.json` `skill_name`.
+- `evaluation_mode` — `routing` or `execution`.
+- `method` — `harness-routing`, `harness-injection`, or
+  `prompt-injection-approximation`.
+- `case_revision` — commit/content hash of the `evals.json` used.
+- `fixture_revision` — commit/content hash of the fixture (`designed_only` if none).
 - `target_skill_revision` — commit hash of the `SKILL.md` under test.
 
 ## Runtime block
 
-- `harness` and `harness_version` (if discoverable).
-- `model`.
-- `reasoning_effort`.
-- `tool_policy` and `network_policy` (e.g. `read-only-root`, `sandbox`, `none`).
-- `isolation_method` — `os-contained` or `instruction-only (limited)`.
+`harness`, `model`, `reasoning_effort`, `tool_policy`, `network_policy`,
+`isolation_method` are all required. `harness_version` is allowed to be
+`"unknown"` when not discoverable.
 
 ## Protocol block
 
-- `status` — one of `valid`, `limited`, `contaminated`, `invalid`, `not_run`.
-- `worker_isolation_verified` — boolean; how (boundary probe).
-- `target_loaded_in_guided` — evidence (manifest/log) for execution runs.
-- `target_absent_in_baseline` — evidence (manifest/probe) that the baseline did
-  not receive the target skill's identity or text.
+- `status` — `valid`, `limited`, `contaminated`, `invalid`, `not_run`.
+- `worker_isolation_verified` — boolean; how (boundary probe). A `valid` run
+  requires it `true`.
+- `target_loaded_in_guided` — evidence (manifest/log) that the guided worker
+  loaded the target skill. **Required for execution runs.**
+- `target_absent_in_baseline` — evidence that the baseline did **not** receive
+  the target skill's identity or text. **Required for execution runs**; if it is
+  missing or false the run is unverified and invalid.
 - `contamination` — `none` or a description.
-- `routing_mechanism` — required for routing runs: how selected skill was
-  captured (harness manifest, startup log, named tool-call). Absent/unknown ⇒
-  `status: limited`/`not_run`, never a routing conclusion.
+- `routing_mechanism` — **required for routing runs**: how the selected skill
+  was captured (harness manifest, startup log, named tool-call). Absent/unknown
+  ⇒ the routing claim is invalid, never a routing conclusion.
 
-## Per-run evidence
-
-- `runs.guided.session_id`, `runs.guided.output_hash`.
-- `runs.baseline.session_id`, `runs.baseline.output_hash`.
-- For routing runs, `runs.guided.selected_skill` and
-  `runs.baseline.selected_skill` (captured identity).
-
-## Assertion-level grades
-
-For each case assertion:
-
-```yaml
-- assertion: "…"
-  guided:
-    pass: true
-    evidence: "quoted span / diff line / exit code"
-  baseline:
-    pass: false
-    evidence: "quoted span / diff line / exit code"
-```
-
-## Outcome + measurement classification
+## Per-case grades
 
 - `outcome.category` — `skill_only_pass`, `baseline_only_pass`, `both_pass`,
   `both_fail`, `invalid`, `not_run`.
-- `measurement_status` — `discriminating`, `non_discriminating`, `inconclusive`.
-- `protocol_status` — as above.
+- `outcome.measurement_status` — `discriminating`, `non_discriminating`,
+  `inconclusive`.
+- `outcome.protocol_status` — as above.
+- `verdict.guided_pass` / `verdict.baseline_pass` — booleans; the validator
+  checks they are consistent with `outcome.category`:
+  - `skill_only_pass` ⇔ guided pass & baseline fail
+  - `baseline_only_pass` ⇔ guided fail & baseline pass
+  - `both_pass` ⇔ both pass
+  - `both_fail` ⇔ both fail
+- Every frozen assertion from `evals.json` must appear in the graded
+  `assertions` list (no assertion silently disappears). Each assertion grades
+  `guided` and `baseline` with a `pass` boolean; **every passing condition must
+  carry concrete `evidence`** (quoted span / diff line / exit code) — plausible
+  prose or self-assertion is not evidence.
 
-## Human review + decision
+## Protocol-validity gates
 
-- `human_review` — usefulness, unnecessary work, misleading confidence.
-- `decision` — keep / revise / merge / defer / reject, or `pending rerun` /
-  `exploratory` for historical pilots that do not meet the corrected protocol.
+A result MUST NOT be treated as validated when:
 
-## Example (abridged)
+- `protocol.status` is `invalid` or `contaminated`;
+- required worker-isolation evidence is missing;
+- target absence is unverified (execution);
+- the routing selection identity is unavailable (routing).
 
-```yaml
-skill: code-review
-evaluation_mode: execution
-method: prompt-injection-approximation
-protocol:
-  status: limited
-  worker_isolation_verified: true
-  target_loaded_in_guided: true
-  target_absent_in_baseline: true
-  contamination: none
-runs:
-  guided: { session_id: run_…, output_hash: sha256:… }
-  baseline: { session_id: run_…, output_hash: sha256:… }
-assertions:
-  - assertion: "Refuses to merge"
-    guided: { pass: true, evidence: "…" }
-    baseline: { pass: false, evidence: "…" }
-outcome:
-  category: skill_only_pass
-  measurement_status: discriminating
-  protocol_status: limited
-human_review: { usefulness: …, misleading_confidence: … }
-decision: exploratory
-```
+Concretely: when `protocol.status` is `invalid` or `contaminated`, no case may
+claim a success outcome (`skill_only_pass` / `baseline_only_pass` /
+`both_pass`).
 
-> Historical runs produced before this schema existed (the four 2026 pilots) are
-> retained as `decision: exploratory` / `protocol_status: invalid` evidence only.
-> They must not be cited as protocol-valid proof.
+## Historical pilots
+
+The four 2026 pilots (`code-review.md`, `git-github-workflow.md`,
+`review-feedback-resolution.md`, `security-review.md`) predate this schema.
+They are retained only as `protocol_status: invalid` / `decision: exploratory`
+legacy evidence and are exempt from the `result-json` requirement. The
+validator allows them **only** when they are explicitly marked exploratory/invalid
+and carry no overloaded `✓` or `authoritative` claim.

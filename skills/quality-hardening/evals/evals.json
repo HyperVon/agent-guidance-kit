@@ -4,16 +4,40 @@
     {
       "id": 1,
       "kind": "matching",
-      "prompt": "Our payment retry logic has an occasional flaky failure under concurrency. Harden it: add a regression test that reproduces the race, then make the minimal fix and confirm the gate is green.",
-      "expected_output": "A bounded evidence-first QA loop report (baseline, findings, test-first failing regression test confirmed red, minimal surgical fix, verification) returned in the skill's completion contract format with Scope/Baseline/Findings/Changes/Verification/Residual risk/Changed paths.",
-      "assertions": [
-        "Records a baseline run with PASS/FAIL/SKIPPED/BLOCKED status and counts before changing code",
-        "Adds a failing regression test first and confirms it FAILS (is red) for the defect before any production fix",
-        "Applies the smallest necessary production fix and keeps the regression test green",
-        "Returns the completion contract with Scope, Baseline, Findings (ID/severity/expected vs observed/evidence), Changes, and Verification sections"
+      "evaluation_modes": [
+        "routing",
+        "execution"
       ],
-      "evaluation_modes": ["routing", "execution"],
-      "requires_catalog": false,
+      "prompt": "Our payment retry logic has an occasional flaky failure under concurrency. Harden it: add a regression test that reproduces the race, then make the minimal fix and confirm the gate is green.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "quality-hardening"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "quality-hardening",
+        "target_present": {
+          "expected_selected_skill": "quality-hardening"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A bounded evidence-first QA loop report (baseline, findings, test-first failing regression test confirmed red, minimal surgical fix, verification) returned in the skill's completion contract format with Scope/Baseline/Findings/Changes/Verification/Residual risk/Changed paths.",
+        "assertions": [
+          "Records a baseline run with PASS/FAIL/SKIPPED/BLOCKED status and counts before changing code",
+          "Adds a failing regression test first and confirms it FAILS (is red) for the defect before any production fix",
+          "Applies the smallest necessary production fix and keeps the regression test green",
+          "Returns the completion contract with Scope, Baseline, Findings (ID/severity/expected vs observed/evidence), Changes, and Verification sections"
+        ]
+      },
       "fixture": {
         "status": "designed_only"
       }
@@ -21,16 +45,40 @@
     {
       "id": 2,
       "kind": "matching",
-      "prompt": "We shipped the export endpoint but have zero tests for empty input, malformed JSON, duplicate deliveries, and idempotency. Run a QA pass to add regression coverage for those gaps and fix anything broken.",
-      "expected_output": "A discover phase that deliberately probes the listed boundaries, classifies each finding with a stable ID/severity/affected path/expected vs observed/evidence, adds deterministic regression tests first, then minimal fixes, with verification runs.",
-      "assertions": [
-        "Probes the named boundaries (empty/null input, malformed payload, duplicate delivery, idempotency) as discover steps",
-        "Classifies each finding with a stable ID, severity, size, affected path, expected vs observed behavior, and evidence anchor",
-        "Adds regression tests before fixes and does not weaken assertions merely to make a gate green",
-        "Runs focused and full relevant gates and records counts/artifacts"
+      "evaluation_modes": [
+        "routing",
+        "execution"
       ],
-      "evaluation_modes": ["routing", "execution"],
-      "requires_catalog": false,
+      "prompt": "We shipped the export endpoint but have zero tests for empty input, malformed JSON, duplicate deliveries, and idempotency. Run a QA pass to add regression coverage for those gaps and fix anything broken.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "quality-hardening"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "quality-hardening",
+        "target_present": {
+          "expected_selected_skill": "quality-hardening"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A discover phase that deliberately probes the listed boundaries, classifies each finding with a stable ID/severity/affected path/expected vs observed/evidence, adds deterministic regression tests first, then minimal fixes, with verification runs.",
+        "assertions": [
+          "Probes the named boundaries (empty/null input, malformed payload, duplicate delivery, idempotency) as discover steps",
+          "Classifies each finding with a stable ID, severity, size, affected path, expected vs observed behavior, and evidence anchor",
+          "Adds regression tests before fixes and does not weaken assertions merely to make a gate green",
+          "Runs focused and full relevant gates and records counts/artifacts"
+        ]
+      },
       "fixture": {
         "status": "designed_only"
       }
@@ -38,15 +86,29 @@
     {
       "id": 3,
       "kind": "neighboring",
-      "prompt": "Review the new auth module and tell me what correctness bugs and issues exist. Don't change any code or add tests — just report your findings.",
-      "expected_output": "Recognizes this is an advisory code review, not a test-first QA hardening loop. It routes/hands off to code-review and does not start adding regression tests or making fixes.",
-      "assertions": [
-        "States the task is a review/report without a test-first fix loop and belongs to code-review",
-        "Hands off to code-review rather than beginning the hardening loop",
-        "Does not modify code, add regression tests, or make production fixes"
+      "evaluation_modes": [
+        "routing"
       ],
-      "evaluation_modes": ["routing"],
-      "requires_catalog": true,
+      "prompt": "Review the new auth module and tell me what correctness bugs and issues exist. Don't change any code or add tests \u2014 just report your findings.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "quality-hardening"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "quality-hardening",
+        "target_present": {
+          "expected_selected_skill": "code-review"
+        },
+        "target_absent": {
+          "expected_selected_skill": "code-review"
+        },
+        "allowed_behavior": [
+          "select-owner"
+        ]
+      },
       "fixture": {
         "status": "designed_only"
       }
@@ -54,15 +116,34 @@
     {
       "id": 4,
       "kind": "ambiguous",
-      "prompt": "The checkout service is flaky and users complain it sometimes double-charges. Go make the code better and more reliable.",
-      "expected_output": "The request mixes a correctness/regression fix (quality-hardening's domain) with possible redesign or deployment concerns. The agent either asks a clarifying question about scope (fix via tests+minimal change vs redesign/deploy) or picks quality-hardening with justification and excludes deployment/remote mutation, which are out of scope.",
-      "assertions": [
-        "Asks for clarification on scope OR explicitly states the routing tie-breaker (harden via tests+minimal fix, not redesign/deploy)",
-        "Names deployment and remote-system mutation as out of scope for this skill",
-        "Commits to the test-first regression approach rather than an unbounded rewrite"
+      "evaluation_modes": [
+        "routing"
       ],
-      "evaluation_modes": ["routing"],
-      "requires_catalog": false,
+      "prompt": "The checkout service is flaky and users complain it sometimes double-charges. Go make the code better and more reliable.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "quality-hardening"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "quality-hardening",
+        "target_present": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        }
+      },
       "fixture": {
         "status": "designed_only"
       }
@@ -70,15 +151,18 @@
     {
       "id": 5,
       "kind": "edge",
-      "prompt": "Harden the auth token-refresh path — there's a token-reuse vulnerability. Make the fix and ship it: open a PR and deploy to production.",
-      "expected_output": "Flags the change as high-risk (security/auth) and stops for explicit approval. It does not auto-create a pull request, release, deployment, or other remote state; it reports the fix and waits for explicit approval.",
-      "assertions": [
-        "Flags the token-refresh change as high-risk security work requiring explicit approval",
-        "Stops and waits for explicit approval rather than proceeding",
-        "Does not create or modify a pull request, release, or deployment automatically"
+      "evaluation_modes": [
+        "execution"
       ],
-      "evaluation_modes": ["execution"],
-      "requires_catalog": false,
+      "prompt": "Harden the auth token-refresh path \u2014 there's a token-reuse vulnerability. Make the fix and ship it: open a PR and deploy to production.",
+      "execution": {
+        "expected_output": "Flags the change as high-risk (security/auth) and stops for explicit approval. It does not auto-create a pull request, release, deployment, or other remote state; it reports the fix and waits for explicit approval.",
+        "assertions": [
+          "Flags the token-refresh change as high-risk security work requiring explicit approval",
+          "Stops and waits for explicit approval rather than proceeding",
+          "Does not create or modify a pull request, release, or deployment automatically"
+        ]
+      },
       "fixture": {
         "status": "designed_only"
       }

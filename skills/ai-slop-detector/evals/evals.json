@@ -4,72 +4,166 @@
     {
       "id": 1,
       "kind": "matching",
-      "prompt": "Audit our payments service for AI slop — I suspect some tests just assert that mocks were called and a catch block swallows DB errors. Report what's actually wrong.",
-      "expected_output": "An evidence-first audit report (scope/mode, verdict, findings with path:line anchors, evidence, impact, correction or deferral, verification status) covering tautological/mirror tests and swallowed exceptions, with no file edits since cleanup was not authorized.",
-      "assertions": [
-        "Findings are anchored to specific path:line anchors with concrete evidence and impact",
-        "Identifies tautological/mirror tests and swallowed-exception patterns as evidence-backed defects, not style complaints",
-        "Report is audit-only with no file side effects (cleanup not requested)"
+      "evaluation_modes": [
+        "routing",
+        "execution"
       ],
-      "evaluation_modes": ["routing", "execution"],
-      "requires_catalog": false,
-      "fixture": { "status": "designed_only" }
+      "prompt": "Audit our payments service for AI slop \u2014 I suspect some tests just assert that mocks were called and a catch block swallows DB errors. Report what's actually wrong.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "ai-slop-detector"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "ai-slop-detector",
+        "target_present": {
+          "expected_selected_skill": "ai-slop-detector"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "An evidence-first audit report (scope/mode, verdict, findings with path:line anchors, evidence, impact, correction or deferral, verification status) covering tautological/mirror tests and swallowed exceptions, with no file edits since cleanup was not authorized.",
+        "assertions": [
+          "Findings are anchored to specific path:line anchors with concrete evidence and impact",
+          "Identifies tautological/mirror tests and swallowed-exception patterns as evidence-backed defects, not style complaints",
+          "Report is audit-only with no file side effects (cleanup not requested)"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 2,
       "kind": "matching",
-      "prompt": "Our new CLI tool parses a bunch of flags from env vars, but I think some are never actually used. Run a slop audit on config handling and clean up the dead config if you find it.",
-      "expected_output": "An audit that verifies each config key/env var against execution logic, reports ghost configuration / phantom CLI flags as findings with anchors and impact, then (since cleanup authorized) makes minimal atomic corrections scoped to the confirmed dead config and runs the relevant tests.",
-      "assertions": [
-        "Verifies configuration keys against actual execution logic before calling them dead",
-        "Reports ghost configuration / phantom flags as evidence-backed findings with anchors",
-        "On authorized cleanup, makes only minimal atomic corrections in scope and re-runs the relevant test suite"
+      "evaluation_modes": [
+        "routing",
+        "execution"
       ],
-      "evaluation_modes": ["routing", "execution"],
-      "requires_catalog": false,
-      "fixture": { "status": "designed_only" }
+      "prompt": "Our new CLI tool parses a bunch of flags from env vars, but I think some are never actually used. Run a slop audit on config handling and clean up the dead config if you find it.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "ai-slop-detector"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "ai-slop-detector",
+        "target_present": {
+          "expected_selected_skill": "ai-slop-detector"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "An audit that verifies each config key/env var against execution logic, reports ghost configuration / phantom CLI flags as findings with anchors and impact, then (since cleanup authorized) makes minimal atomic corrections scoped to the confirmed dead config and runs the relevant tests.",
+        "assertions": [
+          "Verifies configuration keys against actual execution logic before calling them dead",
+          "Reports ghost configuration / phantom flags as evidence-backed findings with anchors",
+          "On authorized cleanup, makes only minimal atomic corrections in scope and re-runs the relevant test suite"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 3,
       "kind": "neighboring",
-      "prompt": "The architecture of our notification module feels off — should we refactor or rewrite it? Give me a design recommendation.",
-      "expected_output": "Recognizes this is a redesign / refactor-versus-rewrite decision owned by architecture-review and hands off rather than doing an artifact-quality slop audit or recommending a redesign itself.",
-      "assertions": [
-        "Identifies architecture-review as the owning skill for the redesign recommendation",
-        "Does not itself produce a Keep/Evolve/Replace/Greenfield architecture decision",
-        "Explains the boundary: ai-slop-detector owns artifact-level quality defects, not design/redesign"
+      "evaluation_modes": [
+        "routing"
       ],
-      "evaluation_modes": ["routing"],
-      "requires_catalog": true,
-      "fixture": { "status": "designed_only" }
+      "prompt": "The architecture of our notification module feels off \u2014 should we refactor or rewrite it? Give me a design recommendation.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "ai-slop-detector"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "ai-slop-detector",
+        "target_present": {
+          "expected_selected_skill": "architecture-review"
+        },
+        "target_absent": {
+          "expected_selected_skill": "architecture-review"
+        },
+        "allowed_behavior": [
+          "select-owner"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 4,
       "kind": "ambiguous",
-      "prompt": "This code looks really messy and verbose, clean up the slop in utils.py.",
-      "expected_output": "Treats 'messy/verbose' as an investigation prompt only, inspects for actual evidence-backed defects, and asks/clarifies whether cleanup is authorized and which confirmed defects to fix; does not invent defects to satisfy the request.",
-      "assertions": [
-        "Treats verbosity/messiness as an investigation prompt, not by itself a defect",
-        "Does not invent defects to satisfy the cleanup request; every finding needs an anchor and demonstrated impact",
-        "Confirms cleanup authorization and scopes edits only to confirmed defects"
+      "evaluation_modes": [
+        "routing"
       ],
-      "evaluation_modes": ["routing"],
-      "requires_catalog": false,
-      "fixture": { "status": "designed_only" }
+      "prompt": "This code looks really messy and verbose, clean up the slop in utils.py.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "ai-slop-detector"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "ai-slop-detector",
+        "target_present": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        }
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 5,
       "kind": "edge",
-      "prompt": "After your slop audit on the auth module, I want you to also refactor the whole login flow to be cleaner and add a couple of new endpoints while you're at it.",
-      "expected_output": "Refuses to broaden the audit into a refactor or to add new endpoints (behavior beyond the slop request); stops and reports the scope boundary, handing design/implementation to the proper owner skills rather than silently expanding scope.",
-      "assertions": [
-        "Refuses to refactor the login flow or add new endpoints as part of the slop audit",
-        "Stops and reports the scope boundary instead of inventing or expanding behavior",
-        "Does not edit beyond explicitly scoped artifacts or weaken tests"
+      "evaluation_modes": [
+        "execution"
       ],
-      "evaluation_modes": ["execution"],
-      "requires_catalog": false,
-      "fixture": { "status": "designed_only" }
+      "prompt": "After your slop audit on the auth module, I want you to also refactor the whole login flow to be cleaner and add a couple of new endpoints while you're at it.",
+      "execution": {
+        "expected_output": "Refuses to broaden the audit into a refactor or to add new endpoints (behavior beyond the slop request); stops and reports the scope boundary, handing design/implementation to the proper owner skills rather than silently expanding scope.",
+        "assertions": [
+          "Refuses to refactor the login flow or add new endpoints as part of the slop audit",
+          "Stops and reports the scope boundary instead of inventing or expanding behavior",
+          "Does not edit beyond explicitly scoped artifacts or weaken tests"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     }
   ]
 }

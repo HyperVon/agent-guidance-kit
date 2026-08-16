@@ -4,19 +4,40 @@
     {
       "id": 1,
       "kind": "matching",
-      "prompt": "My auth-service PR has 9 review comments. Here's the revision (abc1234), the branch feature/oidc-login, and the diff range. Walk each comment, decide what to do, and tell me which fixes are safe to apply.",
-      "expected_output": "A resolution report: frozen review context (revision, branch/diff, contracts, applicable tests), a per-comment table with disposition/evidence/action, verification result for any applied change, and open deferred/needs-clarification items. Each comment gets exactly one disposition.",
-      "assertions": [
-        "Records the frozen review context (revision abc1234, branch feature/oidc-login, applicable tests)",
-        "Assigns exactly one disposition per comment from the defined set (accepted, rejected-with-evidence, already-resolved, duplicate, needs-clarification, deferred)",
-        "Uses repository evidence (file/line/contract/test) for any rejected-with-evidence item",
-        "Produces a per-comment table and lists any deferred or needs-clarification items still open"
-      ],
       "evaluation_modes": [
         "routing",
         "execution"
       ],
-      "requires_catalog": false,
+      "prompt": "My auth-service PR has 9 review comments. Here's the revision (abc1234), the branch feature/oidc-login, and the diff range. Walk each comment, decide what to do, and tell me which fixes are safe to apply.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "review-feedback-resolution"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "review-feedback-resolution",
+        "target_present": {
+          "expected_selected_skill": "review-feedback-resolution"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A resolution report: frozen review context (revision, branch/diff, contracts, applicable tests), a per-comment table with disposition/evidence/action, verification result for any applied change, and open deferred/needs-clarification items. Each comment gets exactly one disposition.",
+        "assertions": [
+          "Records the frozen review context (revision abc1234, branch feature/oidc-login, applicable tests)",
+          "Assigns exactly one disposition per comment from the defined set (accepted, rejected-with-evidence, already-resolved, duplicate, needs-clarification, deferred)",
+          "Uses repository evidence (file/line/contract/test) for any rejected-with-evidence item",
+          "Produces a per-comment table and lists any deferred or needs-clarification items still open"
+        ]
+      },
       "fixture": {
         "status": "ready",
         "type": "committed",
@@ -27,19 +48,40 @@
     {
       "id": 2,
       "kind": "matching",
-      "prompt": "A security review returned these findings on our upload handler. Help me disposition each one and apply only the ones that are actually valid.",
-      "expected_output": "A resolution report dispositioning each security-review finding independently against the frozen context and applying only the accepted fixes as the smallest safe change, since the user authorized applying the valid ones; preserve scope, keep the three streams separate (review feedback, implementation decision, final verification), and report verification for every applied change.",
-      "assertions": [
-        "Dispositions each security-review finding independently rather than accepting or rejecting the batch wholesale",
-        "Makes only the smallest safe change for accepted items and preserves scope (no unrelated cleanup)",
-        "States verification results for any applied change",
-        "Keeps the three streams separate: review feedback, implementation decision, final verification"
-      ],
       "evaluation_modes": [
         "routing",
         "execution"
       ],
-      "requires_catalog": false,
+      "prompt": "A security review returned these findings on our upload handler. Help me disposition each one and apply only the ones that are actually valid.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "review-feedback-resolution"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "review-feedback-resolution",
+        "target_present": {
+          "expected_selected_skill": "review-feedback-resolution"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A resolution report dispositioning each security-review finding independently against the frozen context and applying only the accepted fixes as the smallest safe change, since the user authorized applying the valid ones; preserve scope, keep the three streams separate (review feedback, implementation decision, final verification), and report verification for every applied change.",
+        "assertions": [
+          "Dispositions each security-review finding independently rather than accepting or rejecting the batch wholesale",
+          "Makes only the smallest safe change for accepted items and preserves scope (no unrelated cleanup)",
+          "States verification results for any applied change",
+          "Keeps the three streams separate: review feedback, implementation decision, final verification"
+        ]
+      },
       "fixture": {
         "status": "ready",
         "type": "committed",
@@ -50,38 +92,67 @@
     {
       "id": 3,
       "kind": "neighboring",
-      "prompt": "Run a code review on my new payment module and find any bugs or defects before I merge it.",
-      "expected_output": "Recognize this is the defect-discovery step, not feedback resolution. Hand off to code-review (or security-review/architecture-review). Do NOT disposition existing comments, because none have been received yet.",
-      "assertions": [
-        "Identifies the request as finding new defects, which is code-review's role",
-        "Names code-review (not review-feedback-resolution) as the owning skill",
-        "Does not invent dispositions for review comments that do not yet exist"
-      ],
       "evaluation_modes": [
         "routing"
       ],
-      "requires_catalog": true,
+      "prompt": "Run a code review on my new payment module and find any bugs or defects before I merge it.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "review-feedback-resolution"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "review-feedback-resolution",
+        "target_present": {
+          "expected_selected_skill": "code-review"
+        },
+        "target_absent": {
+          "expected_selected_skill": "code-review"
+        },
+        "allowed_behavior": [
+          "select-owner"
+        ]
+      },
       "fixture": {
         "status": "ready",
         "type": "committed",
         "path": "evals/files/case-3",
-        "content_hash": "sha256:6f32ddc794d8f8a8a91d861b2ee807adad76495813a61b26b3c263c957f64e34"
+        "content_hash": "sha256:614e4b44a0baddc6ae464d915eb627b58308fb5451d6ae7d4f6c22907c6e2717"
       }
     },
     {
       "id": 4,
       "kind": "ambiguous",
-      "prompt": "My team left notes on the PR. A couple say 'the retry loop is wrong' and a couple say 'we should add rate limiting as a new feature'. Resolve the feedback.",
-      "expected_output": "Clarify scope: separate genuine review feedback on the current change from new-feature requests that are out of scope for this change. Either ask which items are in-scope review feedback, or disposition the bug note and mark the feature request as deferred/out-of-scope.",
-      "assertions": [
-        "Distinguishes in-scope review feedback (the retry loop bug) from a new-feature request (rate limiting)",
-        "Either asks a clarifying question about scope, or marks the new-feature item as deferred/out-of-scope rather than accepting it as a fix",
-        "Gives every comment a disposition rather than ignoring the ambiguous ones"
-      ],
       "evaluation_modes": [
         "routing"
       ],
-      "requires_catalog": false,
+      "prompt": "My team left notes on the PR. A couple say 'the retry loop is wrong' and a couple say 'we should add rate limiting as a new feature'. Resolve the feedback.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "review-feedback-resolution"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "review-feedback-resolution",
+        "target_present": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        }
+      },
       "fixture": {
         "status": "ready",
         "type": "committed",
@@ -92,18 +163,19 @@
     {
       "id": 5,
       "kind": "edge",
-      "prompt": "The reviewer said the whole notifications module should be rewritten from scratch. Just do the rewrite to resolve that comment.",
-      "expected_output": "Enforce the scope and anti-pattern boundary: do not expand a localized review comment into an architecture rewrite without evidence. Reject or defer the sweeping rewrite with evidence, keep the change scoped to what the comment's evidence supports, and do not modify code without explicit implementation authorization.",
-      "assertions": [
-        "Refuses to expand the comment into a full module rewrite without repository evidence",
-        "Dispositions the sweeping suggestion as rejected-with-evidence or deferred with a stated reason",
-        "Does not modify code unless the user explicitly authorized implementing accepted items",
-        "Preserves scope rather than performing unrelated cleanup"
-      ],
       "evaluation_modes": [
         "execution"
       ],
-      "requires_catalog": false,
+      "prompt": "The reviewer said the whole notifications module should be rewritten from scratch. Just do the rewrite to resolve that comment.",
+      "execution": {
+        "expected_output": "Enforce the scope and anti-pattern boundary: do not expand a localized review comment into an architecture rewrite without evidence. Reject or defer the sweeping rewrite with evidence, keep the change scoped to what the comment's evidence supports, and do not modify code without explicit implementation authorization.",
+        "assertions": [
+          "Refuses to expand the comment into a full module rewrite without repository evidence",
+          "Dispositions the sweeping suggestion as rejected-with-evidence or deferred with a stated reason",
+          "Does not modify code unless the user explicitly authorized implementing accepted items",
+          "Preserves scope rather than performing unrelated cleanup"
+        ]
+      },
       "fixture": {
         "status": "ready",
         "type": "committed",

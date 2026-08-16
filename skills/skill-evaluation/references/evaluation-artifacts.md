@@ -18,10 +18,24 @@ validator (see `scripts/validate_evaluations.py`) checks this shape:
       "id": 1,
       "kind": "matching",
       "evaluation_modes": ["routing", "execution"],
-      "requires_catalog": false,
       "prompt": "A realistic request",
-      "expected_output": "Observable success criteria; not a worker-visible grading rubric",
-      "assertions": ["A concrete property to verify"],
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "example-skill"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "example-skill",
+        "target_present": { "expected_selected_skill": "example-skill" },
+        "target_absent": { "expected_selected_skill": null,
+                           "allowed_fallbacks": ["clarify", "generic-review"] }
+      },
+      "execution": {
+        "expected_output": "Observable success criteria; not a worker-visible grading rubric",
+        "assertions": ["A concrete property to verify"]
+      },
       "fixture": {
         "status": "ready",
         "type": "committed",
@@ -33,28 +47,77 @@ validator (see `scripts/validate_evaluations.py`) checks this shape:
 }
 ```
 
-Field rules enforced by the validator:
+### Routing and execution are separate oracles
+
+A routing evaluation asks *which skill did the harness select?* and is graded
+from **harness-selection evidence** (loaded-skill manifest, routing log,
+named tool call) — never from whether the final answer explains why some other
+skill was not chosen. An execution evaluation asks *once the skill is active,
+did its guidance improve the outcome?* and is graded from the worker's actual
+output against the frozen assertions.
+
+Therefore the two oracles live in different blocks:
+
+- `routing` — required when `evaluation_modes` contains `"routing"`.
+  - `experiment` — `"target-availability"` (catalog present vs absent) or
+    `"description-regression"` (candidate description vs prior description).
+  - `target_skill` — the skill under test.
+  - `target_present.expected_selected_skill` — the skill the router should pick
+    when the target is in the catalog. For a `matching` case this is the target;
+    for `neighboring` it is the correct **owner**; for `ambiguous` it is `null`
+    with `allowed_behavior: ["clarify", "select-owner-with-documented-tiebreaker"]`.
+  - `target_absent.expected_selected_skill` — the expected selection when the
+    target is **removed** from the catalog. For `matching` this is normally
+    `null` (fallbacks allowed); for `neighboring` the owner is unchanged because
+    only the target was removed; for `ambiguous` it is `null` with clarifiers.
+- `execution` — required when `evaluation_modes` contains `"execution"`;
+  holds `expected_output` and `assertions` (verifiable from worker output only).
+
+A routing-only case must **not** carry an `execution` block (no handoff-prose
+assertions), and an execution-only case must **not** carry `routing` /
+`routing_context`. This is what stops a post-activation handoff oracle from
+being mistaken for a routing result.
+
+### routing_context (replaces `requires_catalog`)
+
+`requires_catalog` is removed. Routing cases instead declare `routing_context`:
+
+- `catalog_required: true` — the harness routing surface (catalog) is needed.
+- `comparison` — `"target-present-vs-target-absent"` (default) or
+  `"description-regression"`.
+- `catalog_source: "generated-from-current-catalog"` — the catalog is produced
+  by `scripts/build_routing_catalog.py` from each skill's frontmatter, **not**
+  copied into the task fixture.
+- `target_skill` — must equal the skill name.
+
+The catalog is the **routing projection** and is generated per condition
+(`--target-absent <skill>` for the baseline). It must never be committed inside
+a task fixture, because the same task fixture is reused across conditions and
+only the projection differs.
+
+### Field rules enforced by the validator
 
 - `skill_name` — required; must match the skill directory name.
 - each `evals` entry:
-  - `id` — integer, unique within the skill.
-  - `kind` — one of `matching`, `neighboring`, `ambiguous`, `edge`.
+  - `id` — integer, exactly the set `{1,2,3,4,5}` across the five cases.
+  - `kind` — one of `matching`, `neighboring`, `ambiguous`, `edge`; the pack is
+    exactly 2 `matching`, 1 `neighboring`, 1 `ambiguous`, 1 `edge`.
   - `evaluation_modes` — array with at least one of `routing`, `execution`.
-  - `requires_catalog` — boolean; true for routing/neighboring cases that need a
-    neutral skill catalog present in both conditions so hand-off is possible.
   - `prompt` — non-empty; a natural user request (do not recite the skill's
-    workflow; do not leak the expected answer).
-  - `expected_output` — non-empty observable criteria; faithful to the current
-    `SKILL.md`; must not confuse "no authorization yet" with a later explicit
-    authorization.
-  - `assertions` — non-empty array of strings; each verifiable from the output.
+    workflow; do not leak the expected answer or the intended defect).
+  - `routing` / `routing_context` — present iff `routing` is in the modes.
+  - `execution` (`expected_output` + `assertions`) — present iff `execution` is
+    in the modes.
   - `fixture` — required block:
     - `status`: `"ready"` or `"designed_only"`.
     - when `"ready"`: `type` (`"committed"` or `"generator"`), `path` (must
-      exist under the skill dir), and `content_hash` are required.
+      exist under the skill dir), and `content_hash` are required. A `generator`
+      fixture additionally records `source_hash` (the generator source) and
+      `output_hash` (the deterministic generated output); the validator runs the
+      generator and fails if the output is non-deterministic or the hash is
+      wrong.
     - when `"designed_only"`: no `path`; the case is not executable yet.
-  - `files` — optional, retained for backward compatibility; superseded by
-    `fixture.path`.
+  - No fixture directory may contain a `catalog.md` (routing-surface leak).
 
 Keep generated results in a temporary or explicitly named workspace. Do not claim
 a skill is verified when cases were only designed, not executed and graded. A

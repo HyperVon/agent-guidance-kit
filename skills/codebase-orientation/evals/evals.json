@@ -4,72 +4,166 @@
     {
       "id": 1,
       "kind": "matching",
-      "prompt": "I just joined the team. Can you onboard me to the acme-web repo — explain what it does and how it's structured?",
-      "expected_output": "An evidence-backed overview covering project purpose, tech stack, repository structure, entry points, major workflows, important modules, integrations, configuration, testing strategy, conventions, operational concerns, and unknowns, with claims tagged observed/inferred/unknown where it matters.",
-      "assertions": [
-        "Covers the required overview sections (purpose, stack, structure, entry points, workflows, modules, integrations, config, testing, conventions, operations)",
-        "Claims are grounded in repository evidence (source, config, tests, build files) rather than assumed",
-        "Distinguishes observed facts, inferred behavior, and unknowns explicitly"
+      "evaluation_modes": [
+        "routing",
+        "execution"
       ],
-      "evaluation_modes": ["routing", "execution"],
-      "requires_catalog": false,
-      "fixture": { "status": "designed_only" }
+      "prompt": "I just joined the team. Can you onboard me to the acme-web repo \u2014 explain what it does and how it's structured?",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "codebase-orientation"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "codebase-orientation",
+        "target_present": {
+          "expected_selected_skill": "codebase-orientation"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "An evidence-backed overview covering project purpose, tech stack, repository structure, entry points, major workflows, important modules, integrations, configuration, testing strategy, conventions, operational concerns, and unknowns, with claims tagged observed/inferred/unknown where it matters.",
+        "assertions": [
+          "Covers the required overview sections (purpose, stack, structure, entry points, workflows, modules, integrations, config, testing, conventions, operations)",
+          "Claims are grounded in repository evidence (source, config, tests, build files) rather than assumed",
+          "Distinguishes observed facts, inferred behavior, and unknowns explicitly"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 2,
       "kind": "matching",
-      "prompt": "Map the repository at ./billing-service so I can find where payment retries are handled.",
-      "expected_output": "A descriptive map grounded in evidence that locates the entry points, major workflows (including the payment-retry path), important modules, and integrations, with uncertain areas stated as unknowns rather than invented.",
-      "assertions": [
-        "Identifies entry points and the payment-retry workflow from source evidence",
-        "Names the important modules and integrations that carry the core behavior",
-        "States any unconfirmable details as unknowns instead of inventing flows"
+      "evaluation_modes": [
+        "routing",
+        "execution"
       ],
-      "evaluation_modes": ["routing", "execution"],
-      "requires_catalog": false,
-      "fixture": { "status": "designed_only" }
+      "prompt": "Map the repository at ./billing-service so I can find where payment retries are handled.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "codebase-orientation"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "codebase-orientation",
+        "target_present": {
+          "expected_selected_skill": "codebase-orientation"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A descriptive map grounded in evidence that locates the entry points, major workflows (including the payment-retry path), important modules, and integrations, with uncertain areas stated as unknowns rather than invented.",
+        "assertions": [
+          "Identifies entry points and the payment-retry workflow from source evidence",
+          "Names the important modules and integrations that carry the core behavior",
+          "States any unconfirmable details as unknowns instead of inventing flows"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 3,
       "kind": "neighboring",
-      "prompt": "Explain the repo, and then propose a redesign of the data layer to use event sourcing.",
-      "expected_output": "Delivers the descriptive orientation for the explain part, then recognizes the redesign/redesign recommendation as architecture-review's domain and hands that off rather than producing a redesign itself.",
-      "assertions": [
-        "Provides the descriptive, evidence-backed orientation as requested",
-        "Identifies the redesign proposal as owned by architecture-review",
-        "Does not itself judge or redesign the architecture; hands off the redesign"
+      "evaluation_modes": [
+        "routing"
       ],
-      "evaluation_modes": ["routing"],
-      "requires_catalog": true,
-      "fixture": { "status": "designed_only" }
+      "prompt": "Explain the repo, and then propose a redesign of the data layer to use event sourcing.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "codebase-orientation"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "codebase-orientation",
+        "target_present": {
+          "expected_selected_skill": "architecture-review"
+        },
+        "target_absent": {
+          "expected_selected_skill": "architecture-review"
+        },
+        "allowed_behavior": [
+          "select-owner"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 4,
       "kind": "ambiguous",
-      "prompt": "Help me understand this project so I can start changing it.",
-      "expected_output": "Provides the descriptive orientation (this skill's scope) and clarifies the boundary that actually planning the change belongs to implementation-planning, asking what depth of map is needed before routing the change-planning part elsewhere.",
-      "assertions": [
-        "Gives a descriptive, evidence-backed understanding of the project",
-        "States the boundary that planning changes belongs to implementation-planning, not this skill",
-        "Clarifies the needed map depth / next step rather than silently moving into implementation planning"
+      "evaluation_modes": [
+        "routing"
       ],
-      "evaluation_modes": ["routing"],
-      "requires_catalog": true,
-      "fixture": { "status": "designed_only" }
+      "prompt": "Help me understand this project so I can start changing it.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "codebase-orientation"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "codebase-orientation",
+        "target_present": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        }
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 5,
       "kind": "edge",
-      "prompt": "I need you to rewrite the README to fix the outdated setup docs after you map the repo.",
-      "expected_output": "Refuses to edit the README; reiterates that codebase-orientation is descriptive only and does not alter docs or code, and hands the factual doc-drift fix to documentation-review rather than making the edit.",
-      "assertions": [
-        "Refuses to rewrite or edit the README as part of orientation",
-        "States that this skill describes and does not alter code, docs, or design",
-        "Routes the doc-drift fix to documentation-review instead of performing it"
+      "evaluation_modes": [
+        "execution"
       ],
-      "evaluation_modes": ["execution"],
-      "requires_catalog": true,
-      "fixture": { "status": "designed_only" }
+      "prompt": "I need you to rewrite the README to fix the outdated setup docs after you map the repo.",
+      "execution": {
+        "expected_output": "Refuses to edit the README; reiterates that codebase-orientation is descriptive only and does not alter docs or code, and hands the factual doc-drift fix to documentation-review rather than making the edit.",
+        "assertions": [
+          "Refuses to rewrite or edit the README as part of orientation",
+          "States that this skill describes and does not alter code, docs, or design",
+          "Routes the doc-drift fix to documentation-review instead of performing it"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     }
   ]
 }

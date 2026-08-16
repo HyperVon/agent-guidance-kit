@@ -21,6 +21,3 @@ would inspect:
   timestamp.
 - `refund` applies `math.fabs` to the amount, silently turning negative
   refund requests into positive ones (a caller error becomes a payout).
-
-Per the skill catalog (`catalog.md`), finding defects in a diff is the role of
-`code-review`, not `review-feedback-resolution`.

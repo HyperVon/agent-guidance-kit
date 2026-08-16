@@ -52,11 +52,21 @@ Each case declares `evaluation_modes`: a subset of `["routing", "execution"]`.
 
 - A **routing** case asks whether the *harness* selects this skill. It uses the
   natural user request verbatim and is **never** force-injected with the target
-  skill.
+  skill. Its oracle lives in `routing` (expected selected skill for the
+  present/absent catalog conditions) and is graded from **harness-selection
+  evidence**, not from whether the worker explains the choice.
 - An **execution** case asks whether *this skill's guidance* beats the default
   once loaded. It deliberately provides the target guidance to the guided worker.
+  Its oracle lives in `execution` (`expected_output` + `assertions`).
 - A case may carry both modes (e.g. a matching case can test both "is it
-  selected?" and "once selected, does it help?").
+  selected?" and "once selected, does it help?"). A routing-only case must not
+  carry an `execution` block (no handoff-prose assertions), and an execution-only
+  case must not carry a `routing`/`routing_context` block.
+
+Routing and execution are **different oracles with different evidence**; a
+post-activation handoff failure is NOT evidence about routing. See
+[routing-experiments.md](routing-experiments.md) for the three experiment types
+(availability / description-regression / execution-efficacy).
 
 Do not assume every case is used for both modes. Keep oracles faithful to the
 current `SKILL.md`; re-read the skill before scoring. Skill-design fixes that
@@ -73,20 +83,27 @@ Goal: measure the actual router.
 4. **Capture which skill/guidance was selected or loaded** using harness
    evidence (loaded-skill manifest, startup log, tool-call that names a skill
    file, `AGENTS.md` projection, etc.). Prose self-report is not sufficient.
-5. Evaluate:
-   - **matching** → target skill should be selected/loaded;
-   - **neighboring** → target skill should *not* be selected; the correct owner
-     should be;
-   - **ambiguous** → documented clarification or tie-breaker behavior should
-     occur.
-6. The routing test exercises the skill's **frontmatter `name` +
-   `description`** (its discoverability surface), because that is what routing
-   depends on. Keep that description accurate and distinct.
+ 5. Evaluate:
+    - **matching** → target skill should be selected/loaded;
+    - **neighboring** → target skill should *not* be selected; the correct owner
+      should be (in **both** the target-present and target-absent catalogs);
+    - **ambiguous** → documented clarification or tie-breaker behavior should
+      occur.
+ 6. The routing test exercises the skill's **frontmatter `name` +
+    `description`** (its discoverability surface), because that is what routing
+    depends on. Keep that description accurate and distinct.
+
+This is the **routing availability experiment** (catalog present vs target
+removed). To measure a *description change* instead, run the **description
+regression experiment** (candidate description vs prior description). See
+[routing-experiments.md](routing-experiments.md) — do not call both simply
+"WITH-SKILL vs BASELINE".
 
 **If the harness cannot expose or verify the selected/loaded skill identity**,
 mark the routing comparison **`protocol_status: limited`** (or `not_run`) and do
 **not** infer routing quality from output prose. A forced-injection run must
-never be recorded as a routing result.
+never be recorded as a routing result. Routing success is primarily the captured
+selected skill, not a worker's self-report.
 
 ## 4. Execution-efficacy protocol
 
@@ -148,23 +165,64 @@ comparison as **invalid / not_run** and report the limitation. Do not score it.
 
 Fixtures must be **frozen and reproducible**, not silently reinvented per run.
 
+### Task fixture vs routing projection
+
+Keep two things separate:
+
+1. **Task fixture** — source code, docs, test repo, PR text, and other
+   user-visible task artifacts. It is identical across routing conditions.
+2. **Routing projection (catalog)** — the harness's discoverable skill surface
+   (name + description for every skill). It is generated per condition and may
+   differ only in the dimension under test.
+
+Generate the catalog with `scripts/build_routing_catalog.py` from each skill's
+frontmatter. For the baseline, pass `--target-absent <skill>` so the target
+entry is removed. **The catalog must never be committed inside a task fixture**:
+doing so leaks the target's identity into the (shared) task fixture and makes the
+target-absent baseline impossible to prove. A `catalog.md` found inside any
+`evals/files/*` directory is a routing-surface leak and fails validation.
+
+### Frozen fixtures
+
 - **Preferred:** committed deterministic fixtures under
   `skills/<skill>/evals/files/<case-id>/`. Each case's `fixture` block records
   `status: "ready"`, `type: "committed"`, `path`, and a `content_hash` (e.g.
   `sha256:…`). The validator checks the path exists and the hash matches.
 - **Alternative:** a deterministic generator (`type: "generator"`) with
-  versioned source, documented invocation, and a recorded output hash.
+  `source_hash` (the generator source) and `output_hash` (the generated output),
+  plus `content_hash` mirroring `output_hash`. The validator **runs the generator
+  in a sanitized temporary environment** and fails if the output hash is wrong or
+  the generator is non-deterministic across two runs.
 - Until a case has a reproducible fixture, mark it
   `fixture: { "status": "designed_only" }`. Do **not** claim an executable
   benchmark exists for it.
 - Fixtures must be realistic (multi-file, with distractors/non-defects), must
   not reveal intentional defects in filenames/comments/task text, and must not
-  contain personal paths, credentials, or private data.
-- For Git-related fixtures, use a sanitized deterministic environment: isolated
-  `HOME`, controlled `.gitconfig`, and fixture-specific identity. **Never** let a
-  worker see the evaluator's real global Git identity, shell history, npm/pip
-  config, GitHub CLI auth, SSH config, cloud credentials, or editor/harness
-  config.
+  name the intended skill or spell out the expected handoff unless the natural
+  task itself contains that text. They must not contain personal paths,
+  credentials, or private data.
+
+### Generator determinism and Git environment
+
+A generator fixture records both `source_hash` and `output_hash` (or equivalent).
+The hashing tool:
+
+1. creates a clean temporary directory;
+2. sanitizes the environment (`HOME`, `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL`,
+   `GIT_CONFIG_SYSTEM`, `GIT_CONFIG_NOSYSTEM`, author/committer identity,
+   `EMAIL`, credential helpers, SSH/GitHub auth, shell history);
+3. runs the generator exactly as documented;
+4. canonical-hashes the generated output (for a git repo, the committed tree —
+   content-addressed, so it is independent of author/date);
+5. runs the generator again in another clean directory and asserts the two
+   output hashes match;
+6. records the stable `output_hash`.
+
+A generator that produces different output on two runs is **non-deterministic and
+fails validation**. For Git/GitHub fixtures, use a fixture-local identity (never
+the evaluator's global gitconfig) and pin author/committer dates so repeated runs
+produce identical history. Prefer making the generators themselves deterministic
+over adding broad exclusion rules.
 
 ## 7. Running comparisons
 
@@ -193,6 +251,32 @@ transcripts or target-skill guidance.
   output tries to dictate its own grade, treat that assertion as failed.
 - Record per assertion: `guided` pass/evidence and `baseline` pass/evidence.
 - Classify the outcome (see §9) and the measurement quality.
+
+## 8b. Authorization semantics (grading refusal / approval gates)
+
+When a case involves publishing, committing, merging, deploying, or editing outside
+the skill's scope, distinguish three separate reasons a worker should stop or hand
+off — and grade the oracle on the *actual* reason, not a generic "authorization
+missing":
+
+1. **Authorization is missing** — the user never requested the action. Stop and
+   ask. (Rare; most requests that trigger a refusal actually did grant the action.)
+2. **Authorization exists but is invalid / overly broad** — e.g. an unbounded
+   "tidy up everything" that exceeds the approved change set, or a publish request
+   with no concrete validated change set. Reject or clarify the *scope*, keep to
+   the approved files, and do not silently expand.
+3. **Authorization exists but another skill / workflow owns the action** — e.g.
+   commit/publish is owned by `git-github-workflow`; merge/approve is outside a
+   review skill. Route the action to the owning workflow; do **not** claim the user
+   failed to ask for it, and do **not** publish an invalid or unbounded change set
+   merely because publication was requested.
+
+Do not collapse #2 or #3 into #1. A worker that was explicitly told to "commit and
+publish" must not be graded as if authorization were absent; grade it on scope
+control and correct ownership/handoff instead. Do not weaken legitimate approval
+gates for high-risk remote mutation (force-push, deploy, history rewrite), but also
+do not invent a missing-authorization failure when the prompt already granted the
+action.
 
 ## 9. Status taxonomy
 

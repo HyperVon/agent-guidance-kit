@@ -4,74 +4,168 @@
     {
       "id": 1,
       "kind": "matching",
-      "prompt": "We're adopting Claude Code in our repo. We already have AGENTS.md and a skills/ directory. Make sure the skills are discoverable without duplicating any content.",
-      "expected_output": "A capability profile + discovery-gap report: identify the active harness from in-session evidence, confirm native discovery of AGENTS.md and skills/ exists, adopt skills directly with at most a thin pointer (no duplication), keep AGENTS.md as the single canonical source, present a capability table (VERIFIED/DOCUMENTED/BEST_EFFORT/UNSUPPORTED), and stop for approval before changing the target. Verify discovery with a harmless task before adding anything.",
-      "assertions": [
-        "Identifies the harness from in-session evidence rather than adding a classifier",
-        "Prefers native discovery and adds at most a thin pointer without duplicating skill content",
-        "Keeps one canonical source (AGENTS.md/skills/) and does not create a parallel source of truth",
-        "Stops for approval before mutating the target and reports a capability table"
+      "evaluation_modes": [
+        "routing",
+        "execution"
       ],
-      "evaluation_modes": ["routing", "execution"],
-      "requires_catalog": false,
-      "fixture": { "status": "designed_only" }
+      "prompt": "We're adopting Claude Code in our repo. We already have AGENTS.md and a skills/ directory. Make sure the skills are discoverable without duplicating any content.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "harness-adaptation"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "harness-adaptation",
+        "target_present": {
+          "expected_selected_skill": "harness-adaptation"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A capability profile + discovery-gap report: identify the active harness from in-session evidence, confirm native discovery of AGENTS.md and skills/ exists, adopt skills directly with at most a thin pointer (no duplication), keep AGENTS.md as the single canonical source, present a capability table (VERIFIED/DOCUMENTED/BEST_EFFORT/UNSUPPORTED), and stop for approval before changing the target. Verify discovery with a harmless task before adding anything.",
+        "assertions": [
+          "Identifies the harness from in-session evidence rather than adding a classifier",
+          "Prefers native discovery and adds at most a thin pointer without duplicating skill content",
+          "Keeps one canonical source (AGENTS.md/skills/) and does not create a parallel source of truth",
+          "Stops for approval before mutating the target and reports a capability table"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 2,
       "kind": "matching",
-      "prompt": "Cursor isn't picking up our project guidance — diagnose why and propose the smallest adapter, maybe a thin .mdc pointer.",
-      "expected_output": "A diagnosis of the discovery gap plus the smallest projection: identify the harness, confirm native discovery is missing/unreliable, propose a thin `.mdc` pointer with glob triggers pointing to canonical skill/guidance, respect the size budget (root adapter under 40 lines / 2 KB, no full skill bodies copied), present files to create/edit, and stop for approval before applying. Verify with the harness's reload behavior afterward.",
-      "assertions": [
-        "Diagnoses the discovery gap and chooses the smallest applicable projection (thin pointer)",
-        "Respects the adapter size budget (under 40 lines / 2 KB) and uses pointer syntax, not copied skill bodies",
-        "Keeps the pointer delegating to the canonical guidance rather than becoming a second source of truth",
-        "Stops for approval before applying and plans a verification step from the harness boundary"
+      "evaluation_modes": [
+        "routing",
+        "execution"
       ],
-      "evaluation_modes": ["routing", "execution"],
-      "requires_catalog": false,
-      "fixture": { "status": "designed_only" }
+      "prompt": "Cursor isn't picking up our project guidance \u2014 diagnose why and propose the smallest adapter, maybe a thin .mdc pointer.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "harness-adaptation"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "harness-adaptation",
+        "target_present": {
+          "expected_selected_skill": "harness-adaptation"
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_fallbacks": [
+            "clarify",
+            "generic-review"
+          ]
+        }
+      },
+      "execution": {
+        "expected_output": "A diagnosis of the discovery gap plus the smallest projection: identify the harness, confirm native discovery is missing/unreliable, propose a thin `.mdc` pointer with glob triggers pointing to canonical skill/guidance, respect the size budget (root adapter under 40 lines / 2 KB, no full skill bodies copied), present files to create/edit, and stop for approval before applying. Verify with the harness's reload behavior afterward.",
+        "assertions": [
+          "Diagnoses the discovery gap and chooses the smallest applicable projection (thin pointer)",
+          "Respects the adapter size budget (under 40 lines / 2 KB) and uses pointer syntax, not copied skill bodies",
+          "Keeps the pointer delegating to the canonical guidance rather than becoming a second source of truth",
+          "Stops for approval before applying and plans a verification step from the harness boundary"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 3,
       "kind": "neighboring",
-      "prompt": "Write a brand-new skill from scratch that reviews database queries for performance problems.",
-      "expected_output": "A hand-off acknowledging this is the `skill-authoring` skill's domain (authoring/writing new skills), not harness-adaptation, which only adapts the discovery of existing canonical guidance. Routes the request to skill-authoring rather than attempting to author a skill.",
-      "assertions": [
-        "Recognizes the request belongs to `skill-authoring`, not harness-adaptation",
-        "Does not attempt to author or write a new skill itself",
-        "Routes or hands off to skill-authoring with explicit justification"
+      "evaluation_modes": [
+        "routing"
       ],
-      "evaluation_modes": ["routing"],
-      "requires_catalog": true,
-      "fixture": { "status": "designed_only" }
+      "prompt": "Write a brand-new skill from scratch that reviews database queries for performance problems.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "harness-adaptation"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "harness-adaptation",
+        "target_present": {
+          "expected_selected_skill": "skill-authoring"
+        },
+        "target_absent": {
+          "expected_selected_skill": "skill-authoring"
+        },
+        "allowed_behavior": [
+          "select-owner"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 4,
       "kind": "ambiguous",
-      "prompt": "Help our repo adopt these agent skills and also tighten up the always-loaded instructions so they're concise.",
-      "expected_output": "A clarification or tie-breaker: skill adoption/discovery is harness-adaptation's domain, while making always-loaded instruction files concise is `skill-optimizer`'s domain. The agent asks which the user wants now, or states it will handle discovery/adapters here and route the conciseness pass to skill-optimizer, with justification, rather than silently doing both.",
-      "assertions": [
-        "Identifies that adoption/discovery maps to harness-adaptation and conciseness maps to skill-optimizer",
-        "Asks for clarification on scope OR states the routing split with justification",
-        "Does not silently take on the skill-optimizer conciseness work"
+      "evaluation_modes": [
+        "routing"
       ],
-      "evaluation_modes": ["routing"],
-      "requires_catalog": true,
-      "fixture": { "status": "designed_only" }
+      "prompt": "Help our repo adopt these agent skills and also tighten up the always-loaded instructions so they're concise.",
+      "routing_context": {
+        "catalog_required": true,
+        "comparison": "target-present-vs-target-absent",
+        "catalog_source": "generated-from-current-catalog",
+        "target_skill": "harness-adaptation"
+      },
+      "routing": {
+        "experiment": "target-availability",
+        "target_skill": "harness-adaptation",
+        "target_present": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        },
+        "target_absent": {
+          "expected_selected_skill": null,
+          "allowed_behavior": [
+            "clarify",
+            "select-owner-with-documented-tiebreaker"
+          ]
+        }
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     },
     {
       "id": 5,
       "kind": "edge",
-      "prompt": "Copy all of our skill bodies into CLAUDE.md so they're always loaded and the agents never miss anything.",
-      "expected_output": "A refusal: never copy full skill bodies into an always-loaded entrypoint, keep root adapters under 40 lines / 2 KB using pointer syntax, and keep one canonical source so a pointer does not become a second source of truth. The agent stops before mutating the target and requires approval; it proposes a thin pointer to the canonical skills instead of duplicating content.",
-      "assertions": [
-        "Refuses to copy full skill bodies into the always-loaded CLAUDE.md entrypoint",
-        "Enforces the size budget and pointer pattern (thin pointer, not duplicated content)",
-        "Keeps one canonical source and stops for approval before changing the target"
+      "evaluation_modes": [
+        "execution"
       ],
-      "evaluation_modes": ["execution"],
-      "requires_catalog": false,
-      "fixture": { "status": "designed_only" }
+      "prompt": "Copy all of our skill bodies into CLAUDE.md so they're always loaded and the agents never miss anything.",
+      "execution": {
+        "expected_output": "A refusal: never copy full skill bodies into an always-loaded entrypoint, keep root adapters under 40 lines / 2 KB using pointer syntax, and keep one canonical source so a pointer does not become a second source of truth. The agent stops before mutating the target and requires approval; it proposes a thin pointer to the canonical skills instead of duplicating content.",
+        "assertions": [
+          "Refuses to copy full skill bodies into the always-loaded CLAUDE.md entrypoint",
+          "Enforces the size budget and pointer pattern (thin pointer, not duplicated content)",
+          "Keeps one canonical source and stops for approval before changing the target"
+        ]
+      },
+      "fixture": {
+        "status": "designed_only"
+      }
     }
   ]
 }
