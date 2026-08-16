@@ -40,10 +40,13 @@ as an optional `guide.md` vs. embedding it as instructions. This is exactly why 
 leak-free method is mandatory.
 
 ## Second skill (git-github-workflow)
-Case 3 (neighboring) is recorded in [`results/git-github-workflow.md`](results/git-github-workflow.md).
-It did **not** discriminate — and exposed a real skill gap: `git-github-workflow` lists
-"code review of diff content" as a non-goal but does not *actively route* to `code-review`,
-so a guided worker reviewed the diff anyway. Flagged as a skill-improvement candidate.
+Now fully run (5 cases) with the authoritative embedded method — see
+[`results/git-github-workflow.md`](results/git-github-workflow.md). It discriminates on
+**3 of 5** cases (branch/commit/PR discipline, identity safety, not claiming the
+dependency-upgrade workflow), far more than `code-review`'s 1. Non-discriminating on the
+routing gap (case 3 — same passive-non-goal weakness) and a safety case the baseline also
+refuses (case 5). Two skill-strength fixes flagged: enforce the `code-review` hand-off,
+and explicitly name `dependency-upgrade` for bump work.
 
 ## Next step
 Execute the case sets in a harness that can provide isolated workers, then record per-skill results in
