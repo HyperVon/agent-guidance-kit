@@ -96,6 +96,10 @@ adapter setup, or the active harness's discovery behavior is unclear.
 Read the frontmatter and body of every candidate skill before proposing it.
 For each candidate, ask:
 
+0. Is the candidate marked `source_only: true` (or prose `SOURCE_ONLY`, e.g.
+   `catalog-discovery`)? If so, classify it `SKIP` for target adoption and note
+   it is maintainer-only; the installer refuses it. Never propose it as an
+   adopted skill.
 1. Does the target have a recurring or high-risk task this skill materially
    improves?
 2. Is the workflow more specific than normal capable-model behavior?

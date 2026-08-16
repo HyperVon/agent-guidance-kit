@@ -54,6 +54,8 @@ ownership boundary, not one worker per file.
 Reserve coupled integration work for the parent. Do not give multiple editing
 workers the same file or generated output directory.
 
+- Treat manifest + lockfile pairs as implicit shared state even when workers edit disjoint source. A dependency add or install in any track rewrites the lockfile. Make lockfile regeneration a parent-owned serial step: let workers finish, then run the single package-manager update/regenerate in the integrated state and review the diff.
+
 ## 3. Select workers honestly
 
 - Use an exact model/provider/effort only when the harness exposes and supports
@@ -64,6 +66,7 @@ workers the same file or generated output directory.
   substitutions or unknown routing plainly.
 - Do not build repository-side model catalogs, pricing tables, quota probes, or
   fallback engines to imitate the host.
+- When a subagent candidate's model/provider must be selected, defer to `agent-runtime-router` rather than building a local catalog.
 
 ## 4. Brief each worker
 
@@ -144,6 +147,7 @@ When a worker hangs, times out, hits a context/iteration limit, or returns a bro
 1. **Isolate the failure:** Check whether the failed worker's write scope is strictly disjoint from other completed tracks. Never discard independent successful tracks due to an isolated sibling failure.
 2. **Verify partial state is clean:** Before integrating any results, confirm that `PARTIAL` or `FAILED` workers' modifications are fully reverted, stashed, or isolated in a separate branch or worktree. Do not integrate green tracks on top of uncommitted partial changes from a failed sibling.
 3. **Integrate green tracks:** Apply and verify the results of all successful disjoint tracks following normal verification gates.
+   - For worktree-based tracks, integrate by merging or cherry-picking the track branch into the parent integration branch, then verify; only after the final serial gate passes, delete the worktree (`git worktree remove`) and the temporary track branch. Report each worktree/branch removed.
 4. **Triage the failed track:** Choose one explicit recovery strategy:
    - *Re-brief with tighter scope:* If the failure was due to context overflow or ambiguous instructions, re-launch a single worker with a narrower boundary and explicit stop condition.
    - *Fall back to serial parent execution:* If the track requires sensitive context, complex integration, or debugging, execute the remaining track directly in the parent.

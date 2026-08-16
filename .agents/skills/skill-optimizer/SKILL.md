@@ -37,7 +37,16 @@ different audiences, and thin harness pointers when they improve discovery.
    It reports lines, words, characters, headings, links, a rough `characters / 4`
    token proxy, and exact repeated prose candidates. Treat the proxy as a
    comparison aid, not a tokenizer result or proof of semantic duplication. Use
-   `--scope all` only when related archive material is in scope.
+    `--scope all` only when related archive material is in scope.
+
+### Inventory script verification
+Before trusting any measurement from `guidance_inventory.py`, confirm it has unit
+tests under `scripts/tests/` covering: a normal repo root, a missing root
+(non-directory exit), symlink escapes, and `possible_saved_characters` math. Run
+them (e.g. `python3 -m pytest .agents/skills/skill-optimizer/scripts/tests/`) and
+report the result as PASS/BLOCKED, not assumed. Treat a missing or failing test
+suite as a blocker on the baseline, not a silent proxy.
+
 3. Account for the context surface, not only the files in the inventory:
    loaded skills, root instructions, harness projections, tool descriptions,
    linked references, and large generated outputs can all create routing or

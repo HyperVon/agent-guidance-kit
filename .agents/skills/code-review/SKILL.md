@@ -63,7 +63,12 @@ itself.
    - *Concurrency & atomicity:* unlocked mutexes/locks on early return or exception paths; check-then-act (TOCTOU) races; goroutine/thread/task leaks without lifecycle termination; unhandled promise/async task rejections.
    - *State transitions & persistence:* partial multi-step persistence writes lacking transaction rollback; missing database connection/file handle release in `finally`/`defer` blocks; idempotency failures during retries.
    - *Input & boundary validation:* missing bounds, size, or type checks on untrusted payloads; unescaped inputs reaching regex/SQL/shell parsers; sensitive data leaked into log lines.
-   - *Error propagation:* swallowed exceptions returning synthetic default values that masquerade as success; missing error wrapping that loses operational root cause.
+    - *Error propagation:* swallowed exceptions returning synthetic default values that masquerade as success; missing error wrapping that loses operational root cause.
+    - *Effective fix / behavior change:* When the change is framed as fixing a bug or
+      closing a vulnerability, trace the reported root cause to the changed lines and
+      confirm the diff actually alters the behavior that produces it. A diff that only
+      adds logging, comments, formatting, docs, or unrelated code is not a fix; report
+      it as an incomplete or ineffective change rather than accepting it.
 4. **Inspect tests and evidence.** Each changed test should protect a distinct
    defect class and derive expected values from a contract or independent
    oracle. Ask whether a plausible wrong implementation would fail. Run the

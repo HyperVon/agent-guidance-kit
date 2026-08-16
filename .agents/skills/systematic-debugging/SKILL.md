@@ -39,6 +39,7 @@ description: >-
 
    **For regressions and intermittent failures:**
    - *Regression bisection:* For regressions after recent changes, inspect git commit history and diffs across the failing subsystem. Reproduce the test on the last known-working commit to confirm that the failure is a genuine regression rather than an environment issue.
+   - `git bisect` (with a run script) is the preferred deterministic tool for isolating the regressing commit; use it instead of manual history scanning for non-trivial histories.
    - *Intermittent / CI-only failures:* Compare environment differences (OS, architecture, lockfiles, timezone, concurrency). Execute the reproduction under a stress loop (20–50 iterations) to establish an empirical baseline failure rate before testing fixes.
 4. Establish the change and data path. Inspect the relevant diff, recent
    changes, configuration, dependencies, and a known-working neighboring path.

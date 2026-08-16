@@ -91,6 +91,8 @@ history or publish without authority.
 - Use explicit issue closing keywords in PR bodies (`Fixes #123`, `Closes #456`) rather than vague issue references.
 - Do not `push --force`, `push --force-with-lease` on `main`, or rewrite
   published history without explicit approval and a backup branch.
+- Before any `push --force-with-lease` (non-main) or history rewrite, create an explicit backup branch (`git branch backup/<branch>-<date>`) and name it in the report; never rely on the reflog alone.
+- Before opening or updating a PR, `git fetch <remote> <base>` and reconcile the branch with the current base (merge or rebase) so the PR diff is against latest `main`; report the base SHA you rebased onto.
 - Do not commit secrets, `.env`, `id_rsa`, `*.pem`, or personal filesystem
   paths. Redact examples.
 - Do not create a remote, tag, or release (`git tag`/`gh release`) without

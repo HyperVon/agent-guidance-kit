@@ -53,8 +53,10 @@ Size alone is an investigation trigger, not evidence that code is defective.
    split mechanically or move code merely to change a line count.
 4. **Work in small slices.** After each cohesive slice, record a checkpoint
    containing changed paths, the remaining allowlist, behavior risks, and
-   verification evidence. Run the relevant formatter, compiler, linter, and
-   tests before starting the next slice. Keep contract expectations independent
+   verification evidence. Run the project's full behavior gate for the affected
+   scope (formatter, compiler, linter, and the complete test suite / coverage
+   for touched and dependent modules), not only a subset of relevant tests,
+   before starting the next slice. Keep contract expectations independent
    from the implementation and preserve a handoff if the work must pause.
 5. **Compare the result.** Re-measure per-file and aggregate size, confirm
    behavior and test coverage did not regress, and assess readability,

@@ -142,7 +142,13 @@ applied.
    skill, inspect candidate skills, and choose the smallest useful set. A
    refresh may select all receipt-owned skills; adding a skill selects it plus
    its required dependency closure. Optional related skills remain suggestions.
-6. Generate a new plan with the resolved source installer. Review requested and
+6. Generate a new plan with the resolved source installer:
+   python3 <kit-root>/.agents/skills/bootstrap-project/scripts/install_skills.py \
+     plan --kit-root <kit-root> --target <target-root> \
+     --skill <approved-skill> --output <plan.json>
+   Review requested/auto-added skills, create/update/unchanged statuses,
+   source-owned canonical-guidance findings, conflicts, managed routing,
+   source revision, and content digests. The mechanical plan does not apply canonical guidance
    automatically added skills, create/update/unchanged statuses, source-owned
    canonical-guidance findings, conflicts, managed routing, source revision,
    and content digests. The mechanical plan does not apply canonical guidance
@@ -166,7 +172,10 @@ applied.
    - The maintenance plan must explicitly list the retired skill as `RETIRE` rather than silently deleting it.
    - If the skill directory contains target-created files (e.g., custom evals, scripts, or notes), preserve the directory and warn the user.
    - Upon approved application, remove the retired skill from `.agents/.agent-guidance-kit/receipts/` and update the managed AGENTS route block.
-8. Apply the unchanged plan with `--approve`. Receipt-backed unmodified content
+8. Apply only the unchanged approved plan:
+   python3 <kit-root>/.agents/skills/bootstrap-project/scripts/install_skills.py \
+     apply --kit-root <kit-root> --target <target-root> --plan <plan.json> --approve
+   Receipt-backed unmodified content
    may be refreshed atomically; new content is create-only; local divergence is
    never overwritten.
 9. Run the bundled target validator plus the target repository's relevant

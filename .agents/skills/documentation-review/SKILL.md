@@ -4,7 +4,10 @@ description: >-
   Audit and update project documentation against current implementation,
   build/configuration, tests, CI, and authoritative external references when
   needed. Use for documentation audits, documentation sync, stale or incorrect
-  claims, runbooks, guides, READMEs, diagrams, or project-local guidance.
+  claims, runbooks, guides, READMEs, diagrams, or project-local guidance. Do not
+  use for missing domain depth, anti-patterns, or checklist gaps in a skill (use
+  skill-reviewer); this skill verifies factual agreement with source/build/CI
+  truth.
 ---
 
 # Documentation Review

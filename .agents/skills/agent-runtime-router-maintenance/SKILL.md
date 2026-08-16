@@ -34,6 +34,20 @@ directories or fetch a replacement.
 
 ## Audit and refresh
 
+### Prerequisite: confirm the installer exists
+The plan/apply commands below invoke
+`<router-root>/.agents/skills/bootstrap-runtime-router/scripts/install_runtime.py`.
+This script is **not** part of this kit; it ships in the resolved Agent Runtime
+Router source checkout. Before planning, verify it exists:
+
+```text
+test -f "<router-root>/.agents/skills/bootstrap-runtime-router/scripts/install_runtime.py" \
+  && echo "installer present" || echo "MISSING: re-resolve the ARR source checkout"
+```
+
+If the installer is missing, stop and re-resolve `<router-root>`. Do not bypass the
+installer with `cp`, `rsync`, an editor, or a direct overwrite.
+
 1. Read target guidance and the current receipt at
    `.agents/.agent-runtime-router/receipt.json`.
 2. Validate the current installation:

@@ -43,14 +43,21 @@ description: >-
    - *Keyboard navigation:* Focus traps in modals/dialogs (missing `Escape` listener, missing focus restore on close); interactive elements reachable and operable via `Tab`/`Enter`/`Space`.
    - *Form controls:* Every input/select/textarea must have a programmatic label (`<label for="...">`, `aria-label`, or `aria-labelledby`); placeholder text is not an accessible label.
    - *Dynamic state & alerts:* Async status, error banners, and toast notifications must announce via `aria-live="polite"` or `role="alert"`.
-   - *Semantic interactive elements:* Buttons and links must use `<button>` and `<a>` (or explicit `role="button"` with `tabIndex="0"` and keyboard handlers); do not use bare `<div onClick=...>` without keyboard equivalents.
+    - *Semantic interactive elements:* Buttons and links must use `<button>` and `<a>` (or explicit `role="button"` with `tabIndex="0"` and keyboard handlers); do not use bare `<div onClick=...>` without keyboard equivalents.
+    - *Visible focus:* `outline: none` (or `box-shadow`/`border` removal) on `:focus` without an equally visible `:focus-visible` or `:focus` replacement makes keyboard focus invisible. Treat removal of the native focus indicator as a P1 defect unless a clearly visible focus style is provided.
    - *Async form protection:* Submit buttons must disable or indicate pending state during in-flight async requests to prevent duplicate submission or double charging.
    - *Form error recovery:* On validation failure, focus must be programmatically moved to the error summary or first invalid field, and invalid inputs must declare `aria-invalid="true"`.
 4. **Review responsive and accessible behavior.** Check semantic controls,
    labels, focus visibility and order, keyboard reachability, contrast, zoom or
    text resizing, reduced motion, touch targets, responsive overflow, and
    content resilience. Treat automated checks as partial evidence, not a full
-   accessibility verdict.
+    accessibility verdict.
+    State explicitly which checks require a runtime and list them as verification gaps
+    rather than asserting them from source: actual rendered layout, real responsive
+    breakpoint behavior, true keyboard traversal order, screen-reader announcements,
+    and measured color contrast. Use these thresholds when evaluating contrast from
+    tokens/computed styles: 4.5:1 for normal text, 3:1 for large text (≥24px or
+    ≥19px bold) and for UI components/graphical objects and focus indicators.
 5. **Review visual and performance quality.** Check hierarchy, typography,
    spacing, density, imagery, motion, consistency, layout stability, and
    obvious waterfall or rendering cost against the stated product intent. Do

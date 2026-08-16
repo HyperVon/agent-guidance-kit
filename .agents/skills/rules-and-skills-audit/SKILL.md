@@ -18,7 +18,9 @@ canonical source.
 
 1. Discover guidance with `rg --files --hidden`, including nested `AGENTS.md`,
    operating files, `CLAUDE.md`, skill files, harness rules, and instructions
-   under common guidance directories. Respect each file's directory scope.
+   under common guidance directories. Respect each file's directory scope. If `rg` is
+   unavailable, fall back to a scoped `find` over the guidance roots; note
+   which tool produced the inventory.
 2. Build a compact inventory: path, purpose, scope, trigger, dependencies,
    source-of-truth claims, and notable rules or workflows. Record files read and
    candidates skipped with reasons.
