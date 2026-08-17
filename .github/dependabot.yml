@@ -1,0 +1,13 @@
+version: 2
+# Configure Dependabot to only monitor the root project and actions.
+# Evaluation fixture manifests under skills/**/evals/** are intentionally frozen test fixtures
+# and must NOT be updated by Dependabot.
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
