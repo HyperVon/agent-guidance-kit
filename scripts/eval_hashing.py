@@ -127,6 +127,12 @@ def _generator_output_hash(output_dir: str) -> str:
             # .git internals. Deterministically captures untracked files, uncommitted
             # modifications, and staged-but-dirty content.
             for rel in _files_recursive(output_dir):
+                # .origin.git is a bare upstream created by git init --bare;
+                # its config contains platform-specific keys (e.g. macOS
+                # precomposeunicode) that vary across git versions/filesystems
+                # and must not affect the worker-visible task hash.
+                if rel == ".origin.git" or rel.startswith(".origin.git/"):
+                    continue
                 full = os.path.join(output_dir, rel)
                 fh = _sha256_of(open(full, "rb").read())
                 h.update((rel + ":" + fh + "\n").encode("utf-8"))
