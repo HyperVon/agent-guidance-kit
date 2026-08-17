@@ -246,68 +246,74 @@ def run_container(image, model, prompt, fixture_dir, guidance_dir, skill_name):
     A run is successful ONLY if: docker/Kilo returned 0, a container id exists,
     the output was parsed, a session id exists, and model text was produced.
     """
-    cidfile = tempfile.mktemp(suffix=".cid", dir=SHARED_TMP)
-    promptfile = tempfile.mktemp(suffix=".prompt.txt", dir=SHARED_TMP)
-    open(promptfile, "w").write(prompt)
-    cmd = ["docker", "run", "--rm", "--cidfile", cidfile,
-           "-v", f"{fixture_dir}:/work/task",
-           "-v", f"{promptfile}:/work/prompt.txt:ro"]
-    if guidance_dir:
-        cmd += ["-v", f"{guidance_dir}:/work/guidance/{skill_name}:ro"]
-    # ENTRYPOINT is `kilo`; override to bash so we can run kilo then a boundary
-    # probe that records whether the guidance path is actually present/absent.
-    script = (
-        "set +e\n"
-        f"kilo run --model {model} --variant high --format json --pure --auto "
-        "--dir /work/task \"$(cat /work/prompt.txt)\" < /dev/null "
-        "> /tmp/kilo.out 2> /tmp/kilo.err\n"
-        "KILO_RC=$?\n"
-        "cat /tmp/kilo.out\n"
-        "cat /tmp/kilo.err >&2\n"
-        f"if [ -e \"/work/guidance/{skill_name}/SKILL.md\" ]; then "
-        "echo GUIDANCE_PROBE:present; else echo GUIDANCE_PROBE:absent; fi\n"
-        "exit $KILO_RC\n"
-    )
-    cmd += ["--entrypoint", "bash", image, "-c", script]
-
-    meta = {"returncode": None, "stdout": "", "stderr": "",
-            "container_id": None, "session_id": None, "output": "",
-            "guidance_probe": None, "status": "failed", "reason": None}
+    # Place the cid/prompt files inside a mkdtemp directory (secure; avoids the
+    # CodeQL py/insecure-temp-file finding on tempfile.mktemp). docker --cidfile
+    # requires the file to NOT pre-exist, so we create the directory and use
+    # fixed names within it rather than pre-creating the files.
+    tmpd = _mkdtemp(prefix="kilo-run-")
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
-    except Exception as e:
-        meta["reason"] = f"docker invocation error: {e}"
-        os.path.exists(promptfile) and os.remove(promptfile)
+        cidfile = os.path.join(tmpd, "cid")
+        promptfile = os.path.join(tmpd, "prompt.txt")
+        with open(promptfile, "w") as _pf:
+            _pf.write(prompt)
+        cmd = ["docker", "run", "--rm", "--cidfile", cidfile,
+               "-v", f"{fixture_dir}:/work/task",
+               "-v", f"{promptfile}:/work/prompt.txt:ro"]
+        if guidance_dir:
+            cmd += ["-v", f"{guidance_dir}:/work/guidance/{skill_name}:ro"]
+        # ENTRYPOINT is `kilo`; override to bash so we can run kilo then a boundary
+        # probe that records whether the guidance path is actually present/absent.
+        script = (
+            "set +e\n"
+            f"kilo run --model {model} --variant high --format json --pure --auto "
+            "--dir /work/task \"$(cat /work/prompt.txt)\" < /dev/null "
+            "> /tmp/kilo.out 2> /tmp/kilo.err\n"
+            "KILO_RC=$?\n"
+            "cat /tmp/kilo.out\n"
+            "cat /tmp/kilo.err >&2\n"
+            f"if [ -e \"/work/guidance/{skill_name}/SKILL.md\" ]; then "
+            "echo GUIDANCE_PROBE:present; else echo GUIDANCE_PROBE:absent; fi\n"
+            "exit $KILO_RC\n"
+        )
+        cmd += ["--entrypoint", "bash", image, "-c", script]
+
+        meta = {"returncode": None, "stdout": "", "stderr": "",
+                "container_id": None, "session_id": None, "output": "",
+                "guidance_probe": None, "status": "failed", "reason": None}
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
+        except Exception as e:
+            meta["reason"] = f"docker invocation error: {e}"
+            return meta
+
+        stdout = proc.stdout or ""
+        stderr = proc.stderr or ""
+        cid = open(cidfile).read().strip() if os.path.exists(cidfile) else None
+
+        session = _extract_session(stdout)
+        text = _collect_text(stdout)
+        probe = None
+        for line in stdout.splitlines():
+            if line.strip().startswith("GUIDANCE_PROBE:"):
+                probe = line.strip().split(":", 1)[1]
+
+        meta.update({"returncode": proc.returncode, "stdout": stdout,
+                     "stderr": stderr, "container_id": cid, "session_id": session,
+                     "output": text, "guidance_probe": probe})
+
+        if proc.returncode != 0:
+            meta["reason"] = f"kilo/docker exited {proc.returncode}"
+        elif not cid:
+            meta["reason"] = "no container id (container never started)"
+        elif not session:
+            meta["reason"] = "no session id in model output"
+        elif not text.strip():
+            meta["reason"] = "empty model response (no text produced)"
+        else:
+            meta["status"] = "success"
         return meta
-
-    stdout = proc.stdout or ""
-    stderr = proc.stderr or ""
-    cid = open(cidfile).read().strip() if os.path.exists(cidfile) else None
-    os.path.exists(promptfile) and os.remove(promptfile)
-    os.path.exists(cidfile) and os.remove(cidfile)
-
-    session = _extract_session(stdout)
-    text = _collect_text(stdout)
-    probe = None
-    for line in stdout.splitlines():
-        if line.strip().startswith("GUIDANCE_PROBE:"):
-            probe = line.strip().split(":", 1)[1]
-
-    meta.update({"returncode": proc.returncode, "stdout": stdout,
-                 "stderr": stderr, "container_id": cid, "session_id": session,
-                 "output": text, "guidance_probe": probe})
-
-    if proc.returncode != 0:
-        meta["reason"] = f"kilo/docker exited {proc.returncode}"
-    elif not cid:
-        meta["reason"] = "no container id (container never started)"
-    elif not session:
-        meta["reason"] = "no session id in model output"
-    elif not text.strip():
-        meta["reason"] = "empty model response (no text produced)"
-    else:
-        meta["status"] = "success"
-    return meta
+    finally:
+        shutil.rmtree(tmpd, ignore_errors=True)
 
 
 def main():
