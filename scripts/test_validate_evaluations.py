@@ -20,7 +20,6 @@ import docker_isolation_preflight as dip
 import eval_hashing as eh
 import run_catalog_routing_eval as rc
 import validate_evaluations as ve
-from eval_hashing import HASH_PREFIX
 
 
 # Helper to reset the shared error/warning lists between tests.

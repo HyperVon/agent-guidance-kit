@@ -87,7 +87,7 @@ def _verify_host_kilo(model):
         print(f"kilo executable not found ({kilo})", file=sys.stderr)
         sys.exit(2)
     if not _host_kilo_version():
-        print(f"kilo --version failed on host", file=sys.stderr)
+        print("kilo --version failed on host", file=sys.stderr)
         sys.exit(2)
     try:
         models = subprocess.check_output([kilo, "models"],

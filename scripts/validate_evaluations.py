@@ -739,7 +739,6 @@ def check_matrix_sync(skill_names):
         if not os.path.exists(tgt):
             err(f"matrix broken result link {m.group(1)}")
     # Per-row agreement between the matrix and the linked result file.
-    res_dir = os.path.join(EVALS_DIR, "results")
     for line in text.splitlines():
         if "|" not in line:
             continue

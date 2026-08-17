@@ -43,7 +43,7 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from eval_hashing import (canonical_hash, source_hash_of, hash_workspace,
+from eval_hashing import (source_hash_of, hash_workspace,
                            materialize_fixture_seed, HASH_PREFIX)
 
 IMAGE = "kilo-eval:local"
