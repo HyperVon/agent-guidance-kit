@@ -34,6 +34,36 @@ this file holds the filesystem/sandbox procedure and troubleshooting.
   an immediate file manifest before the task begins. A path mentioned in a prompt
   is not isolation.
 
+## Docker execution layer (production-valid isolation)
+
+Layer B (execution efficacy) runs each worker in a **fresh Docker container** built
+from `Dockerfile.eval` (image `kilo-eval:local`). This is the OS-level isolation the
+protocol requires for a `valid` run and replaces the weaker instruction-only fallback.
+
+- **Fresh container per worker.** Guided and baseline are *separate* `docker run --rm`
+  invocations; record both container IDs — they must differ. A shared container means
+  the conditions were not independent (contamination).
+- **Guidance-only mount for the guided worker.** Mount *only* `SKILL.md` +
+  `references/` read-only at `/work/guidance/<name>`. **Never mount the whole skill
+  directory** — that would leak the `evals/` fixture snapshot (including the expected
+  output) into the guided worker.
+- **No guidance for the baseline.** The baseline container receives the same task
+  fixture and the same natural task, but **no guidance mount at all** — it must not see
+  the target `SKILL.md` body, its `references/`, or the skill name in a guidance path.
+- **No host secrets.** The image contains no `~/.gitconfig`, no `~/.ssh`, no
+  `GH_TOKEN`/`GITHUB_TOKEN`, and no mounted Kilo auth store. Models are reached through
+  **anonymous Kilo Gateway access** (`kilo/tencent/hy3:free`) — absence of
+  `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` does **not** mean there is no provider. `kilo
+  run` inside the container needs `--auto` to execute rather than auto-reject tools.
+- **Deterministic, non-attributable git identity.** `HOME=/home/eval` with
+  `user.name "Eval Worker"` / `user.email "eval-worker@example.invalid"` baked into the
+  image, so any git work the worker does cannot leak the host author.
+- **Boundary probe before scoring.** Run `scripts/docker_isolation_preflight.py`
+  (`--image kilo-eval:local`). All 9 checks must pass: isolated home, deterministic git
+  identity, no ssh dir, no token env, no host `.gitconfig`/path leak, no mounted Kilo
+  auth, target skill absent in the baseline mount, no sibling/guided-output leak. Any
+  failure invalidates the run.
+
 ## Boundary probe
 
 Run a parent-side boundary probe before scoring:

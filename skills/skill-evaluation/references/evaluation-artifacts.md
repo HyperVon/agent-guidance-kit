@@ -102,7 +102,11 @@ only the projection differs.
   - `id` — integer, exactly the set `{1,2,3,4,5}` across the five cases.
   - `kind` — one of `matching`, `neighboring`, `ambiguous`, `edge`; the pack is
     exactly 2 `matching`, 1 `neighboring`, 1 `ambiguous`, 1 `edge`.
-  - `evaluation_modes` — array with at least one of `routing`, `execution`.
+  - `evaluation_modes` — array with at least one of the three-layer modes:
+    `routing` (legacy/harness), `catalog-routing` (Layer A: portable
+    model-as-classifier over a generated neutral catalog — no harness needed),
+    `harness-routing` (Layer C: optional harness-integration routing), or
+    `execution` (Layer B: Docker-isolated guided vs baseline efficacy).
   - `prompt` — non-empty; a natural user request (do not recite the skill's
     workflow; do not leak the expected answer or the intended defect).
   - `routing` / `routing_context` — present iff `routing` is in the modes.
