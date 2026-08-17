@@ -158,7 +158,8 @@ The runner hardening in `fix/evaluation-runner-integrity` (PR #47) was
 **re-run end-to-end on the current head** after the macOS `/tmp` mount fix and
 the corrected fixture/guidance hash semantics. Exact results:
 
-- **HEAD:** `<HEAD-SHA>` (branch `fix/evaluation-runner-integrity`, PR #47).
+- **HEAD:** `2e963364cec45a35b75d6c4253c9e7c326170b15` (branch
+  `fix/evaluation-runner-integrity`, PR #47).
 - **`docker build -f Dockerfile.eval -t kilo-eval:local .`** — succeeded
   (`Successfully tagged kilo-eval:local`).
 - **`docker_isolation_preflight.py --image kilo-eval:local --target-skill
