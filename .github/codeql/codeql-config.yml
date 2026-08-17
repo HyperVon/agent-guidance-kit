@@ -1,0 +1,10 @@
+name: "CodeQL config"
+
+# Intentionally vulnerable fixtures used as evaluation corpora — not production code.
+# They are scanned by the evaluation validator, not by CodeQL for security alerts.
+paths-ignore:
+  - skills/**/evals/files/**
+  - skills/**/evals/**
+  - docs/evaluations/**
+  - .eval-evidence/**
+  - .docker-tmp/**

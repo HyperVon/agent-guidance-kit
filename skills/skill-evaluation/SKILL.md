@@ -24,6 +24,24 @@ description: >-
 - **Side effects:** write only to an explicitly chosen evaluation workspace;
    never place generated outputs or private inputs in the shared library by default.
 
+## Evaluation layers (three concerns)
+
+Keep these separate; a finding about one is never evidence about another:
+
+1. **Routing quality** — does the right skill get selected/loaded for a natural
+   request? Two portable forms exist: **Layer A catalog-routing** (a fresh model
+   call over a generated neutral catalog that returns a structured
+   `{"selected_skill": ...}`) and **Layer C harness-routing** (the real harness's
+   routing/discovery, which must expose the selected skill as evidence).
+2. **Execution efficacy (Layer B)** — once a skill is legitimately active, does its
+   guidance beat the harness default? Run as **two fresh Docker containers**
+   (`Dockerfile.eval` → `kilo-eval:local`): guided mounts *guidance only*
+   (`SKILL.md` + `references/`) at `/work/guidance/<name>`; baseline mounts **no**
+   guidance. Free models are reached through anonymous Kilo Gateway access
+   (`kilo/tencent/hy3:free`); no API key or auth is mounted.
+3. **Protocol validity** — were the conditions genuinely independent and leak-free?
+   Without this, any comparison is uninterpretable.
+
 ## Scope gate
 
 Use this workflow only when the user asks to measure routing or output quality.

@@ -1,7 +1,10 @@
 # Skill evaluation summary
 
-> **Status: case sets designed; methodology corrected; no protocol-valid runs
-> exist yet.**
+> **Status: case sets designed; methodology corrected; evaluation *infrastructure*
+> is now proven end-to-end on the 4 pilot skills (Docker execution layer + portable
+> catalog-routing layer). No *full published efficacy* run (n≥3, graded assertions,
+> committed result file) exists yet, and harness-integrated routing (Layer C) is
+> still blocked where the harness cannot expose the selected skill.**
 
 This repository has evaluation case sets for every one of the 26 skills at
 `skills/<name>/evals/evals.json` (130 cases total), following the schema in
@@ -55,18 +58,162 @@ The methodology has been corrected and is documented in:
 
 ## What has NOT been done (and must not be claimed)
 
-- **No routing evaluation exists.** All prior runs force-injected the target
-  skill, so harness routing was never measured. Routing cells in the matrix are
-  `not_run`.
-- **No protocol-valid execution run exists.** The four pilots are `invalid`
-  (force-injection + instruction-only containment + condition-labeled prompts).
-  They are historical/exploratory, not validated proof.
+- **No full published efficacy run exists yet.** The 4 pilots' infrastructure is
+  proven (see below), but the historical result files remain `protocol_status:
+  invalid` / `decision: exploratory` and have not been replaced by graded,
+  committed runs with quoted evidence.
+- **No harness-integrated routing (Layer C) evaluation exists.** All routing to
+  date is Layer A catalog-routing (portable model-as-classifier). Where the harness
+  cannot expose the selected skill as evidence, Layer C is `not_run`.
 - **Fixtures frozen for only 4/26 skills** (the pilots). The other 22 remain
   `designed_only`; their cases are not executable until fixtures are frozen.
-- **No repetitions / placebo.** Each pilot was a single run; no n≥3 repeats, no
-  irrelevant-guidance placebo.
-- **No OS-level isolation** was available in this CLI; runs here must be labeled
-  `protocol_status: limited` even when rerun.
+- **No repetitions / placebo yet** for a published efficacy claim. Each smoke was a
+  single run; n≥3 repeats and an irrelevant-guidance placebo are still required
+  before any efficacy conclusion.
+- **No OS-level isolation on the host** — that is why Layer B runs in Docker
+  (`Dockerfile.eval` → `kilo-eval:local`), not on the macOS host. Host runs would
+  still have to be labeled `protocol_status: limited`.
+
+## Phase 1 reassessment (2026-08-16)
+
+The corrected pipeline was exercised against the four pilot skills
+(`code-review`, `git-github-workflow`, `review-feedback-resolution`,
+`security-review`) in this CLI environment. Full write-up:
+`docs/evaluations/phase1-environment.md`.
+
+- **What ran green:** `hash_fixtures.py` (idempotent; 6 generator fixtures re-hash
+  under the full git-state algorithm), `build_routing_catalog.py` (target-present =
+  26 skills; each `--target-absent <skill>` = 25, dropping only the named target),
+  `validate_evaluations.py` (0 errors / 0 warnings), and `test_validate_evaluations.py`
+  (29 tests pass).
+- **What could NOT run at the time (host-only):** a protocol-valid run *on the
+  macOS host* — Kilo/CLI on a laptop is the harness itself, so it cannot capture
+  routing selection as harness evidence, and it cannot create independent OS-contained
+  worker contexts (no container; host `~/.gitconfig` leaks the evaluator's personal
+  `user.name` / `user.email`; a live `gh` token is present). Per `RUNBOOK.md` §3/§5
+  host runs were recorded `not_run` (blocked). **This constraint is now bypassed for
+  Layer B by running the workers inside Docker** (see follow-up below).
+- **No evidence invented; no historical pilot reused.** The four exploratory pilots
+  stay `protocol_status: invalid`.
+- **Gate enforcement proven:** a temporary result claiming `valid` + `both_pass` with
+  `instruction-only` isolation was rejected by `validate_evaluations.py` (then removed).
+  This confirms the pipeline blocks the weakening the rules forbid.
+- **Repeats:** 0 at the time. **Protocol status:** `not_run` for host runs.
+
+## Infrastructure proven (2026-08-16, follow-up)
+
+The corrected pipeline was taken past "schema green" to a working three-layer
+runner, proven on the `code-review` pilot (fixtures already frozen for all 4
+pilots):
+
+- **Layer A — catalog-routing (portable, harness-independent).** `scripts/run_catalog_routing_eval.py`
+  issues a fresh model call per repetition over a generated neutral catalog and
+  captures a structured `{"selected_skill": ...}` decision. Smoke on case 1:
+  target-present selected `code-review` 3/3; target-absent returned `null`/clarify
+  (real behavior; the catalog otherwise had no plain code-review owner).
+- **Layer B — Docker execution-efficacy.** `Dockerfile.eval` builds `kilo-eval:local`
+  (Node 22, `@kilocode/cli`, deterministic eval git identity, **no** host
+  `~/.gitconfig`/`~/.ssh`/tokens, **no** mounted Kilo auth). `scripts/run_execution_eval.py`
+  runs two **fresh containers** per repetition: guided mounts *guidance only*
+  (`SKILL.md` + `references/`, never the `evals/` fixture snapshot) at
+   `/work/guidance/code-review`; baseline mounts **nothing**. Smoke on case 5
+   (n=1, infrastructure only): two **distinct fresh containers** confirmed; both
+   started from the identical frozen seed (starting fixture hashes matched the
+   frozen `output_hash`); guided and baseline outputs captured. This is an
+   **infrastructure smoke, not an efficacy claim** (n≥3 + an irrelevant-guidance
+   placebo are still required before any efficacy conclusion).
+ - **Boundary probe green.** `scripts/docker_isolation_preflight.py` passes all 23
+   checks (isolated home, deterministic git identity, no ssh/token/host-config host
+   path leak, no Kilo auth mount, **target-skill guidance absent in baseline AND present,
+   readable, hash-matched, with references in the guided mount** at the real
+   `/work/guidance/<name>/SKILL.md` path).
+ - **Model access is anonymous + free + pinned (cost gate, not a methodology rule).** The
+   model `kilo/tencent/hy3:free` is reached through Kilo Gateway with no API key mounted;
+   absence of `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` does **not** mean no provider. The model
+   is **pinned** (not auto-routed) so guided and baseline workers share identical
+   inference; `--auto` is only permission auto-approval. The free-model restriction is a
+   **cost-safety gate** (`require_free_model` refuses a non-`:free` model unless
+   `--allow-paid-model`); a paid model is methodologically valid if both workers use the
+   identical resolved model. The free-model catalog changes over time — update
+   `DEFAULT_MODEL` in the runners when it is retired. The **Kilo CLI version is pinned** in
+   `Dockerfile.eval` (`ARG KILO_CLI_VERSION`) and recorded in the evidence.
+ - **Runner hardening (shared-fixture / contamination fixes).** Each repetition now uses
+   **two independent copies of one pristine seed** (`/work/task` per condition) so the
+   guided worker can never mutate the baseline's state; both starting hashes are recorded
+   and must match. Generator source (`setup.sh` / answer key) is run in a sanitized
+   environment and **stripped** from the worker seed. A failed Docker/Kilo run is recorded
+   `run_status="failed"` and the validator **rejects** the evidence. `--check-evidence`
+   dispatches on an explicit `evidence_type` field, so unknown/malformed evidence is a hard
+   error, never silently skipped. Catalog-routing distinguishes a *failed model invocation*
+   from a *valid null-selection* (`status` vs `decision`), so a model failure can no longer
+   masquerade as a "clarify / target-absent" pass.
+
+These prove the *infrastructure* is sound. What remains before any published
+efficacy claim: n≥3 repetitions per condition, an irrelevant-guidance placebo,
+frozen-assertion grading with quoted evidence, and committed result files.
+
+## Current-head rerun (2026-08-17)
+
+The runner hardening in `fix/evaluation-runner-integrity` (PR #47) was
+**re-run end-to-end on the current head** after the macOS `/tmp` mount fix and
+the corrected fixture/guidance hash semantics. Exact results:
+
+- **HEAD:** `2e963364cec45a35b75d6c4253c9e7c326170b15` (branch
+  `fix/evaluation-runner-integrity`, PR #47).
+- **`docker build -f Dockerfile.eval -t kilo-eval:local .`** — succeeded
+  (`Successfully tagged kilo-eval:local`).
+- **`docker_isolation_preflight.py --image kilo-eval:local --target-skill
+  code-review`** — **23/23 checks passed**. The guided mount now additionally
+  proves `references_present_if_required` (a required `references/` directory
+  that is missing now FAILS the probe; previously this check could not fail).
+- **Catalog-routing smoke** (`run_catalog_routing_eval.py --skill code-review
+  --case-id 1 --reps 3`): `target_present` selected `code-review`/**apply**
+  3/3; `target_absent` returned `null`/**clarify** 3/3. Hardening proven: a
+  decision that *omits* `selected_skill` or `action` is now rejected (it can no
+  longer become an explicit `null` selection), and a non-null selection that is
+  not present in the catalog actually supplied to the model (e.g. a target
+  selected under a target-absent catalog) is rejected.
+- **Execution smoke** (`run_execution_eval.py --skill code-review --case-id 5
+  --reps 1`): two **distinct fresh containers**; guided and baseline both
+  started from the identical **frozen** seed — `canonical_seed_hash`
+  (`sha256:694cc87e…`) equals the frozen fixture `output_hash`/`content_hash`.
+  `guidance_bundle_hash` was recorded and is now required by the validator.
+  **n=1 infrastructure smoke — not an efficacy claim.**
+- **`validate_evaluations.py --check-evidence`** — **PASSED** on the actual
+  current-head smoke files (no errors / no warnings).
+- **`validate_evaluations.py`** (schema) — 0 errors / 0 warnings.
+- **`test_validate_evaluations.py`** — **75 tests pass** (up from 50; 25 new
+  regression tests covering the routing missing-field/catalog-membership
+  defects, the generator source-vs-output hash split, the frozen-hash anchor,
+  the references probe, and the Kilo-path/mode consistency fixes).
+- **`hash_fixtures.py`** — idempotent; the 6 generator fixtures re-hashed under
+  the corrected semantics (worker-visible `output_hash`/`content_hash`, with
+  `setup.sh` **excluded**; `source_hash` still covers `setup.sh`). Second run:
+  `Updated 0`.
+
+### Generator hash semantics corrected
+
+`materialize_fixture_seed` is now the single canonical worker-visible
+materialization. `canonical_hash` and `verify_generator_deterministic` both defer
+to it, so the frozen `output_hash`/`content_hash` always describe exactly the
+artifact the worker receives:
+
+- `source_hash` = hash of the evaluator-only generator source (`setup.sh`);
+- `output_hash` / `content_hash` = hash of the **worker-visible** generated task
+  state (generator source stripped before hashing).
+
+This closes the gap where the frozen hash and the task actually presented to the
+worker were different artifacts.
+
+### Catalog-routing integrity
+
+`extract_decision` now validates the **raw** model JSON: both `selected_skill`
+and `action` must be explicitly present (a missing field is NOT an explicit
+`null`), unknown actions are rejected, and a non-null `selected_skill` must name
+a skill that was actually in the catalog supplied for that condition. The
+frozen-hash anchor plus the guidance-bundle hash mean a malformed, stale,
+partially-mounted, or differently-materialized evaluation cannot masquerade as
+trustworthy evidence.
 
 ## Case-set audit
 

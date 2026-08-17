@@ -11,11 +11,14 @@ import shutil
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import build_routing_catalog as brc
+import docker_isolation_preflight as dip
 import eval_hashing as eh
+import run_catalog_routing_eval as rc
 import validate_evaluations as ve
 
 
@@ -102,6 +105,14 @@ class SchemaFailureTests(unittest.TestCase):
         ve.check_case(fake_path(), "x/evals.json", c)
         self.assertTrue(any("missing 'routing' expectation" in e for e in ve.errors))
 
+    def test_catalog_routing_mode_accepted_in_case(self):
+        # Layer A catalog-routing must be a valid evaluation_mode.
+        c = base_case(1, "matching", ["catalog-routing"],
+                      routing_context=routing_ctx(),
+                      routing=routing_exp())
+        ve.check_case(fake_path(), "x/evals.json", c)
+        self.assertFalse(any("bad evaluation_modes" in e for e in ve.errors))
+
     def test_execution_no_assertions(self):
         c = base_case(5, "edge", ["execution"],
                       execution={"expected_output": "out", "assertions": []})
@@ -127,10 +138,11 @@ class ResultFailureTests(unittest.TestCase):
                         "isolation_method": "instruction-only (limited)"},
             "protocol": {"status": "limited", "worker_isolation_verified": True,
                          "target_loaded_in_guided": "ev", "target_absent_in_baseline": "ev",
+                         "guided_skill_hash": "sha256:g", "baseline_guidance_absent": "ev",
                          "contamination": "none", "routing_mechanism": None},
-            "runs": {"guided": {"session_id": "g1", "output_hash": "h",
+            "runs": {"guided": {"session_id": "g1", "container_id": "cg1", "output_hash": "h",
                                 "selected_skill": "code-review"},
-                     "baseline": {"session_id": "b1", "output_hash": "h"}},
+                     "baseline": {"session_id": "b1", "container_id": "cb1", "output_hash": "h"}},
             "cases": [{
                 "case_id": 1,
                 "outcome": {"category": "skill_only_pass",
@@ -261,6 +273,257 @@ class ResultFailureTests(unittest.TestCase):
         res["protocol"]["status"] = "valid"
         ve.check_one_result("r.md", res, {"code-review"}, {})
         self.assertTrue(any("OS-level isolation" in e for e in ve.errors))
+
+    # --- new Docker execution evidence checks (mode == execution) ---
+    def test_execution_shared_container_id_fails(self):
+        res = self._result()
+        res["runs"]["guided"]["container_id"] = "cb1"  # same as baseline
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("share a container_id" in e for e in ve.errors))
+
+    def test_execution_missing_skill_hash_fails(self):
+        res = self._result()
+        res["protocol"].pop("guided_skill_hash")
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("guided_skill_hash" in e for e in ve.errors))
+
+    def test_execution_missing_baseline_absence_proof_fails(self):
+        res = self._result()
+        res["protocol"].pop("baseline_guidance_absent")
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("baseline_guidance_absent" in e for e in ve.errors))
+
+    # --- catalog-routing / harness-routing modes (Layer A / Layer C) ---
+    def _routing_mode_result(self, mode):
+        res = self._result(
+            mode=mode,
+            protocol={"status": "limited", "worker_isolation_verified": True,
+                      "routing_mechanism": "harness-selection-log",
+                      "target_loaded_in_guided": None,
+                      "target_absent_in_baseline": None,
+                      "guided_skill_hash": None, "baseline_guidance_absent": None,
+                      "contamination": "none"},
+            runs={"guided": {"session_id": "g1", "container_id": "cg1",
+                             "output_hash": "h", "selected_skill": "code-review"},
+                  "baseline": {"session_id": "b1", "container_id": "cb1",
+                               "output_hash": "h", "selected_skill": None}},
+            cases=[{
+                "case_id": 1,
+                "outcome": {"category": "both_pass",
+                            "measurement_status": "discriminating",
+                            "protocol_status": "limited"},
+                "verdict": {"guided_pass": True, "baseline_pass": True},
+                "runs": {"guided": {"selected_skill": "code-review"},
+                         "baseline": {"selected_skill": None}},
+                "assertions": [],
+            }])
+        return res
+
+    def test_catalog_routing_mode_accepted(self):
+        res = self._routing_mode_result("catalog-routing")
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertEqual(ve.errors, [], ve.errors)
+
+    def test_harness_routing_mode_accepted(self):
+        res = self._routing_mode_result("harness-routing")
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertEqual(ve.errors, [], ve.errors)
+
+
+class EvidenceValidationTests(unittest.TestCase):
+    def tearDown(self):
+        reset()
+
+    def _exec_evidence(self, **over_rep):
+        rep = {
+            "rep": 1,
+            "workspace_path": "/work/task",
+            "canonical_seed_hash": "sha256:seed",
+            "guided_workspace_id": "ws-guided-1",
+            "baseline_workspace_id": "ws-baseline-1",
+            "guided": {
+                "container_id": "cg", "session_id": "sg",
+                "run_status": "success", "returncode": 0,
+                "skill_mounted": True, "skill_hash": "sha256:skill",
+                "guidance_verified": True, "guidance_probe": "present",
+                "starting_fixture_hash": "sha256:seed", "ending_fixture_hash": "sha256:g",
+                "output": "guided output", "stderr": ""},
+            "baseline": {
+                "container_id": "cb", "session_id": "sb",
+                "run_status": "success", "returncode": 0,
+                "skill_mounted": False,
+                "guidance_verified_absent": True, "guidance_probe": "absent",
+                "starting_fixture_hash": "sha256:seed", "ending_fixture_hash": "sha256:h",
+                "output": "baseline output", "stderr": ""},
+            "distinct_containers": True, "distinct_sessions": True,
+            "starting_fixture_hashes_match": True, "workspace_paths_differ": True,
+        }
+        rep.update(over_rep)
+        return {"evidence_type": "execution",
+                "canonical_seed_hash": "sha256:seed",
+                "expected_fixture_hash": "sha256:seed",
+                "guidance_bundle_hash": "sha256:bundle",
+                "repetitions": [rep]}
+
+    def _cat_evidence(self, present_reps, absent_reps):
+        return {"evidence_type": "catalog-routing", "conditions": {
+            "target_present": {"repetitions": present_reps},
+            "target_absent": {"repetitions": absent_reps}}}
+
+    def test_execution_evidence_valid(self):
+        self.assertEqual(ve.validate_execution_evidence(self._exec_evidence()), [])
+
+    def test_execution_evidence_shared_container_fails(self):
+        ev = self._exec_evidence()
+        ev["repetitions"][0]["guided"]["container_id"] = "cb"
+        self.assertTrue(any("distinct containers" in e
+                            for e in ve.validate_execution_evidence(ev)))
+
+    def test_execution_evidence_baseline_leak_fails(self):
+        ev = self._exec_evidence()
+        ev["repetitions"][0]["baseline"]["guidance_verified_absent"] = False
+        self.assertTrue(any("guidance_verified_absent" in e
+                            for e in ve.validate_execution_evidence(ev)))
+
+    def test_execution_evidence_fixture_mismatch_fails(self):
+        ev = self._exec_evidence()
+        ev["repetitions"][0]["baseline"]["starting_fixture_hash"] = "sha256:other"
+        self.assertTrue(any("starting fixture hashes differ" in e
+                            for e in ve.validate_execution_evidence(ev)))
+
+    def test_execution_evidence_failed_run_rejected(self):
+        # Defect 3/9: a failed Docker/Kilo run cannot be valid evidence.
+        ev = self._exec_evidence()
+        ev["repetitions"][0]["guided"]["run_status"] = "failed"
+        ev["repetitions"][0]["guided"]["returncode"] = 1
+        ev["repetitions"][0]["guided"]["guidance_verified"] = False
+        ev["repetitions"][0]["guided"]["output"] = ""
+        self.assertTrue(any("run_status" in e
+                            for e in ve.validate_execution_evidence(ev)))
+
+    def test_execution_evidence_shared_workspace_rejected(self):
+        # Defect 1: guided and baseline must use independent workspace ids.
+        ev = self._exec_evidence()
+        ev["repetitions"][0]["baseline_workspace_id"] = "ws-guided-1"
+        self.assertTrue(any("workspace ids" in e
+                            for e in ve.validate_execution_evidence(ev)))
+
+    def test_catalog_routing_evidence_valid(self):
+        ev = self._cat_evidence(
+            [{"rep": 1, "status": "success", "decision":
+              {"selected_skill": "code-review", "action": "apply"},
+              "match": True}],
+            [{"rep": 1, "status": "success", "decision":
+              {"selected_skill": None, "action": "clarify"}, "match": True}])
+        self.assertEqual(ve.validate_catalog_routing_evidence(ev), [])
+
+    def test_catalog_routing_evidence_missing_condition(self):
+        ev = {"evidence_type": "catalog-routing",
+              "conditions": {"target_present": {"repetitions": []}}}
+        self.assertTrue(any("missing" in e
+                            for e in ve.validate_catalog_routing_evidence(ev)))
+
+    def test_catalog_failed_model_cannot_pass(self):
+        # Defect 5/14B: a failed model invocation must NOT be a null-selection pass.
+        ev = self._cat_evidence(
+            [{"rep": 1, "status": "success", "decision":
+              {"selected_skill": "code-review", "action": "apply"}, "match": True}],
+            # Model failed but someone marked match=True -> must be flagged.
+            [{"rep": 1, "status": "failed", "error": "kilo exited 1",
+              "decision": None, "match": True}])
+        self.assertTrue(any("false pass" in e
+                            for e in ve.validate_catalog_routing_evidence(ev)))
+
+    def test_catalog_failed_model_recorded_as_failure(self):
+        # The legitimate representation of a failure: status failed, match False.
+        ev = self._cat_evidence(
+            [{"rep": 1, "status": "success", "decision":
+              {"selected_skill": "code-review", "action": "apply"}, "match": True}],
+            [{"rep": 1, "status": "failed", "error": "no parseable decision",
+              "decision": None, "match": False}])
+        self.assertEqual(ve.validate_catalog_routing_evidence(ev), [])
+
+    def test_catalog_invalid_decision_rejected(self):
+        # null selection with action apply is invalid.
+        ev = self._cat_evidence(
+            [{"rep": 1, "status": "success", "decision":
+              {"selected_skill": None, "action": "apply"}, "match": False}],
+            [{"rep": 1, "status": "success", "decision":
+              {"selected_skill": None, "action": "clarify"}, "match": True}])
+        self.assertTrue(any("action 'apply'" in e
+                            for e in ve.validate_catalog_routing_evidence(ev)))
+
+
+class EvidenceDirDispatchTests(unittest.TestCase):
+    """Defect 4 / 14A / 14G: --check-evidence must really inspect files and must
+    not silently skip unknown or malformed evidence."""
+
+    def tearDown(self):
+        reset()
+
+    def _run_check(self, files):
+        d = tempfile.mkdtemp()
+        try:
+            for name, content in files.items():
+                open(os.path.join(d, name), "w").write(content)
+            ve.check_evidence_dir(d)
+            return list(ve.errors)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+            ve.EVALS_DIR = os.path.join(ROOT, "docs", "evaluations")
+
+    def test_malformed_exec_evidence_fails(self):
+        # A malformed execution evidence file must cause validator failure.
+        errs = self._run_check({
+            "exec-bad.json": '{"evidence_type":"execution", "repetitions":[{"rep":1,'
+                             '"guided":{"container_id":"g"},'
+                             '"baseline":{"container_id":"g"}}]}'})
+        self.assertTrue(any("distinct containers" in e for e in errs),
+                        f"expected distinct-container failure, got {errs}")
+
+    def test_unknown_evidence_type_rejected(self):
+        errs = self._run_check({
+            "weird.json": '{"evidence_type":"mystery","repetitions":[]}'})
+        self.assertTrue(any("unknown evidence_type" in e for e in errs),
+                        f"expected unknown-type error, got {errs}")
+
+    def test_catalog_evidence_validated_via_dispatch(self):
+        good = {"evidence_type": "catalog-routing", "conditions": {
+            "target_present": {"repetitions": [
+                {"rep": 1, "status": "success", "decision":
+                 {"selected_skill": "code-review", "action": "apply"},
+                 "match": True}]},
+            "target_absent": {"repetitions": [
+                {"rep": 1, "status": "success", "decision":
+                 {"selected_skill": None, "action": "clarify"}, "match": True}]}}}
+        errs = self._run_check({"catalog-routing-x.json": json.dumps(good)})
+        self.assertEqual(errs, [], errs)
+
+
+class GeneratorSeedTests(unittest.TestCase):
+    """Defect 2 / 14E: generator source must never be worker-visible."""
+
+    def tearDown(self):
+        reset()
+
+    def test_generator_seed_excludes_source(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            gendir = os.path.join(tmp, "gen")
+            os.makedirs(gendir)
+            open(os.path.join(gendir, "setup.sh"), "w").write(
+                "#!/usr/bin/env bash\nset -e\n"
+                "echo '# answer key: the defect is in auth.py' > LEAK.txt\n")
+            seed, h = eh.materialize_fixture_seed(gendir, "generator",
+                                                  "setup.sh", "bash setup.sh")
+            self.assertFalse(os.path.exists(os.path.join(seed, "setup.sh")),
+                             "generator source leaked into worker seed")
+            self.assertTrue(os.path.exists(os.path.join(seed, "LEAK.txt")),
+                            "generated task state missing from seed")
+            self.assertTrue(h)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
 
 
 class GeneratorTests(unittest.TestCase):
@@ -441,6 +704,281 @@ class CatalogTests(unittest.TestCase):
         absent_names = [n for n, _ in absent_rows]
         self.assertNotIn("code-review", absent_names)
         self.assertEqual(len(names), len(absent_names) + 1)
+
+
+class CatalogRoutingDecisionTests(unittest.TestCase):
+    """Defect 1 / 14B: a malformed/partial catalog-routing decision must never
+    become a valid null-selection, and a selection must be valid against the exact
+    catalog actually presented to the model."""
+
+    def _cat(self, names):
+        return set(names)
+
+    def test_missing_selected_skill_rejected(self):
+        r = rc.extract_decision('{"action": "clarify"}', self._cat(["code-review"]))
+        self.assertEqual(r["status"], "failed")
+        self.assertIn("selected_skill field missing", r["error"])
+
+    def test_missing_action_rejected(self):
+        r = rc.extract_decision('{"selected_skill": null}', self._cat(["code-review"]))
+        self.assertEqual(r["status"], "failed")
+        self.assertIn("action field missing", r["error"])
+
+    def test_null_clarify_accepted(self):
+        r = rc.extract_decision('{"selected_skill": null, "action": "clarify"}',
+                                self._cat(["code-review"]))
+        self.assertEqual(r["status"], "success")
+        self.assertEqual(r["decision"]["selected_skill"], None)
+        self.assertEqual(r["decision"]["action"], "clarify")
+
+    def test_null_apply_rejected(self):
+        r = rc.extract_decision('{"selected_skill": null, "action": "apply"}',
+                                self._cat(["code-review"]))
+        self.assertEqual(r["status"], "failed")
+        self.assertIn("action 'apply'", r["error"])
+
+    def test_skill_apply_accepted(self):
+        r = rc.extract_decision('{"selected_skill": "code-review", "action": "apply"}',
+                                self._cat(["code-review"]))
+        self.assertEqual(r["status"], "success")
+
+    def test_skill_clarify_rejected(self):
+        r = rc.extract_decision('{"selected_skill": "code-review", "action": "clarify"}',
+                                self._cat(["code-review"]))
+        self.assertEqual(r["status"], "failed")
+        self.assertIn("action 'clarify'", r["error"])
+
+    def test_unknown_catalog_skill_rejected(self):
+        r = rc.extract_decision('{"selected_skill": "ghost", "action": "apply"}',
+                                self._cat(["code-review"]))
+        self.assertEqual(r["status"], "failed")
+        self.assertIn("not in supplied catalog", r["error"])
+
+    def test_absent_target_returned_anyway_rejected(self):
+        # target-absent catalog omits the target; selecting it is rejected.
+        r = rc.extract_decision('{"selected_skill": "code-review", "action": "apply"}',
+                                self._cat(["other-skill"]))
+        self.assertEqual(r["status"], "failed")
+        self.assertIn("not in supplied catalog", r["error"])
+
+    def test_malformed_json_rejected(self):
+        r = rc.extract_decision('{"selected_skill": }', self._cat(["code-review"]))
+        self.assertEqual(r["status"], "failed")
+        self.assertIn("malformed", r["error"])
+
+    def test_empty_output_rejected(self):
+        r = rc.extract_decision('', self._cat(["code-review"]))
+        self.assertEqual(r["status"], "failed")
+        self.assertIn("no JSON decision", r["error"])
+
+    def test_unknown_action_rejected(self):
+        r = rc.extract_decision('{"selected_skill": null, "action": "bogus"}',
+                                self._cat(["code-review"]))
+        self.assertEqual(r["status"], "failed")
+        self.assertIn("invalid action", r["error"])
+
+    def test_failed_kilo_invocation_cannot_match(self):
+        # A failed model invocation (non-zero exit, empty parseable decision)
+        # must be recorded as status failed with no decision, never a pass.
+        import subprocess
+        fake = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="")
+        with unittest.mock.patch("subprocess.run", return_value=fake):
+            meta = rc.run_kilo("prompt", "model", "/tmp", "kilo",
+                               self._cat(["code-review"]))
+        self.assertEqual(meta["status"], "failed")
+        self.assertIsNone(meta["decision"])
+
+
+class GeneratorHashSemanticsTests(unittest.TestCase):
+    """Defect 2 / 14E: source_hash vs worker-visible output_hash semantics."""
+
+    def tearDown(self):
+        reset()
+
+    def test_setup_sh_absent_from_worker_seed(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            gendir = os.path.join(tmp, "gen")
+            os.makedirs(gendir)
+            open(os.path.join(gendir, "setup.sh"), "w").write(
+                "#!/usr/bin/env bash\nset -e\n"
+                "echo 'answer key' > LEAK.txt\n")
+            seed, h = eh.materialize_fixture_seed(gendir, "generator",
+                                                  "setup.sh", "bash setup.sh")
+            self.assertFalse(os.path.exists(os.path.join(seed, "setup.sh")))
+            self.assertTrue(os.path.exists(os.path.join(seed, "LEAK.txt")))
+            self.assertTrue(h)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_source_hash_covering_setup_sh(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            gendir = os.path.join(tmp, "gen")
+            os.makedirs(gendir)
+            open(os.path.join(gendir, "setup.sh"), "w").write("echo hi > a.txt\n")
+            sh = eh.source_hash_of(os.path.join(gendir, "setup.sh"))
+            # Changing setup.sh must change the source hash.
+            open(os.path.join(gendir, "setup.sh"), "w").write("echo bye > a.txt\n")
+            sh2 = eh.source_hash_of(os.path.join(gendir, "setup.sh"))
+            self.assertNotEqual(sh, sh2)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_output_hash_excludes_setup_sh(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            gendir = os.path.join(tmp, "gen")
+            os.makedirs(gendir)
+            open(os.path.join(gendir, "setup.sh"), "w").write(
+                "#!/usr/bin/env bash\nset -e\necho static > out.txt\n")
+            seed, h = eh.materialize_fixture_seed(gendir, "generator",
+                                                  "setup.sh", "bash setup.sh")
+            # The hash must be derived from the worker-visible files only, so adding
+            # (or here, the absence of) setup.sh in the seed is irrelevant because
+            # it is already stripped; recompute via committed_hash of the seed.
+            h2 = eh.committed_hash(seed)
+            # canonical_hash(generator) must equal the worker-visible seed hash.
+            ch = eh.canonical_hash(gendir, "generator", "setup.sh", "bash setup.sh")
+            self.assertEqual(ch, h)
+            self.assertEqual(ch, h2)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_modifying_generated_output_changes_output_hash(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            gendir = os.path.join(tmp, "gen")
+            os.makedirs(gendir)
+            open(os.path.join(gendir, "setup.sh"), "w").write(
+                "#!/usr/bin/env bash\nset -e\necho one > out.txt\n")
+            h1 = eh.canonical_hash(gendir, "generator", "setup.sh", "bash setup.sh")
+            open(os.path.join(gendir, "setup.sh"), "w").write(
+                "#!/usr/bin/env bash\nset -e\necho two > out.txt\n")
+            h2 = eh.canonical_hash(gendir, "generator", "setup.sh", "bash setup.sh")
+            self.assertNotEqual(h1, h2)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_deterministic_worker_seed_hash(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            gendir = os.path.join(tmp, "gen")
+            os.makedirs(gendir)
+            open(os.path.join(gendir, "setup.sh"), "w").write(
+                "#!/usr/bin/env bash\nset -e\necho static > out.txt\n")
+            h1 = eh.canonical_hash(gendir, "generator", "setup.sh", "bash setup.sh")
+            h2 = eh.canonical_hash(gendir, "generator", "setup.sh", "bash setup.sh")
+            self.assertEqual(h1, h2)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_canonical_seed_equals_frozen_hash(self):
+        # canonical_hash(generator) is what hash_fixtures.py records as the frozen
+        # output_hash/content_hash; materialize_fixture_seed must reproduce it.
+        tmp = tempfile.mkdtemp()
+        try:
+            gendir = os.path.join(tmp, "gen")
+            os.makedirs(gendir)
+            open(os.path.join(gendir, "setup.sh"), "w").write(
+                "#!/usr/bin/env bash\nset -e\necho static > out.txt\n")
+            frozen = eh.canonical_hash(gendir, "generator", "setup.sh", "bash setup.sh")
+            seed, runtime = eh.materialize_fixture_seed(gendir, "generator",
+                                                       "setup.sh", "bash setup.sh")
+            self.assertEqual(runtime, frozen)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+class ExecutionEvidenceAnchorTests(unittest.TestCase):
+    """Defect 3 / 14C: execution evidence must anchor to the frozen fixture hash
+    and freeze the injected guidance bundle."""
+
+    def tearDown(self):
+        reset()
+
+    def _ev(self, **over):
+        ev = {
+            "evidence_type": "execution",
+            "canonical_seed_hash": "sha256:seed",
+            "expected_fixture_hash": "sha256:seed",
+            "guidance_bundle_hash": "sha256:bundle",
+            "repetitions": [{
+                "rep": 1,
+                "canonical_seed_hash": "sha256:seed",
+                "guided_workspace_id": "ws-guided-1",
+                "baseline_workspace_id": "ws-baseline-1",
+                "guided": {"container_id": "cg", "session_id": "sg",
+                           "run_status": "success", "returncode": 0,
+                           "skill_mounted": True, "skill_hash": "sha256:skill",
+                           "guidance_verified": True, "guidance_probe": "present",
+                           "starting_fixture_hash": "sha256:seed",
+                           "ending_fixture_hash": "sha256:g", "output": "out",
+                           "stderr": ""},
+                "baseline": {"container_id": "cb", "session_id": "sb",
+                             "run_status": "success", "returncode": 0,
+                             "skill_mounted": False,
+                             "guidance_verified_absent": True,
+                             "guidance_probe": "absent",
+                             "starting_fixture_hash": "sha256:seed",
+                             "ending_fixture_hash": "sha256:h", "output": "out",
+                             "stderr": ""},
+                "distinct_containers": True, "distinct_sessions": True,
+                "starting_fixture_hashes_match": True,
+                "workspace_paths_differ": True,
+            }],
+        }
+        ev.update(over)
+        return ev
+
+    def test_valid_with_anchored_hash(self):
+        self.assertEqual(ve.validate_execution_evidence(self._ev()), [])
+
+    def test_missing_expected_fixture_hash_rejected(self):
+        ev = self._ev()
+        del ev["expected_fixture_hash"]
+        errs = ve.validate_execution_evidence(ev)
+        self.assertTrue(any("expected_fixture_hash" in e for e in errs), errs)
+
+    def test_missing_guidance_bundle_rejected(self):
+        ev = self._ev()
+        del ev["guidance_bundle_hash"]
+        errs = ve.validate_execution_evidence(ev)
+        self.assertTrue(any("guidance_bundle_hash" in e for e in errs), errs)
+
+    def test_frozen_hash_mismatch_rejected(self):
+        # Guided and baseline start from identical copies, but the canonical seed
+        # does not match the frozen expected hash -> evidence must be rejected.
+        ev = self._ev(expected_fixture_hash="sha256:wrong")
+        errs = ve.validate_execution_evidence(ev)
+        self.assertTrue(any("frozen" in e or "expected_fixture_hash" in e
+                            for e in errs), errs)
+
+
+class PreflightReferencesTests(unittest.TestCase):
+    """Defect 4 / 14D: the docker references probe must fail when required
+    references are missing."""
+
+    def test_refs_expected_and_present(self):
+        script = dip.probe_script("code-review", "abc", guidance_present=True,
+                                  refs_expected=True)
+        self.assertIn("references_present_if_required", script)
+        # required + present -> the check succeeds inline (true)
+        self.assertIn('references_present_if_required" true', script)
+
+    def test_refs_expected_and_absent_fails(self):
+        # When references are required, the absent branch must be compiled so that
+        # a missing references directory fails (required=true).
+        script = dip.probe_script("code-review", "abc", guidance_present=True,
+                                  refs_expected=True)
+        self.assertIn('[ "true" = "true" ]', script)
+        self.assertNotIn("references_available", script)
+
+    def test_refs_not_expected_and_absent_passes(self):
+        script = dip.probe_script("code-review", "abc", guidance_present=True,
+                                  refs_expected=False)
+        # When references are not required, the absent branch must pass (true).
+        self.assertIn('[ "false" = "true" ]', script)
 
 
 if __name__ == "__main__":

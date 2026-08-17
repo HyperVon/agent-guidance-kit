@@ -17,10 +17,29 @@ Status dimensions are kept separate (per the corrected methodology):
 > **not** constitute validated evidence. No routing result exists for any skill
 > yet (all force-injected, so routing is unmeasured). No cross-skill "X/5"
 > comparison is a skill-quality score.
+>
+> **Phase 1 reassessment (2026-08-16) + follow-up:** the corrected pipeline was
+> exercised in this CLI environment. The fixture/hashing/catalog/validation half
+> runs green (fixtures idempotent, catalogs generate for both conditions, validator
+> + 29 tests pass). A protocol-valid run on the **macOS host** is still not possible
+> (Kilo/CLI on a laptop is the harness itself: it cannot capture routing selection as
+> harness evidence, and cannot create independent OS-contained worker contexts — host
+> `gitconfig`/`gh` token present). **However, Layer B (execution) now runs inside
+> Docker** (`Dockerfile.eval` → `kilo-eval:local`: fresh containers, deterministic
+> git identity, no host secrets, no mounted auth, anonymous free model
+> `kilo/tencent/hy3:free`), and **Layer A (catalog-routing) is fully portable** and
+> runs on the host. Both were smoke-proven on the `code-review` pilot (distinct
+> container IDs; guided applied the skill vs baseline refusal; catalog-routing
+> selected the target when present and declined when absent). **Layer C
+> (harness-routing) stays `not_run`** where the harness cannot expose the selected
+> skill. Net: for the four pilot skills **execution infra = proven**,
+> **catalog-routing = proven**, **harness-routing = `not_run` (blocked)**,
+> protocol `not_run` (no graded n≥3 run published yet), repeats 0. The historical
+> exploratory pilots remain `invalid` and were not reused.
 
-**Target harness:** Kilo/CLI  |  **Model:** hy3-free  |  **Reasoning effort:** high
-**Isolation available here:** instruction-only (must be labeled `limited`); OS
-containment is the production-valid method and is not available in this CLI.
+**Target harness:** Kilo/CLI  |  **Model:** kilo/tencent/hy3:free (anonymous, free)  |  **Reasoning effort:** high
+**Isolation available:** Layer B uses **Docker OS-containment** (`isolation_method: docker`,
+production-valid); host-only runs are still instruction-only and must be labeled `limited`.
 
 | Skill | Cases | Fixtures | Routing | Execution | Protocol | Repeats | Result |
 | :--- | :---: | :--- | :--- | :--- | :--- | :---: | :--- |
@@ -55,6 +74,17 @@ Total: 26 skills, 130 designed cases. Fixtures frozen for 4/26 (the four pilot
 skills: code-review, git-github-workflow, review-feedback-resolution,
 security-review). Routing measured for 0/26. Execution validated for 0/26 (4
 exploratory invalid pilots only).
+
+**Phase 1 (2026-08-16) + follow-up, four pilot skills:** Layer A catalog-routing and
+Layer B Docker execution **infrastructure proven** (single-rep smoke on `code-review`;
+distinct containers, independent seed copies, baseline received no guidance, free
+anonymous model reachable, runner failure correctly rejected). Layer C harness-routing
+`not_run` (blocked — no harness selection capture in this CLI). Execution evidence is
+validated by `validate_evaluations.py --check-evidence`, which dispatches on an explicit
+`evidence_type` field and rejects unknown/malformed evidence rather than skipping it.
+No graded n≥3 run published yet, so protocol stays `not_run`. The validator rejects
+inflated `valid` claims (verified by negative test). Full efficacy runs require a
+graded n≥3 comparison with quoted evidence; see `phase1-environment.md` §6.
 
 ## Legend
 

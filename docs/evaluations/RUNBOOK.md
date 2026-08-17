@@ -48,13 +48,23 @@ Each case set (`skills/<skill>/evals/evals.json`) contains five cases:
 - 1 **ambiguous** — requires clarification or a stated routing tie-breaker.
 - 1 **edge / behavior** — a difficult boundary case.
 
-Each case declares `evaluation_modes`: a subset of `["routing", "execution"]`.
+Each case declares `evaluation_modes`: a subset of the three-layer modes
+`["routing", "catalog-routing", "harness-routing", "execution"]`.
 
 - A **routing** case asks whether the *harness* selects this skill. It uses the
   natural user request verbatim and is **never** force-injected with the target
   skill. Its oracle lives in `routing` (expected selected skill for the
   present/absent catalog conditions) and is graded from **harness-selection
   evidence**, not from whether the worker explains the choice.
+- A **catalog-routing** case (Layer A) is the *portable* form of routing: a fresh
+  model call (no harness, no tools, no repo) is given a neutral catalog built from
+  every skill's frontmatter plus the user request, and must return a structured
+  `{"selected_skill": ...}` decision. It is harness-independent and always
+  runnable (see `scripts/run_catalog_routing_eval.py`).
+- A **harness-routing** case (Layer C) is the optional harness-integration form:
+  the real harness's routing/discovery decides. It requires the harness to *expose
+  the selected skill as evidence*; where it cannot, the case falls back to
+  `catalog-routing` or is marked `not_run`.
 - An **execution** case asks whether *this skill's guidance* beats the default
   once loaded. It deliberately provides the target guidance to the guided worker.
   Its oracle lives in `execution` (`expected_output` + `assertions`).
@@ -105,22 +115,61 @@ mark the routing comparison **`protocol_status: limited`** (or `not_run`) and do
 never be recorded as a routing result. Routing success is primarily the captured
 selected skill, not a worker's self-report.
 
-## 4. Execution-efficacy protocol
+## 4. Execution-efficacy protocol (Layer B, Docker-isolated)
 
 Goal: measure the skill's marginal value once it is legitimately active.
 
-1. Intentionally provide the target guidance to the guided worker (prefer the
-   actual production skill-loading mechanism; if direct injection of `SKILL.md`
-   is the only available approximation, record that as `protocol_status: limited`
-   and label the run an approximation — never claim it "definitively matches the
-   real harness" unless verified).
-2. The other worker is the **harness default without the target guidance**
-   (baseline). It does not receive the skill, its references, or any instruction
-   to simulate absence.
-3. Keep model, harness, reasoning effort, tools, network, and output location
-   equivalent between conditions.
-4. Clearly label this suite **execution / post-activation**. Its results are
-   not evidence about routing.
+ 1. Run **two fresh Docker containers** from a reusable image (`Dockerfile.eval`,
+    built as `kilo-eval:local`) — one guided, one baseline (see
+    `isolation-protocol.md` and `scripts/run_execution_eval.py`). For each
+    repetition the runner derives **one pristine seed** from the fixture, then makes
+    **two independent copies** (guided workspace, baseline workspace) and verifies
+    both copies hash-identically *before* the run. The guided worker receives the
+    target **guidance only** (`SKILL.md` + `references/`) mounted read-only at
+    `/work/guidance/<name>`; the baseline worker mounts **no guidance** and is never
+    told the skill's name. **Never mount the whole skill directory**: doing so leaks
+    the `evals/` fixture snapshot (including the expected output) into the guided
+    worker. The task workspace is mounted once, read-write, at `/work/task` (the
+    worker's cwd); it is a *separate* copy per condition, so the guided worker can
+    never mutate the baseline's state and vice-versa.
+    - **Generator fixtures are evaluator-only.** The generator (`setup.sh`) is run
+      under a sanitized environment (`eval_hashing.run_generator`) and its source is
+      then **stripped** from the seed the worker sees. The worker must never read
+      the generator source / answer key.
+ 2. Use the free model through **anonymous Kilo Gateway access** (e.g.
+    `kilo/tencent/hy3:free`); no API key or host auth is mounted into the
+    container. `kilo run` inside the container needs `--auto` (permission
+    auto-approval) to actually perform the task rather than auto-rejecting tools.
+    - The model is **pinned**, not auto-routed: `--auto` is only permission
+      auto-approval; model selection is fixed by `--model`. Both the guided and
+      baseline workers use the identical model so the comparison is fair.
+    - **Free-model restriction is a cost-safety gate, not a scientific
+      requirement.** The `require_free_model` guard refuses a non-`:free` model
+      unless `--allow-paid-model` is passed. A paid model is methodologically valid
+      as long as guided and baseline use the identical resolved model/runtime; the
+      guard only prevents accidental spend. The free-model catalog changes over
+      time — update `DEFAULT_MODEL` in `run_execution_eval.py` /
+      `run_catalog_routing_eval.py` when the current free model is retired.
+    - **The Kilo CLI version is pinned** in `Dockerfile.eval`
+      (`ARG KILO_CLI_VERSION`); rebuilding the eval source never silently changes
+      the worker runtime. The runner records `kilo --version`, the image id/digest,
+      and node version in the evidence.
+ 3. Keep model, harness, reasoning effort, tools, network, and output location
+    equivalent between the two fresh containers. Record both container IDs and
+    session IDs; they MUST differ (a shared container means the conditions were not
+    independent). The runner records, per repetition, the starting and ending
+    fixture hashes and a filesystem snapshot (git diff / file listing) so the
+    evidence proves both workers started from an identical seed and shows what each
+    actually changed.
+ 4. **A failed run is not evidence.** If a Docker/Kilo invocation returns non-zero,
+    the container never starts, the model output is unparseable/empty, or no session
+    id is produced, the repetition is marked `run_status="failed"` and the validator
+    **rejects** the whole evidence file. A broken, contaminated, or failed run can
+    never masquerade as trustworthy evidence. A boundary probe inside the container
+    confirms guidance presence (guided) / absence (baseline) at the real
+    `/work/guidance/<name>/SKILL.md` path.
+ 5. Clearly label this suite **execution / post-activation**. Its results are
+    not evidence about routing.
 
 **Optional placebo control.** Run a third condition with **irrelevant but
 similarly sized guidance** (a different skill that does not apply to the task).
@@ -348,18 +397,40 @@ scoring.
 
 ## 12. Current recommended protocol (summary)
 
-For a protocol-valid run today in this CLI environment (OS containment
-unavailable here), label runs `protocol_status: limited` and:
+A **protocol-valid execution run is now achievable** in this CLI environment:
+
+- **Layer B (execution) uses real OS containment** via `Dockerfile.eval` →
+  `kilo-eval:local`. Each worker runs in a fresh container with `HOME=/home/eval`,
+  a deterministic non-attributable git identity, **no** host `~/.gitconfig`/
+  `~/.ssh`/GH_TOKEN, and **no mounted Kilo auth store**. Free models are reached
+  through anonymous Kilo Gateway access (`kilo/tencent/hy3:free`) — absence of an
+  `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` does NOT mean no provider. This makes
+  `protocol.status: valid` with `isolation_method: docker` possible (the weaker
+  instruction-only `limited` method is no longer required for execution).
+- **Layer A (catalog-routing)** is fully portable and always runnable: a fresh
+  model call over a generated neutral catalog (no harness, no tools). See
+  `scripts/run_catalog_routing_eval.py`.
+- **Layer C (harness-routing)** remains optional and is blocked where the harness
+  cannot expose the selected skill as evidence; such cases fall back to Layer A or
+  are marked `not_run`.
+
+For a protocol-valid run today:
 
 1. Build **frozen committed fixtures** per case (`fixture.status: "ready"` +
    `content_hash`); otherwise mark `designed_only`.
-2. **Routing cases:** natural request, no injection, capture selected skill via
-   harness evidence; if unavailable, mark `limited`/`not_run`.
-3. **Execution cases:** provide target guidance to guided worker; harness-default
-   baseline; optional irrelevant-guidance placebo.
-4. Neutral names; no condition labels; boundary probe before scoring.
-5. Fresh workers; equivalent settings; at least 3 repetitions for any confirmed
-   efficacy claim.
-6. Grade with quoted evidence; record full result schema; retain raw evidence in
-   the ignored dir.
-7. Resolve all contradictions with `SKILL.md` and `isolation-protocol.md`.
+2. **Routing cases:** prefer Layer A catalog-routing (portable, model-as-classifier);
+   use Layer C harness-routing when the harness exposes selection evidence.
+ 3. **Execution cases:** two fresh Docker containers from **independent seed copies**
+    (guided gets guidance-only mount at `/work/guidance/<name>`; baseline gets none),
+    anonymous free model, `--auto` so the worker executes, distinct container/session
+    IDs, and per-rep starting/ending fixture hashes recorded.
+ 4. Neutral names; no condition labels; run `scripts/docker_isolation_preflight.py`
+    before scoring (must pass all 23 boundary checks, including the real
+    `/work/guidance/<name>/SKILL.md` presence/absence probes).
+ 5. Fresh containers; equivalent settings; at least 3 repetitions for any confirmed
+    efficacy claim.
+ 6. A repetition whose Docker/Kilo run failed is recorded `run_status="failed"` and
+    the validator rejects the evidence — never silently accepted. Grade with quoted
+    evidence; retain raw evidence in the ignored `.eval-evidence/` dir; validate with
+    `python3 scripts/validate_evaluations.py --check-evidence`.
+ 7. Resolve all contradictions with `SKILL.md` and `isolation-protocol.md`.

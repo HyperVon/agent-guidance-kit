@@ -28,7 +28,15 @@ EVALS_DIR = os.path.join(ROOT, "docs", "evaluations")
 SKILLS_GLOB = os.path.join(ROOT, "skills", "*", "evals", "evals.json")
 
 ALLOWED_KINDS = {"matching", "neighboring", "ambiguous", "edge"}
-ALLOWED_MODES = {"routing", "execution"}
+# Three-layer model (see RUNBOOK.md / skills/skill-evaluation/SKILL.md):
+#   * routing-family  : portable, harness-independent router selection
+#       - "routing"           : legacy / harness-integrated routing
+#       - "catalog-routing"   : Layer A — model-as-classifier over a neutral catalog
+#       - "harness-routing"   : Layer C — optional harness-integration routing
+#   * execution        : Layer B — Docker-isolated guided vs baseline efficacy
+ROUTING_MODES = {"routing", "catalog-routing", "harness-routing"}
+EXEC_MODES = {"execution"}
+ALLOWED_MODES = ROUTING_MODES | EXEC_MODES
 ALLOWED_FIXTURE_STATUS = {"ready", "designed_only"}
 ALLOWED_FIXTURE_TYPES = {"committed", "generator"}
 KIND_COUNTS = {"matching": 2, "neighboring": 1, "ambiguous": 1, "edge": 1}
@@ -136,7 +144,7 @@ def check_case(f, rel, c):
         err(f"{tag}: bad kind '{c.get('kind')}'")
     if not isinstance(c.get("prompt"), str) or not c["prompt"].strip():
         err(f"{tag}: empty prompt")
-    is_routing = "routing" in modes
+    is_routing = bool(set(modes) & ROUTING_MODES)
     is_exec = "execution" in modes
 
     if is_routing:
@@ -359,11 +367,9 @@ def check_one_result(base, res, skill_names, case_index):
             err(f"{base}: missing identity field '{key}'")
     rt = res.get("runtime") or {}
     for key in ("harness", "model", "reasoning_effort", "tool_policy",
-               "network_policy", "isolation_method"):
+                "network_policy", "isolation_method"):
         if not rt.get(key):
             err(f"{base}: missing runtime field '{key}'")
-    if rt.get("harness_version") is None and False:
-        pass  # harness_version may be 'unknown'
     pr = res.get("protocol") or {}
     status = pr.get("status")
     if status not in ALLOWED_PROTOCOL:
@@ -377,12 +383,25 @@ def check_one_result(base, res, skill_names, case_index):
         if any(kw in im for kw in LIMITED_ISOLATION):
             err(f"{base}: valid run requires OS-level isolation, but isolation_method "
                 f"is '{rt.get('isolation_method')}' (limited-grade only)")
-    if mode == "execution":
+    if mode in EXEC_MODES:
         if not pr.get("target_loaded_in_guided"):
             err(f"{base}: execution result missing target_loaded_in_guided evidence")
         if not pr.get("target_absent_in_baseline"):
             err(f"{base}: execution result missing target_absent_in_baseline evidence (target absence unverified)")
-    if mode == "routing":
+        if not pr.get("guided_skill_hash"):
+            err(f"{base}: execution result missing guided_skill_hash (mounted guidance unverified)")
+        if not pr.get("baseline_guidance_absent"):
+            err(f"{base}: execution result missing baseline_guidance_absent evidence (baseline received no guidance)")
+        # Docker execution: the guided and baseline workers must run in distinct
+        # fresh containers, not a shared process.
+        runs = res.get("runs") or {}
+        g_cid = (runs.get("guided") or {}).get("container_id")
+        b_cid = (runs.get("baseline") or {}).get("container_id")
+        if not g_cid or not b_cid:
+            err(f"{base}: execution result must record distinct guided/baseline container_ids")
+        elif g_cid == b_cid:
+            err(f"{base}: guided and baseline share a container_id (contamination)")
+    if mode in ROUTING_MODES:
         if not pr.get("routing_mechanism"):
             err(f"{base}: routing result missing routing_mechanism (selected skill unverified)")
     # Worker / run identity
@@ -435,7 +454,7 @@ def check_result_case(base, cs, skill, mode, case_index):
     if expect and cat != expect:
         err(f"{base} case {cid}: outcome.category '{cat}' inconsistent with verdict (expected {expect})")
 
-    if mode == "routing":
+    if mode in ROUTING_MODES:
         check_routing_result_case(base, cs, skill, case_index, cid, gp, bp)
     else:
         check_exec_result_case(base, cs, skill, case_index, cid)
@@ -522,6 +541,188 @@ def check_exec_result_case(base, cs, skill, case_index, cid):
 
 
 # --------------------------------------------------------------------------
+# Evidence-file validation (local .eval-evidence/*.json from the runners)
+# --------------------------------------------------------------------------
+def validate_execution_evidence(evidence):
+    """Validate a Docker execution-evidence file from run_execution_eval.py.
+
+    Local-only check (the .eval-evidence/ dir is gitignored). Confirms the
+    guided/baseline workers were genuinely independent, started from identical
+    pristine copies, and that a failed run cannot masquerade as valid evidence.
+    Returns a list of error strings (empty == valid).
+    """
+    errs = []
+    et = evidence.get("evidence_type")
+    if et != "execution":
+        errs.append(f"expected evidence_type 'execution', got {et!r}")
+    reps = evidence.get("repetitions") or []
+    if not reps:
+        errs.append("execution evidence has no repetitions")
+        return errs
+    seed = evidence.get("canonical_seed_hash")
+    expected = evidence.get("expected_fixture_hash")
+    # The executed task must be the EXACT frozen fixture, not merely a consistent
+    # (but wrong) one. The runtime canonical seed must equal the frozen hash.
+    if "expected_fixture_hash" not in evidence:
+        errs.append("execution evidence missing expected_fixture_hash "
+                    "(frozen fixture hash not anchored)")
+    if not (evidence.get("guidance_bundle_hash")):
+        errs.append("execution evidence missing guidance_bundle_hash "
+                    "(injected guidance bundle not frozen)")
+    if seed and expected and seed != expected:
+        errs.append(f"canonical seed hash {seed!r} does not match the frozen "
+                    f"expected_fixture_hash {expected!r}")
+    # Per-repetition anchor: the worker's starting fixture must be the frozen one.
+    for r in reps:
+        tag = f"rep{r.get('rep')}"
+        if expected and r.get("canonical_seed_hash") != expected:
+            errs.append(f"{tag}: repetition canonical_seed_hash does not match "
+                        f"the frozen expected_fixture_hash")
+        g = r.get("guided") or {}
+        b = r.get("baseline") or {}
+
+        # Guided worker requirements.
+        for key in ("container_id", "session_id", "run_status", "returncode",
+                    "skill_hash", "starting_fixture_hash", "ending_fixture_hash",
+                    "guidance_verified"):
+            if key not in g:
+                errs.append(f"{tag} guided: missing {key}")
+        if g.get("run_status") != "success":
+            errs.append(f"{tag} guided: run_status={g.get('run_status')!r} "
+                        f"(failed/invalid evidence)")
+        if g.get("returncode") != 0:
+            errs.append(f"{tag} guided: returncode={g.get('returncode')!r}")
+        if g.get("guidance_verified") is not True:
+            errs.append(f"{tag} guided: guidance_verified != true "
+                        f"(boundary probe did not confirm guidance present)")
+        if not (g.get("output") or "").strip() and not g.get("ending_fixture_hash"):
+            errs.append(f"{tag} guided: no model output and no task-state evidence")
+        if seed and g.get("starting_fixture_hash") != seed:
+            errs.append(f"{tag} guided: starting fixture hash does not match "
+                        f"canonical seed hash")
+
+        # Baseline worker requirements.
+        for key in ("container_id", "session_id", "run_status", "returncode",
+                    "starting_fixture_hash", "ending_fixture_hash",
+                    "guidance_verified_absent"):
+            if key not in b:
+                errs.append(f"{tag} baseline: missing {key}")
+        if b.get("run_status") != "success":
+            errs.append(f"{tag} baseline: run_status={b.get('run_status')!r} "
+                        f"(failed/invalid evidence)")
+        if b.get("returncode") != 0:
+            errs.append(f"{tag} baseline: returncode={b.get('returncode')!r}")
+        if b.get("guidance_verified_absent") is not True:
+            errs.append(f"{tag} baseline: guidance_verified_absent != true "
+                        f"(boundary probe found guidance present)")
+
+        # Cross-condition isolation.
+        if not (g.get("container_id") and b.get("container_id")
+                and g["container_id"] != b["container_id"]):
+            errs.append(f"{tag}: guided/baseline not distinct containers")
+        if not (g.get("session_id") and b.get("session_id")
+                and g["session_id"] != b["session_id"]):
+            errs.append(f"{tag}: guided/baseline not distinct sessions")
+        if g.get("starting_fixture_hash") != b.get("starting_fixture_hash"):
+            errs.append(f"{tag}: guided/baseline starting fixture hashes differ "
+                        f"(not identical seed)")
+        gid = r.get("guided_workspace_id")
+        bid = r.get("baseline_workspace_id")
+        if not gid or not bid or gid == bid:
+            errs.append(f"{tag}: guided/baseline workspace ids not distinct "
+                        f"(shared mutable fixture)")
+    return errs
+
+
+def validate_catalog_routing_evidence(evidence):
+    """Validate a catalog-routing evidence file from run_catalog_routing_eval.py.
+
+    Confirms both routing conditions (target-present, target-absent) were run,
+    each repetition carries a status, and a FAILED model invocation is never
+    recorded as a successful null-selection pass. Returns a list of error strings
+    (empty == valid).
+    """
+    errs = []
+    et = evidence.get("evidence_type")
+    if et != "catalog-routing":
+        errs.append(f"expected evidence_type 'catalog-routing', got {et!r}")
+    conds = evidence.get("conditions") or {}
+    if "target_present" not in conds or "target_absent" not in conds:
+        errs.append("catalog-routing evidence missing one or both conditions")
+        return errs
+    valid_actions = ("apply", "clarify")
+    for name, cond in conds.items():
+        reps = cond.get("repetitions") or []
+        if not reps:
+            errs.append(f"{name}: no repetitions captured")
+            continue
+        for r in reps:
+            rep_tag = f"{name} rep{r.get('rep')}"
+            status = r.get("status")
+            if status != "success":
+                # A failed model invocation must NOT be recorded as a pass.
+                if r.get("match") is True:
+                    errs.append(f"{rep_tag}: failed model invocation recorded as "
+                                f"match=True (false pass)")
+                continue
+            decision = r.get("decision") or {}
+            if "selected_skill" not in decision:
+                errs.append(f"{rep_tag}: success but decision missing "
+                            f"'selected_skill'")
+                continue
+            if decision.get("action") not in valid_actions:
+                errs.append(f"{rep_tag}: invalid action {decision.get('action')!r}")
+            sel = decision.get("selected_skill")
+            act = decision.get("action")
+            if sel is None and act == "apply":
+                errs.append(f"{rep_tag}: null selected_skill with action 'apply'")
+            if sel is not None and act == "clarify":
+                errs.append(f"{rep_tag}: non-null selected_skill with 'clarify'")
+            if not isinstance(r.get("match"), bool):
+                errs.append(f"{rep_tag}: match not boolean")
+    return errs
+
+
+def check_evidence_dir(ev_dir=None):
+    """Optional gate for local .eval-evidence/ files (not committed).
+
+    Dispatches on the top-level ``evidence_type`` field (filename convention is
+    only a secondary hint). Unknown or malformed evidence is treated as an error
+    so it cannot be silently skipped.
+    """
+    ev_dir = ev_dir or os.path.join(ROOT, ".eval-evidence")
+    if not os.path.isdir(ev_dir):
+        return
+    for f in sorted(glob.glob(os.path.join(ev_dir, "*.json"))):
+        rel = os.path.relpath(f, ROOT)
+        try:
+            data = json.load(open(f))
+        except Exception as e:
+            err(f"{rel}: unreadable/malformed evidence: {e}")
+            continue
+        if not isinstance(data, dict):
+            err(f"{rel}: evidence is not a JSON object")
+            continue
+        et = data.get("evidence_type")
+        basename = os.path.basename(f)
+        if et == "execution":
+            for e in validate_execution_evidence(data):
+                err(f"{rel}: {e}")
+        elif et == "catalog-routing":
+            for e in validate_catalog_routing_evidence(data):
+                err(f"{rel}: {e}")
+        elif basename.startswith("exec-"):
+            # Legacy fallback: trust filename only when type is absent.
+            for e in validate_execution_evidence(data):
+                err(f"{rel}: {e}")
+        elif basename.startswith("catalog-routing-"):
+            for e in validate_catalog_routing_evidence(data):
+                err(f"{rel}: {e}")
+        else:
+            err(f"{rel}: unknown evidence_type {et!r} (not validated)")
+
+
+# --------------------------------------------------------------------------
 # Matrix / summary consistency
 # --------------------------------------------------------------------------
 def check_matrix_sync(skill_names):
@@ -538,7 +739,6 @@ def check_matrix_sync(skill_names):
         if not os.path.exists(tgt):
             err(f"matrix broken result link {m.group(1)}")
     # Per-row agreement between the matrix and the linked result file.
-    res_dir = os.path.join(EVALS_DIR, "results")
     for line in text.splitlines():
         if "|" not in line:
             continue
@@ -595,6 +795,12 @@ def check_summary(skill_names):
 
 # --------------------------------------------------------------------------
 def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--check-evidence", action="store_true",
+                    help="also validate local .eval-evidence/*.json (Docker run outputs)")
+    args = ap.parse_args()
+
     print("=== Evaluating skill eval artifacts ===")
     skill_names, case_index = check_eval_files()
     check_leaks()
@@ -602,6 +808,9 @@ def main():
     check_results(skill_names, case_index)
     check_matrix_sync(skill_names)
     check_summary(skill_names)
+    if args.check_evidence:
+        print("=== Validating local .eval-evidence/ (Docker run outputs) ===")
+        check_evidence_dir()
 
     print(f"\nSkills with evals.json: {len(skill_names)}")
     print(f"Hard errors: {len(errors)}")

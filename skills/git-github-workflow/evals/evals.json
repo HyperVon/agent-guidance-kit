@@ -44,9 +44,9 @@
         "path": "evals/files/case-1",
         "source": "setup.sh",
         "invocation": "bash setup.sh",
-        "content_hash": "sha256:d1d2d397cc64ec8bc1f98078c93510503ff9ca2e05df1fdbe020f768c5c8e5a4",
+        "content_hash": "sha256:60c1b4cd9aa329f6995ea0e6e7487d563a291b0f6a032a5d573651d4608cbbeb",
         "source_hash": "sha256:92dd883871c6249e321d6e45b874d5365ac6ede3f5996134468572cac18fb08d",
-        "output_hash": "sha256:d1d2d397cc64ec8bc1f98078c93510503ff9ca2e05df1fdbe020f768c5c8e5a4"
+        "output_hash": "sha256:60c1b4cd9aa329f6995ea0e6e7487d563a291b0f6a032a5d573651d4608cbbeb"
       }
     },
     {
@@ -91,9 +91,9 @@
         "path": "evals/files/case-2",
         "source": "setup.sh",
         "invocation": "bash setup.sh",
-        "content_hash": "sha256:9a317cc3c94180101bade42b622fd394a3eaa66d023e8159fb5ce5618de151e2",
+        "content_hash": "sha256:975e299cd6fb23f2cf98cc876169df8141b47130dd91b4c31f65e1a95215542f",
         "source_hash": "sha256:33e39f0db2b8ef0d615f844e19f774b492b591fdd1592dffd927b09a35331da2",
-        "output_hash": "sha256:9a317cc3c94180101bade42b622fd394a3eaa66d023e8159fb5ce5618de151e2"
+        "output_hash": "sha256:975e299cd6fb23f2cf98cc876169df8141b47130dd91b4c31f65e1a95215542f"
       }
     },
     {
@@ -128,9 +128,9 @@
         "path": "evals/files/case-3",
         "source": "setup.sh",
         "invocation": "bash setup.sh",
-        "content_hash": "sha256:b3ccc710017a93cc9b6349a6e590028d7842f44c18d84f038c16b9c295cc423c",
+        "content_hash": "sha256:2d1b78ad5ba470ac235598dae6d36cddc87d213f8b415f7eccf01847da428b31",
         "source_hash": "sha256:c7d877e16cc70e7b801f274601e8632351348b557583a4925fb3266c600a8f71",
-        "output_hash": "sha256:b3ccc710017a93cc9b6349a6e590028d7842f44c18d84f038c16b9c295cc423c"
+        "output_hash": "sha256:2d1b78ad5ba470ac235598dae6d36cddc87d213f8b415f7eccf01847da428b31"
       }
     },
     {
@@ -170,9 +170,9 @@
         "path": "evals/files/case-4",
         "source": "setup.sh",
         "invocation": "bash setup.sh",
-        "content_hash": "sha256:3b84a55dbf7b5625cda51dddb428a3c0a1b5f7af788e66db32a421ecc17a64dd",
+        "content_hash": "sha256:4ee0c5e6f81e27bd69fe8b1867c9995f6fc25b4516ea422143bf04d2217b7716",
         "source_hash": "sha256:6c4525ad56830d4bc73894b7fff42cacad74ee08526d166b058614f6d890de2b",
-        "output_hash": "sha256:3b84a55dbf7b5625cda51dddb428a3c0a1b5f7af788e66db32a421ecc17a64dd"
+        "output_hash": "sha256:4ee0c5e6f81e27bd69fe8b1867c9995f6fc25b4516ea422143bf04d2217b7716"
       }
     },
     {
@@ -196,9 +196,9 @@
         "path": "evals/files/case-5",
         "source": "setup.sh",
         "invocation": "bash setup.sh",
-        "content_hash": "sha256:0ffd99414dff0a536905ed6d0502560bce9f81c689acf5881aa86dd5545262c2",
+        "content_hash": "sha256:701cb9c3d05a2049a7ca2b0964d8af3aec95f79371f5b4fd5bc64242c2de5b6e",
         "source_hash": "sha256:84b1bf612f582bfd0c5c2affaf5a7b76b922f5ab76dc759ab17d23d4200699b0",
-        "output_hash": "sha256:0ffd99414dff0a536905ed6d0502560bce9f81c689acf5881aa86dd5545262c2"
+        "output_hash": "sha256:701cb9c3d05a2049a7ca2b0964d8af3aec95f79371f5b4fd5bc64242c2de5b6e"
       }
     }
   ]
