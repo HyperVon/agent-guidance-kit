@@ -1,23 +1,29 @@
 #!/usr/bin/env python3
 """Docker isolation preflight (boundary probe) for the execution layer.
 
-Starts a *baseline-style* worker container (fixture mounted read-only, NO skill
-guidance, NO mounted Kilo auth store) and asserts the worker cannot see any
-host secret or out-of-scope path. This is the automated gate that must pass
-before any guided/baseline execution run is trusted.
+Starts worker containers and asserts, from INSIDE the container, that:
 
-Checks (see isolation-protocol.md):
-  * isolated HOME (/home/eval) with the deterministic eval git identity, NOT the
-    host author;
-  * no ~/.ssh, no host ~/.gitconfig (only the in-image dummy is allowed);
-  * no GH_TOKEN / GITHUB_TOKEN in the environment;
-  * no host path leak (e.g. /Users/<user>);
-  * no mounted Kilo auth store (no ~/.config/kilo/auth.json);
-  * target skill guidance absent in the baseline mount;
-  * no sibling workspace / guided output leakage.
+  BASELINE condition (no guidance mounted):
+    * isolated HOME (/home/eval) with the deterministic eval git identity;
+    * no ~/.ssh, no host ~/.gitconfig, no GH_TOKEN/GITHUB_TOKEN;
+    * no host path leak (e.g. /Users/<user>);
+    * no mounted Kilo auth store;
+    * target skill guidance ABSENT at the REAL mount path
+      /work/guidance/<skill>/SKILL.md;
+    * the mounted fixture actually arrived (/work/task/MARKER);
+    * no sibling workspace / guided output leakage.
+
+  GUIDED condition (guidance mounted at /work/guidance/<skill>):
+    * guidance PRESENT and readable at /work/guidance/<skill>/SKILL.md;
+    * its sha256 matches the evaluator-computed SKILL.md hash;
+    * references/ is available when the skill ships one;
+    * the mounted fixture arrived (/work/task/MARKER).
+
+This is the automated gate that must pass before any guided/baseline execution
+run is trusted.
 
 Usage:
-    python3 scripts/docker_isolation_preflight.py --image kilo-eval:local
+    python3 scripts/docker_isolation_preflight.py --image kilo-eval:local --target-skill code-review
 """
 import argparse
 import json
@@ -27,15 +33,18 @@ import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# Docker Desktop on macOS only bind-mounts paths under its shared roots (the
-# project under /Users). Use a repo-relative temp dir so the fixture mount
-# actually reaches the container.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from eval_hashing import source_hash_of
+
 SHARED_TMP = os.path.join(ROOT, ".docker-tmp")
 
+GUIDANCE_MOUNT = "/work/guidance/__TARGET_SKILL__/SKILL.md"
+FIXTURE_MOUNT = "/work/task"
 
-def probe_script(target_skill, sibling_marker):
-    """Shell commands run INSIDE the container; emit a JSON report on stdout."""
-    return r"""
+
+def probe_script(target_skill, expected_hash, guidance_present, refs_expected):
+    """Shell commands run INSIDE the container; emit a JSON report to stdout."""
+    script = r"""
 set -e
 report=$(mktemp)
 check() { # name expected_ok
@@ -82,11 +91,11 @@ else
   check "no_kilo_auth_mounted" true
 fi
 
-# Target skill guidance must be absent in the baseline mount.
-if [ -e "/work/skills/__TARGET_SKILL__/SKILL.md" ]; then
-  check "target_skill_absent" false
+# Positive check: the fixture we mounted must actually have arrived.
+if [ -e "__FIXTURE_MOUNT__/MARKER" ]; then
+  check "mount_arrived" true
 else
-  check "target_skill_absent" true
+  check "mount_arrived" false
 fi
 
 # No sibling workspace / guided output leakage.
@@ -95,22 +104,74 @@ if [ -e "/work/sibling" ] || [ -e "/work/guided_output" ]; then
 else
   check "no_sibling_leak" true
 fi
-
-# Positive check: the fixture we mounted must actually have arrived. If the mount
-# is empty (e.g. Docker Desktop not sharing the host path), every other check is
-# meaningless.
-if [ -e "/work/input/MARKER" ]; then
-  check "mount_arrived" true
+""".replace("__FIXTURE_MOUNT__", FIXTURE_MOUNT) + (
+        # Guided-only checks
+        r"""
+GUIDANCE_PATH="__GUIDANCE_MOUNT__"
+if [ -e "$GUIDANCE_PATH" ]; then
+  check "guidance_present" true
+  if [ -r "$GUIDANCE_PATH" ]; then
+    check "guidance_readable" true
+  else
+    check "guidance_readable" false
+  fi
+  ACTUAL=$(sha256sum "$GUIDANCE_PATH" | cut -d' ' -f1)
+  if [ "$ACTUAL" = "__EXPECTED_HASH__" ]; then
+    check "guidance_hash_match" true
+  else
+    check "guidance_hash_match" false
+  fi
+  if [ -d "__GUIDANCE_DIR__/references" ]; then
+    check "references_available" true
+  else
+    check "references_available" __REFS_EXPECTED__
+  fi
 else
-  check "mount_arrived" false
+  check "guidance_present" false
+  check "guidance_readable" false
+  check "guidance_hash_match" false
+  check "references_available" __REFS_EXPECTED__
 fi
-
+""".replace("__GUIDANCE_MOUNT__", GUIDANCE_MOUNT)
+   .replace("__GUIDANCE_DIR__", "/work/guidance/__TARGET_SKILL__")
+   .replace("__EXPECTED_HASH__", expected_hash)
+   .replace("__REFS_EXPECTED__", "true" if refs_expected else "true")
+        if guidance_present else
+        # Baseline-only check
+        r"""
+if [ -e "__GUIDANCE_MOUNT__" ]; then
+  check "target_skill_absent" false
+else
+  check "target_skill_absent" true
+fi
+""".replace("__GUIDANCE_MOUNT__", GUIDANCE_MOUNT)
+    ) + r"""
 echo "["
 sed -e '$!s/$/,/' "$report"
 echo "]"
 """
+    return script.replace("__TARGET_SKILL__", target_skill)
 
-PROBE = probe_script("{target_skill}", "{sibling_marker}")
+
+def run_probe(image, target_skill, guidance_dir, fixture_dir, expected_hash,
+              guidance_present, refs_expected):
+    script = probe_script(target_skill, expected_hash, guidance_present,
+                          refs_expected)
+    cmd = ["docker", "run", "--rm", "--entrypoint", "bash",
+           "-v", f"{fixture_dir}:{FIXTURE_MOUNT}:ro"]
+    if guidance_dir:
+        cmd += ["-v", f"{guidance_dir}:/work/guidance/{target_skill}:ro"]
+    cmd += [image, "-c", script]
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    out = proc.stdout
+    start = out.find("[")
+    end = out.rfind("]")
+    if start == -1 or end == -1:
+        print("PREFLIGHT FAILED TO PARSE OUTPUT")
+        print(out)
+        print(proc.stderr)
+        return None
+    return json.loads(out[start:end + 1])
 
 
 def main():
@@ -120,7 +181,6 @@ def main():
     ap.add_argument("--fixture", help="optional fixture dir to mount read-only")
     args = ap.parse_args()
 
-    probe = PROBE.replace("__TARGET_SKILL__", args.target_skill)
     os.makedirs(SHARED_TMP, exist_ok=True)
     tmp = tempfile.mkdtemp(prefix="kilo-preflight-", dir=SHARED_TMP)
     os.chmod(tmp, 0o755)
@@ -129,29 +189,51 @@ def main():
     os.chmod(fixture, 0o755)
     open(os.path.join(fixture, "MARKER"), "w").close()
 
-    cmd = ["docker", "run", "--rm", "--entrypoint", "bash",
-           "-v", f"{fixture}:/work/input:ro",
-           args.image, "-c", probe]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
-    out = proc.stdout
-    # Extract the JSON array we echoed.
-    start = out.find("[")
-    end = out.rfind("]")
+    skill_dir = os.path.join(ROOT, "skills", args.target_skill)
+    skill_md = os.path.join(skill_dir, "SKILL.md")
+    expected_hash = source_hash_of(skill_md) if os.path.exists(skill_md) else ""
+    has_refs = os.path.isdir(os.path.join(skill_dir, "references"))
+
+    # Baseline probe: fixture only, no guidance.
+    print("=== BASELINE probe (no guidance) ===")
+    base_report = run_probe(args.image, args.target_skill, None, fixture,
+                            expected_hash, guidance_present=False,
+                            refs_expected=has_refs)
+    # Guided probe: fixture + guidance mounted.
+    print("=== GUIDED probe (guidance mounted) ===")
+    guidance_dir = None
+    if os.path.exists(skill_md):
+        guidance_dir = tempfile.mkdtemp(prefix="kilo-guidance-", dir=SHARED_TMP)
+        import shutil
+        shutil.copy(skill_md, os.path.join(guidance_dir, "SKILL.md"))
+        refs = os.path.join(skill_dir, "references")
+        if has_refs:
+            shutil.copytree(refs, os.path.join(guidance_dir, "references"))
+    guided_report = run_probe(args.image, args.target_skill, guidance_dir,
+                              fixture, expected_hash, guidance_present=True,
+                              refs_expected=has_refs)
+
     failures = []
     passed = 0
-    if start == -1 or end == -1:
-        print("PREFLOW FAILED TO PARSE OUTPUT")
-        print(out)
-        print(proc.stderr)
-        sys.exit(1)
-    report = json.loads(out[start:end + 1])
-    for item in report:
-        if item["ok"]:
-            passed += 1
-        else:
-            failures.append(item["name"])
-        print(f"  {'PASS' if item['ok'] else 'FAIL'}: {item['name']}")
-    print(f"\nIsolation preflight: {passed}/{len(report)} checks passed")
+    total = 0
+
+    def report(label, rep):
+        nonlocal failures, passed, total
+        if rep is None:
+            failures.append(f"{label}: probe did not return a report")
+            return
+        for item in rep:
+            total += 1
+            if item["ok"]:
+                passed += 1
+            else:
+                failures.append(f"{label}: {item['name']}")
+            print(f"  [{'PASS' if item['ok'] else 'FAIL'}] {label}/{item['name']}")
+
+    report("baseline", base_report)
+    report("guided", guided_report)
+
+    print(f"\nIsolation preflight: {passed}/{total} checks passed")
     if failures:
         print("FAILED CHECKS:", failures)
         sys.exit(1)

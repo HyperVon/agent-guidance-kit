@@ -123,25 +123,37 @@ selected in each condition and lets the validator check it against the case's
 
 For `evaluation_mode: "execution"` the worker runs in **fresh Docker containers**
 (see `isolation-protocol.md` and `Dockerfile.eval`), so the run can be
-`protocol.status: valid` with genuine OS-level isolation. The result-json block
-must then additionally record:
+`protocol.status: valid` with genuine OS-level isolation. The raw runner evidence
+(`scripts/run_execution_eval.py`) is written to
+`.eval-evidence/exec-<skill>-case<id>.json` (gitignored) with top-level
+`"evidence_type": "execution"` and **one repetition per independent seed copy**.
 
-- `runs.guided.container_id` and `runs.baseline.container_id` — the two **distinct**
-  fresh container IDs. They MUST differ; equal IDs means contamination.
-- `protocol.guided_skill_hash` — content hash of the **mounted guidance**
-  (`SKILL.md` + `references/`) the guided worker received, proving which guidance
-  was loaded.
-- `protocol.baseline_guidance_absent` — evidence that the baseline container
-  received **no** target guidance (the runner mounted no guidance dir). This is
-  mandatory: a baseline that can see the target `SKILL.md` body/refs is
-  contaminated and the run is invalid.
-- `runtime.isolation_method` should be `docker` (OS-level), which is what makes
-  `valid` achievable (the `limited` instruction-only wording is NOT sufficient for
-  a valid execution run).
+Each repetition MUST prove:
 
-The local runner (`scripts/run_execution_eval.py`) writes raw evidence to
-`.eval-evidence/exec-<skill>-case<id>.json` (gitignored); the validator checks it
-with `python3 scripts/validate_evaluations.py --check-evidence`.
+- **Independent starting state.** The runner derives one pristine seed, then makes
+  two independent copies (`guided_workspace_id` ≠ `baseline_workspace_id`). It records
+  `starting_fixture_hash` for both and `canonical_seed_hash`; the validator requires
+  `guided.starting_fixture_hash == baseline.starting_fixture_hash == canonical_seed_hash`.
+  The two workers therefore begin from byte-identical state and can never share a
+  mutable fixture.
+- **Distinct execution.** `guided.container_id` ≠ `baseline.container_id` and
+  `guided.session_id` ≠ `baseline.session_id`.
+- **Guidance boundary (probed inside the container).** `guided.guidance_verified` is
+  `true` only if an in-container probe found `/work/guidance/<name>/SKILL.md`;
+  `baseline.guidance_verified_absent` is `true` only if the probe confirmed its
+  *absence*. A bare text claim is not accepted.
+- **Failure is not evidence.** If the Docker/Kilo invocation returned non-zero, the
+  container never started, the model output was empty/unparseable, or no session id
+  was produced, the repetition is `run_status="failed"` and the validator **rejects**
+  the file. `returncode` must be `0` for both workers.
+- **Task-state mutation recorded.** `ending_fixture_hash` plus a filesystem snapshot
+  (`filesystem_snapshot_before/after`) prove what each worker actually changed.
+- `runtime.isolation_method` should be `docker` (OS-level); `limited` instruction-only
+  is NOT sufficient for a valid execution run.
+
+The validator dispatches on `evidence_type` and checks the file with
+`python3 scripts/validate_evaluations.py --check-evidence`; unknown/malformed
+evidence is a hard error, never silently skipped.
 
 ## Required identity
 

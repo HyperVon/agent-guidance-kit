@@ -161,6 +161,53 @@ def source_hash_of(source_path: str) -> str:
     return _sha256_of(open(source_path, "rb").read())
 
 
+def hash_workspace(path: str) -> str:
+    """Deterministic content hash of a (possibly git) workspace.
+
+    Uses the git-aware hasher for git repositories and a plain recursive file
+    hash otherwise. This is what the execution runner uses to prove a guided and
+    a baseline worker started from byte-identical copies and to record the
+    pre/post task-state mutation.
+    """
+    if os.path.isdir(os.path.join(path, ".git")):
+        return _generator_output_hash(path)
+    return committed_hash(path)
+
+
+def materialize_fixture_seed(fixture_dir: str, ftype: str,
+                            source: str = "setup.sh",
+                            invocation: str = "bash setup.sh"):
+    """Produce a pristine, worker-ready seed copy of a fixture.
+
+    * committed  : a byte-identical copy of the fixture directory.
+    * generator  : runs the generator under a sanitized environment (via
+      ``run_generator``) and then STRIPS the generator source files so the worker
+      can never read evaluator-only construction logic (e.g. ``setup.sh`` which
+      may contain the intended defect / answer key).
+
+    Returns ``(seed_dir, hash)`` where ``hash`` is a git-aware content hash of
+    the seed. The returned ``seed_dir`` is a fresh temp dir the caller owns.
+    """
+    sandbox = tempfile.mkdtemp(prefix="eval-seed-")
+    if ftype == "generator":
+        work, _h = run_generator(fixture_dir, source, invocation)
+        try:
+            shutil.copytree(work, sandbox, symlinks=True, dirs_exist_ok=True)
+            # Remove the generator source so it is not worker-visible.
+            gen_names = [n for n in os.listdir(fixture_dir) if n != ".git"]
+            for n in gen_names:
+                p = os.path.join(sandbox, n)
+                if os.path.isdir(p) and not os.path.islink(p):
+                    shutil.rmtree(p, ignore_errors=True)
+                elif os.path.exists(p):
+                    os.remove(p)
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+    else:
+        shutil.copytree(fixture_dir, sandbox, symlinks=True, dirs_exist_ok=True)
+    return sandbox, hash_workspace(sandbox)
+
+
 def canonical_hash(path: str, ftype: str, source: str = "setup.sh",
                    invocation: str = "bash setup.sh") -> str:
     """Return the canonical hash for a fixture directory.

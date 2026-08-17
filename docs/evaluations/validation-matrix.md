@@ -77,8 +77,11 @@ exploratory invalid pilots only).
 
 **Phase 1 (2026-08-16) + follow-up, four pilot skills:** Layer A catalog-routing and
 Layer B Docker execution **infrastructure proven** (single-rep smoke on `code-review`;
-distinct containers, baseline received no guidance, free anonymous model reachable).
-Layer C harness-routing `not_run` (blocked — no harness selection capture in this CLI).
+distinct containers, independent seed copies, baseline received no guidance, free
+anonymous model reachable, runner failure correctly rejected). Layer C harness-routing
+`not_run` (blocked — no harness selection capture in this CLI). Execution evidence is
+validated by `validate_evaluations.py --check-evidence`, which dispatches on an explicit
+`evidence_type` field and rejects unknown/malformed evidence rather than skipping it.
 No graded n≥3 run published yet, so protocol stays `not_run`. The validator rejects
 inflated `valid` claims (verified by negative test). Full efficacy runs require a
 graded n≥3 comparison with quoted evidence; see `phase1-environment.md` §6.

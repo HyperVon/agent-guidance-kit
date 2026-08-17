@@ -547,78 +547,163 @@ def validate_execution_evidence(evidence):
     """Validate a Docker execution-evidence file from run_execution_eval.py.
 
     Local-only check (the .eval-evidence/ dir is gitignored). Confirms the
-    guided/baseline workers were genuinely independent and the baseline received
-    no target guidance. Returns a list of error strings (empty == valid).
+    guided/baseline workers were genuinely independent, started from identical
+    pristine copies, and that a failed run cannot masquerade as valid evidence.
+    Returns a list of error strings (empty == valid).
     """
     errs = []
+    et = evidence.get("evidence_type")
+    if et != "execution":
+        errs.append(f"expected evidence_type 'execution', got {et!r}")
     reps = evidence.get("repetitions") or []
     if not reps:
-        return ["execution evidence has no repetitions"]
+        errs.append("execution evidence has no repetitions")
+        return errs
+    seed = evidence.get("canonical_seed_hash")
     for r in reps:
         tag = f"rep{r.get('rep')}"
         g = r.get("guided") or {}
         b = r.get("baseline") or {}
-        g_cid = g.get("container_id")
-        b_cid = b.get("container_id")
-        if not g_cid or not b_cid:
-            errs.append(f"{tag}: missing container_id(s)")
-        elif g_cid == b_cid:
-            errs.append(f"{tag}: guided and baseline share a container_id (contamination)")
-        if g.get("skill_mounted") is not True:
-            errs.append(f"{tag}: guided worker did not have skill_mounted=true")
-        if b.get("skill_mounted") is not False:
-            errs.append(f"{tag}: baseline worker must have skill_mounted=false (guidance leakage)")
-        if not g.get("skill_hash"):
-            errs.append(f"{tag}: guided missing skill_hash (mounted guidance unverified)")
-        if not g.get("fixture_hash") or g.get("fixture_hash") != b.get("fixture_hash"):
-            errs.append(f"{tag}: guided/baseline fixture_hash mismatch (different fixture)")
-        if not b.get("guidance_absent_proof"):
-            errs.append(f"{tag}: baseline missing guidance_absent_proof")
+
+        # Guided worker requirements.
+        for key in ("container_id", "session_id", "run_status", "returncode",
+                    "skill_hash", "starting_fixture_hash", "ending_fixture_hash",
+                    "guidance_verified"):
+            if key not in g:
+                errs.append(f"{tag} guided: missing {key}")
+        if g.get("run_status") != "success":
+            errs.append(f"{tag} guided: run_status={g.get('run_status')!r} "
+                        f"(failed/invalid evidence)")
+        if g.get("returncode") != 0:
+            errs.append(f"{tag} guided: returncode={g.get('returncode')!r}")
+        if g.get("guidance_verified") is not True:
+            errs.append(f"{tag} guided: guidance_verified != true "
+                        f"(boundary probe did not confirm guidance present)")
+        if not (g.get("output") or "").strip() and not g.get("ending_fixture_hash"):
+            errs.append(f"{tag} guided: no model output and no task-state evidence")
+        if seed and g.get("starting_fixture_hash") != seed:
+            errs.append(f"{tag} guided: starting fixture hash does not match "
+                        f"canonical seed hash")
+
+        # Baseline worker requirements.
+        for key in ("container_id", "session_id", "run_status", "returncode",
+                    "starting_fixture_hash", "ending_fixture_hash",
+                    "guidance_verified_absent"):
+            if key not in b:
+                errs.append(f"{tag} baseline: missing {key}")
+        if b.get("run_status") != "success":
+            errs.append(f"{tag} baseline: run_status={b.get('run_status')!r} "
+                        f"(failed/invalid evidence)")
+        if b.get("returncode") != 0:
+            errs.append(f"{tag} baseline: returncode={b.get('returncode')!r}")
+        if b.get("guidance_verified_absent") is not True:
+            errs.append(f"{tag} baseline: guidance_verified_absent != true "
+                        f"(boundary probe found guidance present)")
+
+        # Cross-condition isolation.
+        if not (g.get("container_id") and b.get("container_id")
+                and g["container_id"] != b["container_id"]):
+            errs.append(f"{tag}: guided/baseline not distinct containers")
+        if not (g.get("session_id") and b.get("session_id")
+                and g["session_id"] != b["session_id"]):
+            errs.append(f"{tag}: guided/baseline not distinct sessions")
+        if g.get("starting_fixture_hash") != b.get("starting_fixture_hash"):
+            errs.append(f"{tag}: guided/baseline starting fixture hashes differ "
+                        f"(not identical seed)")
+        gid = r.get("guided_workspace_id")
+        bid = r.get("baseline_workspace_id")
+        if not gid or not bid or gid == bid:
+            errs.append(f"{tag}: guided/baseline workspace ids not distinct "
+                        f"(shared mutable fixture)")
     return errs
 
 
 def validate_catalog_routing_evidence(evidence):
     """Validate a catalog-routing evidence file from run_catalog_routing_eval.py.
 
-    Confirms both routing conditions (target-present, target-absent) were run and
-    that each repetition captured a structured selected_skill decision. Returns a
-    list of error strings (empty == valid).
+    Confirms both routing conditions (target-present, target-absent) were run,
+    each repetition carries a status, and a FAILED model invocation is never
+    recorded as a successful null-selection pass. Returns a list of error strings
+    (empty == valid).
     """
     errs = []
+    et = evidence.get("evidence_type")
+    if et != "catalog-routing":
+        errs.append(f"expected evidence_type 'catalog-routing', got {et!r}")
     conds = evidence.get("conditions") or {}
     if "target_present" not in conds or "target_absent" not in conds:
-        return ["catalog-routing evidence missing one or both conditions"]
+        errs.append("catalog-routing evidence missing one or both conditions")
+        return errs
+    valid_actions = ("apply", "clarify")
     for name, cond in conds.items():
         reps = cond.get("repetitions") or []
         if not reps:
             errs.append(f"{name}: no repetitions captured")
             continue
         for r in reps:
-            if "selected_skill" not in r:
-                errs.append(f"{name} rep{r.get('rep')}: missing selected_skill")
-            elif not isinstance(r.get("match"), bool):
-                errs.append(f"{name} rep{r.get('rep')}: missing match flag")
+            rep_tag = f"{name} rep{r.get('rep')}"
+            status = r.get("status")
+            if status != "success":
+                # A failed model invocation must NOT be recorded as a pass.
+                if r.get("match") is True:
+                    errs.append(f"{rep_tag}: failed model invocation recorded as "
+                                f"match=True (false pass)")
+                continue
+            decision = r.get("decision") or {}
+            if "selected_skill" not in decision:
+                errs.append(f"{rep_tag}: success but decision missing "
+                            f"'selected_skill'")
+                continue
+            if decision.get("action") not in valid_actions:
+                errs.append(f"{rep_tag}: invalid action {decision.get('action')!r}")
+            sel = decision.get("selected_skill")
+            act = decision.get("action")
+            if sel is None and act == "apply":
+                errs.append(f"{rep_tag}: null selected_skill with action 'apply'")
+            if sel is not None and act == "clarify":
+                errs.append(f"{rep_tag}: non-null selected_skill with 'clarify'")
+            if not isinstance(r.get("match"), bool):
+                errs.append(f"{rep_tag}: match not boolean")
     return errs
 
 
-def check_evidence_dir():
-    """Optional gate for local .eval-evidence/ files (not committed)."""
-    ev_dir = os.path.join(ROOT, ".eval-evidence")
+def check_evidence_dir(ev_dir=None):
+    """Optional gate for local .eval-evidence/ files (not committed).
+
+    Dispatches on the top-level ``evidence_type`` field (filename convention is
+    only a secondary hint). Unknown or malformed evidence is treated as an error
+    so it cannot be silently skipped.
+    """
+    ev_dir = ev_dir or os.path.join(ROOT, ".eval-evidence")
     if not os.path.isdir(ev_dir):
         return
     for f in sorted(glob.glob(os.path.join(ev_dir, "*.json"))):
+        rel = os.path.relpath(f, ROOT)
         try:
             data = json.load(open(f))
         except Exception as e:
-            warn(f"{os.path.relpath(f, ROOT)}: unreadable evidence: {e}")
+            err(f"{rel}: unreadable/malformed evidence: {e}")
             continue
-        rel = os.path.relpath(f, ROOT)
-        if rel.startswith("exec-"):
+        if not isinstance(data, dict):
+            err(f"{rel}: evidence is not a JSON object")
+            continue
+        et = data.get("evidence_type")
+        basename = os.path.basename(f)
+        if et == "execution":
             for e in validate_execution_evidence(data):
                 err(f"{rel}: {e}")
-        elif rel.startswith("catalog-routing-"):
+        elif et == "catalog-routing":
             for e in validate_catalog_routing_evidence(data):
                 err(f"{rel}: {e}")
+        elif basename.startswith("exec-"):
+            # Legacy fallback: trust filename only when type is absent.
+            for e in validate_execution_evidence(data):
+                err(f"{rel}: {e}")
+        elif basename.startswith("catalog-routing-"):
+            for e in validate_catalog_routing_evidence(data):
+                err(f"{rel}: {e}")
+        else:
+            err(f"{rel}: unknown evidence_type {et!r} (not validated)")
 
 
 # --------------------------------------------------------------------------

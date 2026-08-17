@@ -331,63 +331,192 @@ class EvidenceValidationTests(unittest.TestCase):
     def tearDown(self):
         reset()
 
-    def test_execution_evidence_valid(self):
-        ev = {"repetitions": [{
+    def _exec_evidence(self, **over_rep):
+        rep = {
             "rep": 1,
-            "guided": {"container_id": "a", "skill_mounted": True,
-                       "skill_hash": "sha256:x", "fixture_hash": "sha256:f",
-                       "output": "g"},
-            "baseline": {"container_id": "b", "skill_mounted": False,
-                         "guidance_absent_proof": "no mount",
-                         "fixture_hash": "sha256:f", "output": "b"},
-            "distinct_containers": True}]}
-        self.assertEqual(ve.validate_execution_evidence(ev), [])
+            "workspace_path": "/work/task",
+            "canonical_seed_hash": "sha256:seed",
+            "guided_workspace_id": "ws-guided-1",
+            "baseline_workspace_id": "ws-baseline-1",
+            "guided": {
+                "container_id": "cg", "session_id": "sg",
+                "run_status": "success", "returncode": 0,
+                "skill_mounted": True, "skill_hash": "sha256:skill",
+                "guidance_verified": True, "guidance_probe": "present",
+                "starting_fixture_hash": "sha256:f", "ending_fixture_hash": "sha256:g",
+                "output": "guided output", "stderr": ""},
+            "baseline": {
+                "container_id": "cb", "session_id": "sb",
+                "run_status": "success", "returncode": 0,
+                "skill_mounted": False,
+                "guidance_verified_absent": True, "guidance_probe": "absent",
+                "starting_fixture_hash": "sha256:f", "ending_fixture_hash": "sha256:h",
+                "output": "baseline output", "stderr": ""},
+            "distinct_containers": True, "distinct_sessions": True,
+            "starting_fixture_hashes_match": True, "workspace_paths_differ": True,
+        }
+        rep.update(over_rep)
+        return {"evidence_type": "execution", "repetitions": [rep]}
+
+    def _cat_evidence(self, present_reps, absent_reps):
+        return {"evidence_type": "catalog-routing", "conditions": {
+            "target_present": {"repetitions": present_reps},
+            "target_absent": {"repetitions": absent_reps}}}
+
+    def test_execution_evidence_valid(self):
+        self.assertEqual(ve.validate_execution_evidence(self._exec_evidence()), [])
 
     def test_execution_evidence_shared_container_fails(self):
-        ev = {"repetitions": [{
-            "rep": 1,
-            "guided": {"container_id": "a", "skill_mounted": True,
-                       "skill_hash": "sha256:x", "fixture_hash": "sha256:f"},
-            "baseline": {"container_id": "a", "skill_mounted": False,
-                         "guidance_absent_proof": "no mount",
-                         "fixture_hash": "sha256:f"}}]}
-        self.assertTrue(any("container_id" in e
+        ev = self._exec_evidence()
+        ev["repetitions"][0]["guided"]["container_id"] = "cb"
+        self.assertTrue(any("distinct containers" in e
                             for e in ve.validate_execution_evidence(ev)))
 
     def test_execution_evidence_baseline_leak_fails(self):
-        ev = {"repetitions": [{
-            "rep": 1,
-            "guided": {"container_id": "a", "skill_mounted": True,
-                       "skill_hash": "sha256:x", "fixture_hash": "sha256:f"},
-            "baseline": {"container_id": "b", "skill_mounted": True,
-                         "guidance_absent_proof": "no mount",
-                         "fixture_hash": "sha256:f"}}]}
-        self.assertTrue(any("skill_mounted" in e
+        ev = self._exec_evidence()
+        ev["repetitions"][0]["baseline"]["guidance_verified_absent"] = False
+        self.assertTrue(any("guidance_verified_absent" in e
                             for e in ve.validate_execution_evidence(ev)))
 
     def test_execution_evidence_fixture_mismatch_fails(self):
-        ev = {"repetitions": [{
-            "rep": 1,
-            "guided": {"container_id": "a", "skill_mounted": True,
-                       "skill_hash": "sha256:x", "fixture_hash": "sha256:f"},
-            "baseline": {"container_id": "b", "skill_mounted": False,
-                         "guidance_absent_proof": "no mount",
-                         "fixture_hash": "sha256:g"}}]}
-        self.assertTrue(any("fixture_hash" in e
+        ev = self._exec_evidence()
+        ev["repetitions"][0]["baseline"]["starting_fixture_hash"] = "sha256:other"
+        self.assertTrue(any("starting fixture hashes differ" in e
+                            for e in ve.validate_execution_evidence(ev)))
+
+    def test_execution_evidence_failed_run_rejected(self):
+        # Defect 3/9: a failed Docker/Kilo run cannot be valid evidence.
+        ev = self._exec_evidence()
+        ev["repetitions"][0]["guided"]["run_status"] = "failed"
+        ev["repetitions"][0]["guided"]["returncode"] = 1
+        ev["repetitions"][0]["guided"]["guidance_verified"] = False
+        ev["repetitions"][0]["guided"]["output"] = ""
+        self.assertTrue(any("run_status" in e
+                            for e in ve.validate_execution_evidence(ev)))
+
+    def test_execution_evidence_shared_workspace_rejected(self):
+        # Defect 1: guided and baseline must use independent workspace ids.
+        ev = self._exec_evidence()
+        ev["repetitions"][0]["baseline_workspace_id"] = "ws-guided-1"
+        self.assertTrue(any("workspace ids" in e
                             for e in ve.validate_execution_evidence(ev)))
 
     def test_catalog_routing_evidence_valid(self):
-        ev = {"conditions": {
-            "target_present": {"repetitions": [
-                {"rep": 1, "selected_skill": "code-review", "match": True}]},
-            "target_absent": {"repetitions": [
-                {"rep": 1, "selected_skill": None, "match": True}]}}}
+        ev = self._cat_evidence(
+            [{"rep": 1, "status": "success", "decision":
+              {"selected_skill": "code-review", "action": "apply"},
+              "match": True}],
+            [{"rep": 1, "status": "success", "decision":
+              {"selected_skill": None, "action": "clarify"}, "match": True}])
         self.assertEqual(ve.validate_catalog_routing_evidence(ev), [])
 
     def test_catalog_routing_evidence_missing_condition(self):
-        ev = {"conditions": {"target_present": {"repetitions": []}}}
+        ev = {"evidence_type": "catalog-routing",
+              "conditions": {"target_present": {"repetitions": []}}}
         self.assertTrue(any("missing" in e
                             for e in ve.validate_catalog_routing_evidence(ev)))
+
+    def test_catalog_failed_model_cannot_pass(self):
+        # Defect 5/14B: a failed model invocation must NOT be a null-selection pass.
+        ev = self._cat_evidence(
+            [{"rep": 1, "status": "success", "decision":
+              {"selected_skill": "code-review", "action": "apply"}, "match": True}],
+            # Model failed but someone marked match=True -> must be flagged.
+            [{"rep": 1, "status": "failed", "error": "kilo exited 1",
+              "decision": None, "match": True}])
+        self.assertTrue(any("false pass" in e
+                            for e in ve.validate_catalog_routing_evidence(ev)))
+
+    def test_catalog_failed_model_recorded_as_failure(self):
+        # The legitimate representation of a failure: status failed, match False.
+        ev = self._cat_evidence(
+            [{"rep": 1, "status": "success", "decision":
+              {"selected_skill": "code-review", "action": "apply"}, "match": True}],
+            [{"rep": 1, "status": "failed", "error": "no parseable decision",
+              "decision": None, "match": False}])
+        self.assertEqual(ve.validate_catalog_routing_evidence(ev), [])
+
+    def test_catalog_invalid_decision_rejected(self):
+        # null selection with action apply is invalid.
+        ev = self._cat_evidence(
+            [{"rep": 1, "status": "success", "decision":
+              {"selected_skill": None, "action": "apply"}, "match": False}],
+            [{"rep": 1, "status": "success", "decision":
+              {"selected_skill": None, "action": "clarify"}, "match": True}])
+        self.assertTrue(any("action 'apply'" in e
+                            for e in ve.validate_catalog_routing_evidence(ev)))
+
+
+class EvidenceDirDispatchTests(unittest.TestCase):
+    """Defect 4 / 14A / 14G: --check-evidence must really inspect files and must
+    not silently skip unknown or malformed evidence."""
+
+    def tearDown(self):
+        reset()
+
+    def _run_check(self, files):
+        d = tempfile.mkdtemp()
+        try:
+            for name, content in files.items():
+                open(os.path.join(d, name), "w").write(content)
+            ve.check_evidence_dir(d)
+            return list(ve.errors)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+            ve.EVALS_DIR = os.path.join(ROOT, "docs", "evaluations")
+
+    def test_malformed_exec_evidence_fails(self):
+        # A malformed execution evidence file must cause validator failure.
+        errs = self._run_check({
+            "exec-bad.json": '{"evidence_type":"execution", "repetitions":[{"rep":1,'
+                             '"guided":{"container_id":"g"},'
+                             '"baseline":{"container_id":"g"}}]}'})
+        self.assertTrue(any("distinct containers" in e for e in errs),
+                        f"expected distinct-container failure, got {errs}")
+
+    def test_unknown_evidence_type_rejected(self):
+        errs = self._run_check({
+            "weird.json": '{"evidence_type":"mystery","repetitions":[]}'})
+        self.assertTrue(any("unknown evidence_type" in e for e in errs),
+                        f"expected unknown-type error, got {errs}")
+
+    def test_catalog_evidence_validated_via_dispatch(self):
+        good = {"evidence_type": "catalog-routing", "conditions": {
+            "target_present": {"repetitions": [
+                {"rep": 1, "status": "success", "decision":
+                 {"selected_skill": "code-review", "action": "apply"},
+                 "match": True}]},
+            "target_absent": {"repetitions": [
+                {"rep": 1, "status": "success", "decision":
+                 {"selected_skill": None, "action": "clarify"}, "match": True}]}}}
+        errs = self._run_check({"catalog-routing-x.json": json.dumps(good)})
+        self.assertEqual(errs, [], errs)
+
+
+class GeneratorSeedTests(unittest.TestCase):
+    """Defect 2 / 14E: generator source must never be worker-visible."""
+
+    def tearDown(self):
+        reset()
+
+    def test_generator_seed_excludes_source(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            gendir = os.path.join(tmp, "gen")
+            os.makedirs(gendir)
+            open(os.path.join(gendir, "setup.sh"), "w").write(
+                "#!/usr/bin/env bash\nset -e\n"
+                "echo '# answer key: the defect is in auth.py' > LEAK.txt\n")
+            seed, h = eh.materialize_fixture_seed(gendir, "generator",
+                                                  "setup.sh", "bash setup.sh")
+            self.assertFalse(os.path.exists(os.path.join(seed, "setup.sh")),
+                             "generator source leaked into worker seed")
+            self.assertTrue(os.path.exists(os.path.join(seed, "LEAK.txt")),
+                            "generated task state missing from seed")
+            self.assertTrue(h)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
 
 
 class GeneratorTests(unittest.TestCase):

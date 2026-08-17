@@ -17,8 +17,12 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git bash coreutils ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install the Kilo CLI (Linux build) globally.
-RUN npm install -g @kilocode/cli
+# Install the Kilo CLI (Linux build) globally. Pin the exact version so that
+# rebuilding the same eval source later never silently changes the worker runtime.
+# This version must be kept in sync with the tested host Kilo (record it in the
+# evidence). Bump it only as an explicit evaluation-runtime revision.
+ARG KILO_CLI_VERSION=7.4.22
+RUN npm install -g @kilocode/cli@${KILO_CLI_VERSION}
 
 # Non-root eval user with an isolated HOME and a deterministic git identity.
 RUN useradd --create-home --home-dir /home/eval eval

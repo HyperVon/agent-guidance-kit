@@ -119,33 +119,57 @@ selected skill, not a worker's self-report.
 
 Goal: measure the skill's marginal value once it is legitimately active.
 
-1. Run **two fresh Docker containers** from a reusable image (`Dockerfile.eval`,
-   built as `kilo-eval:local`) — one guided, one baseline (see
-   `isolation-protocol.md` and `scripts/run_execution_eval.py`). The guided worker
-   receives the target **guidance only** (`SKILL.md` + `references/`) mounted
-   read-only at `/work/guidance/<name>`. **Never mount the whole skill directory**:
-   doing so leaks the `evals/` fixture snapshot (including the expected output)
-   into the guided worker. The baseline worker receives the **same task fixture
-   and the same natural task, but no guidance mount at all** — it must not see the
-   target `SKILL.md` body, its `references/`, or even the skill's name in a
-   guidance path.
+ 1. Run **two fresh Docker containers** from a reusable image (`Dockerfile.eval`,
+    built as `kilo-eval:local`) — one guided, one baseline (see
+    `isolation-protocol.md` and `scripts/run_execution_eval.py`). For each
+    repetition the runner derives **one pristine seed** from the fixture, then makes
+    **two independent copies** (guided workspace, baseline workspace) and verifies
+    both copies hash-identically *before* the run. The guided worker receives the
+    target **guidance only** (`SKILL.md` + `references/`) mounted read-only at
+    `/work/guidance/<name>`; the baseline worker mounts **no guidance** and is never
+    told the skill's name. **Never mount the whole skill directory**: doing so leaks
+    the `evals/` fixture snapshot (including the expected output) into the guided
+    worker. The task workspace is mounted once, read-write, at `/work/task` (the
+    worker's cwd); it is a *separate* copy per condition, so the guided worker can
+    never mutate the baseline's state and vice-versa.
+    - **Generator fixtures are evaluator-only.** The generator (`setup.sh`) is run
+      under a sanitized environment (`eval_hashing.run_generator`) and its source is
+      then **stripped** from the seed the worker sees. The worker must never read
+      the generator source / answer key.
  2. Use the free model through **anonymous Kilo Gateway access** (e.g.
     `kilo/tencent/hy3:free`); no API key or host auth is mounted into the
-    container. `kilo run` inside the container needs `--auto` to actually perform
-    the task rather than auto-rejecting tools.
+    container. `kilo run` inside the container needs `--auto` (permission
+    auto-approval) to actually perform the task rather than auto-rejecting tools.
     - The model is **pinned**, not auto-routed: `--auto` is only permission
       auto-approval; model selection is fixed by `--model`. Both the guided and
       baseline workers use the identical model so the comparison is fair.
-    - The free-model catalog changes over time. The pinned id is the single
-      constant `DEFAULT_MODEL` in `run_execution_eval.py` /
-      `run_catalog_routing_eval.py`; update it there (and the `:free` suffix is
-      enforced by a `require_free_model` guard) when the current free model is
-      retired. Never run the eval on a paid/account-bound model.
-3. Keep model, harness, reasoning effort, tools, network, and output location
-   equivalent between the two fresh containers. Record both container IDs; they
-   MUST differ (a shared container means the conditions were not independent).
-4. Clearly label this suite **execution / post-activation**. Its results are
-   not evidence about routing.
+    - **Free-model restriction is a cost-safety gate, not a scientific
+      requirement.** The `require_free_model` guard refuses a non-`:free` model
+      unless `--allow-paid-model` is passed. A paid model is methodologically valid
+      as long as guided and baseline use the identical resolved model/runtime; the
+      guard only prevents accidental spend. The free-model catalog changes over
+      time — update `DEFAULT_MODEL` in `run_execution_eval.py` /
+      `run_catalog_routing_eval.py` when the current free model is retired.
+    - **The Kilo CLI version is pinned** in `Dockerfile.eval`
+      (`ARG KILO_CLI_VERSION`); rebuilding the eval source never silently changes
+      the worker runtime. The runner records `kilo --version`, the image id/digest,
+      and node version in the evidence.
+ 3. Keep model, harness, reasoning effort, tools, network, and output location
+    equivalent between the two fresh containers. Record both container IDs and
+    session IDs; they MUST differ (a shared container means the conditions were not
+    independent). The runner records, per repetition, the starting and ending
+    fixture hashes and a filesystem snapshot (git diff / file listing) so the
+    evidence proves both workers started from an identical seed and shows what each
+    actually changed.
+ 4. **A failed run is not evidence.** If a Docker/Kilo invocation returns non-zero,
+    the container never starts, the model output is unparseable/empty, or no session
+    id is produced, the repetition is marked `run_status="failed"` and the validator
+    **rejects** the whole evidence file. A broken, contaminated, or failed run can
+    never masquerade as trustworthy evidence. A boundary probe inside the container
+    confirms guidance presence (guided) / absence (baseline) at the real
+    `/work/guidance/<name>/SKILL.md` path.
+ 5. Clearly label this suite **execution / post-activation**. Its results are
+    not evidence about routing.
 
 **Optional placebo control.** Run a third condition with **irrelevant but
 similarly sized guidance** (a different skill that does not apply to the task).
@@ -396,14 +420,17 @@ For a protocol-valid run today:
    `content_hash`); otherwise mark `designed_only`.
 2. **Routing cases:** prefer Layer A catalog-routing (portable, model-as-classifier);
    use Layer C harness-routing when the harness exposes selection evidence.
-3. **Execution cases:** two fresh Docker containers (guided gets guidance-only mount
-   at `/work/guidance/<name>`; baseline gets none), anonymous free model, `--auto`
-   so the worker executes, distinct container IDs recorded.
-4. Neutral names; no condition labels; run `scripts/docker_isolation_preflight.py`
-   before scoring (must pass all 9 boundary checks).
-5. Fresh containers; equivalent settings; at least 3 repetitions for any confirmed
-   efficacy claim.
-6. Grade with quoted evidence; record full result schema; retain raw evidence in
-   the ignored `.eval-evidence/` dir; validate with
-   `python3 scripts/validate_evaluations.py --check-evidence`.
-7. Resolve all contradictions with `SKILL.md` and `isolation-protocol.md`.
+ 3. **Execution cases:** two fresh Docker containers from **independent seed copies**
+    (guided gets guidance-only mount at `/work/guidance/<name>`; baseline gets none),
+    anonymous free model, `--auto` so the worker executes, distinct container/session
+    IDs, and per-rep starting/ending fixture hashes recorded.
+ 4. Neutral names; no condition labels; run `scripts/docker_isolation_preflight.py`
+    before scoring (must pass all 23 boundary checks, including the real
+    `/work/guidance/<name>/SKILL.md` presence/absence probes).
+ 5. Fresh containers; equivalent settings; at least 3 repetitions for any confirmed
+    efficacy claim.
+ 6. A repetition whose Docker/Kilo run failed is recorded `run_status="failed"` and
+    the validator rejects the evidence — never silently accepted. Grade with quoted
+    evidence; retain raw evidence in the ignored `.eval-evidence/` dir; validate with
+    `python3 scripts/validate_evaluations.py --check-evidence`.
+ 7. Resolve all contradictions with `SKILL.md` and `isolation-protocol.md`.

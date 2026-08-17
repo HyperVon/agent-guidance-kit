@@ -119,15 +119,31 @@ pilots):
   `/work/guidance/code-review`; baseline mounts **nothing**. Smoke on case 5:
   distinct container IDs confirmed; guided applied the skill (4184 chars) vs
   baseline refusal (835 chars).
-- **Boundary probe green.** `scripts/docker_isolation_preflight.py` passes all 9
-  checks (isolated home, deterministic git identity, no ssh/token/host-config host
-  path leak, no Kilo auth mount, target-skill absent in baseline, no sibling leak).
-- **Model access is anonymous + free + pinned.** The model `kilo/tencent/hy3:free`
-  is reached through Kilo Gateway with no API key mounted; absence of
-  `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` does **not** mean no provider. The model is
-  **pinned** (not auto-routed) so guided and baseline workers share identical
-  inference; `--auto` is only permission auto-approval. The free-model catalog
-  changes over time — update `DEFAULT_MODEL` in the runners when it is retired.
+ - **Boundary probe green.** `scripts/docker_isolation_preflight.py` passes all 23
+   checks (isolated home, deterministic git identity, no ssh/token/host-config host
+   path leak, no Kilo auth mount, **target-skill guidance absent in baseline AND present,
+   readable, hash-matched, with references in the guided mount** at the real
+   `/work/guidance/<name>/SKILL.md` path).
+ - **Model access is anonymous + free + pinned (cost gate, not a methodology rule).** The
+   model `kilo/tencent/hy3:free` is reached through Kilo Gateway with no API key mounted;
+   absence of `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` does **not** mean no provider. The model
+   is **pinned** (not auto-routed) so guided and baseline workers share identical
+   inference; `--auto` is only permission auto-approval. The free-model restriction is a
+   **cost-safety gate** (`require_free_model` refuses a non-`:free` model unless
+   `--allow-paid-model`); a paid model is methodologically valid if both workers use the
+   identical resolved model. The free-model catalog changes over time — update
+   `DEFAULT_MODEL` in the runners when it is retired. The **Kilo CLI version is pinned** in
+   `Dockerfile.eval` (`ARG KILO_CLI_VERSION`) and recorded in the evidence.
+ - **Runner hardening (shared-fixture / contamination fixes).** Each repetition now uses
+   **two independent copies of one pristine seed** (`/work/task` per condition) so the
+   guided worker can never mutate the baseline's state; both starting hashes are recorded
+   and must match. Generator source (`setup.sh` / answer key) is run in a sanitized
+   environment and **stripped** from the worker seed. A failed Docker/Kilo run is recorded
+   `run_status="failed"` and the validator **rejects** the evidence. `--check-evidence`
+   dispatches on an explicit `evidence_type` field, so unknown/malformed evidence is a hard
+   error, never silently skipped. Catalog-routing distinguishes a *failed model invocation*
+   from a *valid null-selection* (`status` vs `decision`), so a model failure can no longer
+   masquerade as a "clarify / target-absent" pass.
 
 These prove the *infrastructure* is sound. What remains before any published
 efficacy claim: n≥3 repetitions per condition, an irrelevant-guidance placebo,
