@@ -1,7 +1,10 @@
 # Skill evaluation summary
 
-> **Status: case sets designed; methodology corrected; no protocol-valid runs
-> exist yet.**
+> **Status: case sets designed; methodology corrected; evaluation *infrastructure*
+> is now proven end-to-end on the 4 pilot skills (Docker execution layer + portable
+> catalog-routing layer). No *full published efficacy* run (n≥3, graded assertions,
+> committed result file) exists yet, and harness-integrated routing (Layer C) is
+> still blocked where the harness cannot expose the selected skill.**
 
 This repository has evaluation case sets for every one of the 26 skills at
 `skills/<name>/evals/evals.json` (130 cases total), following the schema in
@@ -55,18 +58,21 @@ The methodology has been corrected and is documented in:
 
 ## What has NOT been done (and must not be claimed)
 
-- **No routing evaluation exists.** All prior runs force-injected the target
-  skill, so harness routing was never measured. Routing cells in the matrix are
-  `not_run`.
-- **No protocol-valid execution run exists.** The four pilots are `invalid`
-  (force-injection + instruction-only containment + condition-labeled prompts).
-  They are historical/exploratory, not validated proof.
+- **No full published efficacy run exists yet.** The 4 pilots' infrastructure is
+  proven (see below), but the historical result files remain `protocol_status:
+  invalid` / `decision: exploratory` and have not been replaced by graded,
+  committed runs with quoted evidence.
+- **No harness-integrated routing (Layer C) evaluation exists.** All routing to
+  date is Layer A catalog-routing (portable model-as-classifier). Where the harness
+  cannot expose the selected skill as evidence, Layer C is `not_run`.
 - **Fixtures frozen for only 4/26 skills** (the pilots). The other 22 remain
   `designed_only`; their cases are not executable until fixtures are frozen.
-- **No repetitions / placebo.** Each pilot was a single run; no n≥3 repeats, no
-  irrelevant-guidance placebo.
-- **No OS-level isolation** was available in this CLI; runs here must be labeled
-  `protocol_status: limited` even when rerun.
+- **No repetitions / placebo yet** for a published efficacy claim. Each smoke was a
+  single run; n≥3 repeats and an irrelevant-guidance placebo are still required
+  before any efficacy conclusion.
+- **No OS-level isolation on the host** — that is why Layer B runs in Docker
+  (`Dockerfile.eval` → `kilo-eval:local`), not on the macOS host. Host runs would
+  still have to be labeled `protocol_status: limited`.
 
 ## Phase 1 reassessment (2026-08-16)
 
@@ -80,19 +86,52 @@ The corrected pipeline was exercised against the four pilot skills
   26 skills; each `--target-absent <skill>` = 25, dropping only the named target),
   `validate_evaluations.py` (0 errors / 0 warnings), and `test_validate_evaluations.py`
   (29 tests pass).
-- **What could NOT run:** a protocol-valid **routing** or **execution** run. This
-  environment (Kilo/CLI on a macOS laptop) is the harness itself, so it cannot capture
-  routing selection as harness evidence (no loaded-skill manifest / routing log / named
-  tool-call), and it cannot create or verify independent OS-contained worker contexts
-  (no container; host `~/.gitconfig` leaks the evaluator's personal `user.name` /
-  `user.email`; a live `gh`
-  token is present). Per `RUNBOOK.md` §3/§5 both are recorded `not_run` (blocked).
+- **What could NOT run at the time (host-only):** a protocol-valid run *on the
+  macOS host* — Kilo/CLI on a laptop is the harness itself, so it cannot capture
+  routing selection as harness evidence, and it cannot create independent OS-contained
+  worker contexts (no container; host `~/.gitconfig` leaks the evaluator's personal
+  `user.name` / `user.email`; a live `gh` token is present). Per `RUNBOOK.md` §3/§5
+  host runs were recorded `not_run` (blocked). **This constraint is now bypassed for
+  Layer B by running the workers inside Docker** (see follow-up below).
 - **No evidence invented; no historical pilot reused.** The four exploratory pilots
   stay `protocol_status: invalid`.
 - **Gate enforcement proven:** a temporary result claiming `valid` + `both_pass` with
   `instruction-only` isolation was rejected by `validate_evaluations.py` (then removed).
   This confirms the pipeline blocks the weakening the rules forbid.
-- **Repeats:** 0. **Protocol status:** `not_run` for all four pilot skills.
+- **Repeats:** 0 at the time. **Protocol status:** `not_run` for host runs.
+
+## Infrastructure proven (2026-08-16, follow-up)
+
+The corrected pipeline was taken past "schema green" to a working three-layer
+runner, proven on the `code-review` pilot (fixtures already frozen for all 4
+pilots):
+
+- **Layer A — catalog-routing (portable, harness-independent).** `scripts/run_catalog_routing_eval.py`
+  issues a fresh model call per repetition over a generated neutral catalog and
+  captures a structured `{"selected_skill": ...}` decision. Smoke on case 1:
+  target-present selected `code-review` 3/3; target-absent returned `null`/clarify
+  (real behavior; the catalog otherwise had no plain code-review owner).
+- **Layer B — Docker execution-efficacy.** `Dockerfile.eval` builds `kilo-eval:local`
+  (Node 22, `@kilocode/cli`, deterministic eval git identity, **no** host
+  `~/.gitconfig`/`~/.ssh`/tokens, **no** mounted Kilo auth). `scripts/run_execution_eval.py`
+  runs two **fresh containers** per repetition: guided mounts *guidance only*
+  (`SKILL.md` + `references/`, never the `evals/` fixture snapshot) at
+  `/work/guidance/code-review`; baseline mounts **nothing**. Smoke on case 5:
+  distinct container IDs confirmed; guided applied the skill (4184 chars) vs
+  baseline refusal (835 chars).
+- **Boundary probe green.** `scripts/docker_isolation_preflight.py` passes all 9
+  checks (isolated home, deterministic git identity, no ssh/token/host-config host
+  path leak, no Kilo auth mount, target-skill absent in baseline, no sibling leak).
+- **Model access is anonymous + free + pinned.** The model `kilo/tencent/hy3:free`
+  is reached through Kilo Gateway with no API key mounted; absence of
+  `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` does **not** mean no provider. The model is
+  **pinned** (not auto-routed) so guided and baseline workers share identical
+  inference; `--auto` is only permission auto-approval. The free-model catalog
+  changes over time — update `DEFAULT_MODEL` in the runners when it is retired.
+
+These prove the *infrastructure* is sound. What remains before any published
+efficacy claim: n≥3 repetitions per condition, an irrelevant-guidance placebo,
+frozen-assertion grading with quoted evidence, and committed result files.
 
 ## Case-set audit
 

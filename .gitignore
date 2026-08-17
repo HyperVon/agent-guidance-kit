@@ -23,3 +23,7 @@ dist/
 # Local evaluation run-evidence (raw worker outputs/logs kept out of git;
 # sanitized summaries are committed under docs/evaluations/results/)
 .eval-evidence/
+
+# Docker-mounted temp dirs (materialized fixtures/guidance) — must live under the
+# repo so Docker Desktop on macOS can bind-mount them; never committed.
+.docker-tmp/

@@ -109,20 +109,48 @@ selected in each condition and lets the validator check it against the case's
 }
 ```
 
-- `runs.guided.selected_skill` — the skill the harness selected in the
-  target-present condition (must be present; null is only valid when the
-  expectation allows it via `allowed_fallbacks`).
-- `runs.baseline.selected_skill` — the skill selected in the target-absent
-  condition; `null` means the harness declined to select the (absent) target,
-  which is the expected baseline outcome.
-- The validator compares each captured selection to the case's
-  `routing.target_present` / `routing.target_absent` expectation and fails the
-  case when the `verdict` booleans disagree with the captured selection.
+  - `runs.guided.selected_skill` — the skill the harness selected in the
+    target-present condition (must be present; null is only valid when the
+    expectation allows it via `allowed_fallbacks`).
+  - `runs.baseline.selected_skill` — the skill selected in the target-absent
+    condition; `null` means the harness declined to select the (absent) target,
+    which is the expected baseline outcome.
+  - The validator compares each captured selection to the case's
+    `routing.target_present` / `routing.target_absent` expectation and fails the
+    case when the `verdict` booleans disagree with the captured selection.
+
+## Docker execution evidence (Layer B)
+
+For `evaluation_mode: "execution"` the worker runs in **fresh Docker containers**
+(see `isolation-protocol.md` and `Dockerfile.eval`), so the run can be
+`protocol.status: valid` with genuine OS-level isolation. The result-json block
+must then additionally record:
+
+- `runs.guided.container_id` and `runs.baseline.container_id` — the two **distinct**
+  fresh container IDs. They MUST differ; equal IDs means contamination.
+- `protocol.guided_skill_hash` — content hash of the **mounted guidance**
+  (`SKILL.md` + `references/`) the guided worker received, proving which guidance
+  was loaded.
+- `protocol.baseline_guidance_absent` — evidence that the baseline container
+  received **no** target guidance (the runner mounted no guidance dir). This is
+  mandatory: a baseline that can see the target `SKILL.md` body/refs is
+  contaminated and the run is invalid.
+- `runtime.isolation_method` should be `docker` (OS-level), which is what makes
+  `valid` achievable (the `limited` instruction-only wording is NOT sufficient for
+  a valid execution run).
+
+The local runner (`scripts/run_execution_eval.py`) writes raw evidence to
+`.eval-evidence/exec-<skill>-case<id>.json` (gitignored); the validator checks it
+with `python3 scripts/validate_evaluations.py --check-evidence`.
 
 ## Required identity
 
 - `skill` — must match a discovered `evals.json` `skill_name`.
-- `evaluation_mode` — `routing` or `execution`.
+- `evaluation_mode` — one of the three-layer modes (see RUNBOOK §2):
+  `routing` (legacy/harness), `catalog-routing` (Layer A: portable
+  model-as-classifier over a neutral catalog), `harness-routing` (Layer C:
+  optional harness-integration routing), or `execution` (Layer B: Docker-isolated
+  guided vs baseline efficacy).
 - `method` — `harness-routing`, `harness-injection`, or
   `prompt-injection-approximation`.
 - `case_revision` — commit/content hash of the `evals.json` used.

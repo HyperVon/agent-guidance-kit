@@ -102,6 +102,14 @@ class SchemaFailureTests(unittest.TestCase):
         ve.check_case(fake_path(), "x/evals.json", c)
         self.assertTrue(any("missing 'routing' expectation" in e for e in ve.errors))
 
+    def test_catalog_routing_mode_accepted_in_case(self):
+        # Layer A catalog-routing must be a valid evaluation_mode.
+        c = base_case(1, "matching", ["catalog-routing"],
+                      routing_context=routing_ctx(),
+                      routing=routing_exp())
+        ve.check_case(fake_path(), "x/evals.json", c)
+        self.assertFalse(any("bad evaluation_modes" in e for e in ve.errors))
+
     def test_execution_no_assertions(self):
         c = base_case(5, "edge", ["execution"],
                       execution={"expected_output": "out", "assertions": []})
@@ -127,10 +135,11 @@ class ResultFailureTests(unittest.TestCase):
                         "isolation_method": "instruction-only (limited)"},
             "protocol": {"status": "limited", "worker_isolation_verified": True,
                          "target_loaded_in_guided": "ev", "target_absent_in_baseline": "ev",
+                         "guided_skill_hash": "sha256:g", "baseline_guidance_absent": "ev",
                          "contamination": "none", "routing_mechanism": None},
-            "runs": {"guided": {"session_id": "g1", "output_hash": "h",
+            "runs": {"guided": {"session_id": "g1", "container_id": "cg1", "output_hash": "h",
                                 "selected_skill": "code-review"},
-                     "baseline": {"session_id": "b1", "output_hash": "h"}},
+                     "baseline": {"session_id": "b1", "container_id": "cb1", "output_hash": "h"}},
             "cases": [{
                 "case_id": 1,
                 "outcome": {"category": "skill_only_pass",
@@ -261,6 +270,124 @@ class ResultFailureTests(unittest.TestCase):
         res["protocol"]["status"] = "valid"
         ve.check_one_result("r.md", res, {"code-review"}, {})
         self.assertTrue(any("OS-level isolation" in e for e in ve.errors))
+
+    # --- new Docker execution evidence checks (mode == execution) ---
+    def test_execution_shared_container_id_fails(self):
+        res = self._result()
+        res["runs"]["guided"]["container_id"] = "cb1"  # same as baseline
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("share a container_id" in e for e in ve.errors))
+
+    def test_execution_missing_skill_hash_fails(self):
+        res = self._result()
+        res["protocol"].pop("guided_skill_hash")
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("guided_skill_hash" in e for e in ve.errors))
+
+    def test_execution_missing_baseline_absence_proof_fails(self):
+        res = self._result()
+        res["protocol"].pop("baseline_guidance_absent")
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("baseline_guidance_absent" in e for e in ve.errors))
+
+    # --- catalog-routing / harness-routing modes (Layer A / Layer C) ---
+    def _routing_mode_result(self, mode):
+        res = self._result(
+            mode=mode,
+            protocol={"status": "limited", "worker_isolation_verified": True,
+                      "routing_mechanism": "harness-selection-log",
+                      "target_loaded_in_guided": None,
+                      "target_absent_in_baseline": None,
+                      "guided_skill_hash": None, "baseline_guidance_absent": None,
+                      "contamination": "none"},
+            runs={"guided": {"session_id": "g1", "container_id": "cg1",
+                             "output_hash": "h", "selected_skill": "code-review"},
+                  "baseline": {"session_id": "b1", "container_id": "cb1",
+                               "output_hash": "h", "selected_skill": None}},
+            cases=[{
+                "case_id": 1,
+                "outcome": {"category": "both_pass",
+                            "measurement_status": "discriminating",
+                            "protocol_status": "limited"},
+                "verdict": {"guided_pass": True, "baseline_pass": True},
+                "runs": {"guided": {"selected_skill": "code-review"},
+                         "baseline": {"selected_skill": None}},
+                "assertions": [],
+            }])
+        return res
+
+    def test_catalog_routing_mode_accepted(self):
+        res = self._routing_mode_result("catalog-routing")
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertEqual(ve.errors, [], ve.errors)
+
+    def test_harness_routing_mode_accepted(self):
+        res = self._routing_mode_result("harness-routing")
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertEqual(ve.errors, [], ve.errors)
+
+
+class EvidenceValidationTests(unittest.TestCase):
+    def tearDown(self):
+        reset()
+
+    def test_execution_evidence_valid(self):
+        ev = {"repetitions": [{
+            "rep": 1,
+            "guided": {"container_id": "a", "skill_mounted": True,
+                       "skill_hash": "sha256:x", "fixture_hash": "sha256:f",
+                       "output": "g"},
+            "baseline": {"container_id": "b", "skill_mounted": False,
+                         "guidance_absent_proof": "no mount",
+                         "fixture_hash": "sha256:f", "output": "b"},
+            "distinct_containers": True}]}
+        self.assertEqual(ve.validate_execution_evidence(ev), [])
+
+    def test_execution_evidence_shared_container_fails(self):
+        ev = {"repetitions": [{
+            "rep": 1,
+            "guided": {"container_id": "a", "skill_mounted": True,
+                       "skill_hash": "sha256:x", "fixture_hash": "sha256:f"},
+            "baseline": {"container_id": "a", "skill_mounted": False,
+                         "guidance_absent_proof": "no mount",
+                         "fixture_hash": "sha256:f"}}]}
+        self.assertTrue(any("container_id" in e
+                            for e in ve.validate_execution_evidence(ev)))
+
+    def test_execution_evidence_baseline_leak_fails(self):
+        ev = {"repetitions": [{
+            "rep": 1,
+            "guided": {"container_id": "a", "skill_mounted": True,
+                       "skill_hash": "sha256:x", "fixture_hash": "sha256:f"},
+            "baseline": {"container_id": "b", "skill_mounted": True,
+                         "guidance_absent_proof": "no mount",
+                         "fixture_hash": "sha256:f"}}]}
+        self.assertTrue(any("skill_mounted" in e
+                            for e in ve.validate_execution_evidence(ev)))
+
+    def test_execution_evidence_fixture_mismatch_fails(self):
+        ev = {"repetitions": [{
+            "rep": 1,
+            "guided": {"container_id": "a", "skill_mounted": True,
+                       "skill_hash": "sha256:x", "fixture_hash": "sha256:f"},
+            "baseline": {"container_id": "b", "skill_mounted": False,
+                         "guidance_absent_proof": "no mount",
+                         "fixture_hash": "sha256:g"}}]}
+        self.assertTrue(any("fixture_hash" in e
+                            for e in ve.validate_execution_evidence(ev)))
+
+    def test_catalog_routing_evidence_valid(self):
+        ev = {"conditions": {
+            "target_present": {"repetitions": [
+                {"rep": 1, "selected_skill": "code-review", "match": True}]},
+            "target_absent": {"repetitions": [
+                {"rep": 1, "selected_skill": None, "match": True}]}}}
+        self.assertEqual(ve.validate_catalog_routing_evidence(ev), [])
+
+    def test_catalog_routing_evidence_missing_condition(self):
+        ev = {"conditions": {"target_present": {"repetitions": []}}}
+        self.assertTrue(any("missing" in e
+                            for e in ve.validate_catalog_routing_evidence(ev)))
 
 
 class GeneratorTests(unittest.TestCase):

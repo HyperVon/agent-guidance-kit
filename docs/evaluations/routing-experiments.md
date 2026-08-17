@@ -2,7 +2,11 @@
 
 The corrected methodology distinguishes three experiments. They have different
 baselines and answer different questions; do not collapse them all into a single
-"WITH-SKILL vs BASELINE" comparison.
+"WITH-SKILL vs BASELINE" comparison. The routing-availability experiment (A) has a
+**portable form** — Layer A catalog-routing — that runs as a fresh model call over a
+generated neutral catalog and needs no harness (see `scripts/run_catalog_routing_eval.py`).
+The harness-integrated form (Layer C) requires the harness to expose the selected skill
+as evidence.
 
 ## A. Routing availability experiment
 
