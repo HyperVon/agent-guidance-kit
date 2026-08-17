@@ -560,8 +560,24 @@ def validate_execution_evidence(evidence):
         errs.append("execution evidence has no repetitions")
         return errs
     seed = evidence.get("canonical_seed_hash")
+    expected = evidence.get("expected_fixture_hash")
+    # The executed task must be the EXACT frozen fixture, not merely a consistent
+    # (but wrong) one. The runtime canonical seed must equal the frozen hash.
+    if "expected_fixture_hash" not in evidence:
+        errs.append("execution evidence missing expected_fixture_hash "
+                    "(frozen fixture hash not anchored)")
+    if not (evidence.get("guidance_bundle_hash")):
+        errs.append("execution evidence missing guidance_bundle_hash "
+                    "(injected guidance bundle not frozen)")
+    if seed and expected and seed != expected:
+        errs.append(f"canonical seed hash {seed!r} does not match the frozen "
+                    f"expected_fixture_hash {expected!r}")
+    # Per-repetition anchor: the worker's starting fixture must be the frozen one.
     for r in reps:
         tag = f"rep{r.get('rep')}"
+        if expected and r.get("canonical_seed_hash") != expected:
+            errs.append(f"{tag}: repetition canonical_seed_hash does not match "
+                        f"the frozen expected_fixture_hash")
         g = r.get("guided") or {}
         b = r.get("baseline") or {}
 

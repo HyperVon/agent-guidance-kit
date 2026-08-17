@@ -44,7 +44,7 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from eval_hashing import (canonical_hash, source_hash_of, hash_workspace,
-                          materialize_fixture_seed)
+                           materialize_fixture_seed, HASH_PREFIX)
 
 IMAGE = "kilo-eval:local"
 # The evaluation runs on a pinned, anonymous FREE model by default. This is a
@@ -93,6 +93,30 @@ def materialize_guidance(skill_dir, skill_name):
     if os.path.isdir(refs):
         shutil.copytree(refs, os.path.join(dst, "references"))
     return dst
+
+
+def guidance_bundle_hash(guidance_dir):
+    """Deterministic hash of the EXACT guidance artifact mounted read-only into the
+    guided worker: SKILL.md plus references/** (sorted by relative path, each file
+    hashed by content). This is the frozen bundle the evaluator intends to inject,
+    recorded so the validator can prove the guided worker received exactly this
+    guidance (the mount is read-only; the worker cannot alter the source bundle).
+    """
+    if not os.path.isdir(guidance_dir):
+        return None
+    h = hashlib.sha256()
+    rels = []
+    for root, _, names in os.walk(guidance_dir):
+        for n in names:
+            full = os.path.join(root, n)
+            if os.path.islink(full):
+                continue
+            rels.append(os.path.relpath(full, guidance_dir))
+    for rel in sorted(rels):
+        full = os.path.join(guidance_dir, rel)
+        fh = hashlib.sha256(open(full, "rb").read()).hexdigest()
+        h.update((rel + ":" + fh + "\n").encode())
+    return HASH_PREFIX + h.hexdigest()
 
 
 def _snapshot(workspace):
@@ -318,6 +342,16 @@ def main():
     natural_task = case["prompt"]
     guidance_src = materialize_guidance(skill_dir, args.skill)
     skill_hash = source_hash_of(os.path.join(skill_dir, "SKILL.md"))
+    guidance_bundle = guidance_bundle_hash(guidance_src)
+
+    # The frozen fixture hash the worker is SUPPOSED to receive. For a generator
+    # fixture this is the worker-visible output_hash (setup.sh already stripped);
+    # for a committed fixture it is content_hash. The validator must reject if the
+    # runtime canonical seed does not equal this exact frozen value.
+    if ftype == "generator":
+        expected_fixture_hash = fx.get("output_hash")
+    else:
+        expected_fixture_hash = fx.get("content_hash")
 
     evidence = {
         "evidence_type": "execution",
@@ -328,6 +362,8 @@ def main():
         "node_version": runtime.get("node_version"),
         "model_listed": runtime.get("model_listed"),
         "skill_hash": skill_hash,
+        "guidance_bundle_hash": guidance_bundle,
+        "expected_fixture_hash": expected_fixture_hash,
         "canonical_seed_hash": None,  # filled in after the first seed is materialized
         "repetitions": [],
     }
@@ -337,11 +373,11 @@ def main():
             # One pristine seed; two independent worker copies.
             seed, seed_hash = materialize_fixture_seed(
                 fx_src, ftype, source, invocation)
-            evidence["canonical_seed_hash"] = seed_hash
+            evidence["canonical_seed_hash"] = HASH_PREFIX + seed_hash
             g_fx = _copy_seed(seed)
             b_fx = _copy_seed(seed)
-            g_before = hash_workspace(g_fx)
-            b_before = hash_workspace(b_fx)
+            g_before = HASH_PREFIX + hash_workspace(g_fx)
+            b_before = HASH_PREFIX + hash_workspace(b_fx)
 
             g_prompt = (natural_task + "\n\nA skill named '" + args.skill +
                         "' is available at /work/guidance/" + args.skill +
@@ -356,8 +392,8 @@ def main():
             b_meta = run_container(args.image, args.model, b_prompt, b_fx,
                                    None, args.skill)
 
-            g_after = hash_workspace(g_fx)
-            b_after = hash_workspace(b_fx)
+            g_after = HASH_PREFIX + hash_workspace(g_fx)
+            b_after = HASH_PREFIX + hash_workspace(b_fx)
 
             # Post-run snapshots (after the worker mutated the mounted copy).
             g_snap_after, b_snap_after = _snapshot(g_fx), _snapshot(b_fx)
@@ -365,7 +401,7 @@ def main():
             rep = {
                 "rep": i + 1,
                 "workspace_path": "/work/task",
-                "canonical_seed_hash": seed_hash,
+                "canonical_seed_hash": HASH_PREFIX + seed_hash,
                 "guided_workspace_id": os.path.basename(g_fx),
                 "baseline_workspace_id": os.path.basename(b_fx),
                 "guided": {
@@ -407,7 +443,7 @@ def main():
                 "distinct_sessions": (g_meta["session_id"]
                                       and g_meta["session_id"]
                                       != b_meta["session_id"]),
-                "starting_fixture_hashes_match": (g_before == b_before == seed_hash),
+                "starting_fixture_hashes_match": (g_before == b_before == HASH_PREFIX + seed_hash),
                 "workspace_paths_differ": (os.path.basename(g_fx)
                                            != os.path.basename(b_fx)),
             }

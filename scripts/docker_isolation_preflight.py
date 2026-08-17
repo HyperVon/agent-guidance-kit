@@ -121,21 +121,22 @@ if [ -e "$GUIDANCE_PATH" ]; then
   else
     check "guidance_hash_match" false
   fi
-  if [ -d "__GUIDANCE_DIR__/references" ]; then
-    check "references_available" true
-  else
-    check "references_available" __REFS_EXPECTED__
-  fi
-else
-  check "guidance_present" false
-  check "guidance_readable" false
-  check "guidance_hash_match" false
-  check "references_available" __REFS_EXPECTED__
-fi
+   if [ -d "__GUIDANCE_DIR__/references" ]; then
+     check "references_present_if_required" true
+   elif [ "__REFS_REQUIRED__" = "true" ]; then
+     check "references_present_if_required" false
+   else
+     check "references_present_if_required" true
+   fi
+ else
+   check "guidance_present" false
+   check "guidance_readable" false
+   check "guidance_hash_match" false
+ fi
 """.replace("__GUIDANCE_MOUNT__", GUIDANCE_MOUNT)
    .replace("__GUIDANCE_DIR__", "/work/guidance/__TARGET_SKILL__")
    .replace("__EXPECTED_HASH__", expected_hash)
-   .replace("__REFS_EXPECTED__", "true" if refs_expected else "true")
+    .replace("__REFS_REQUIRED__", "true" if refs_expected else "false")
         if guidance_present else
         # Baseline-only check
         r"""

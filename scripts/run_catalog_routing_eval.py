@@ -15,11 +15,15 @@ Each repetition is a brand-new Kilo session run from a fresh, isolated, empty
 workdir (never a continuation, never the repo), so there is no cross-rep
 contamination and the model cannot inspect the repository.
 
-Validity rules (defect 5): a model invocation that fails (non-zero exit, no
-parseable decision, or an invalid decision structure) is recorded as
-``status="failed"`` and is explicitly NOT a successful null-selection. A null
-``selected_skill`` (clarify) is only valid when the model call succeeded and
-produced a well-formed ``{"selected_skill": null, "action": "clarify"}``.
+Validity rules: a model invocation that fails (non-zero exit, no parseable
+decision, or an invalid decision structure) is recorded as ``status="failed"``
+and is explicitly NOT a successful null-selection. A null ``selected_skill``
+(clarify) is only valid when the model call succeeded AND produced a well-formed
+decision that EXPLICITLY contains both ``selected_skill`` and ``action``: a
+MISSING field is never treated as an explicit null. A non-null ``selected_skill``
+must name a skill that was actually present in the catalog supplied to the model
+for that condition (a target-absent catalog omits the target, so selecting it is
+rejected).
 
 Usage:
     python3 scripts/run_catalog_routing_eval.py \
@@ -67,9 +71,9 @@ def require_free_model(model, allow_paid):
         sys.exit(2)
 
 
-def _host_kilo_version():
+def _host_kilo_version(kilo_bin=KILO_BIN):
     try:
-        out = subprocess.check_output([KILO_BIN, "--version"],
+        out = subprocess.check_output([kilo_bin, "--version"],
                                       text=True, timeout=60).strip()
         return out.splitlines()[0] if out else None
     except Exception:
@@ -159,27 +163,65 @@ def _collect_text(stdout):
     return "".join(parts)
 
 
-def extract_decision(text):
+def extract_decision(text, catalog_names=None):
+    """Parse and strictly validate a raw model routing decision.
+
+    Returns ``{"status": "success", "decision": {...}}`` or
+    ``{"status": "failed", "error": <reason>, "decision": None}``.
+
+    CRITICAL: a MISSING field is NOT the same as an explicit ``null``. The raw
+    parsed object must explicitly contain both ``selected_skill`` and ``action``;
+    omitting either is a malformed decision and is rejected (it can never become a
+    valid null-selection pass). A non-null ``selected_skill`` must additionally
+    name a skill that was actually present in the catalog supplied to the model
+    for this condition. Unknown action values are rejected.
+    """
     m = re.search(r"\{.*\}", text, re.DOTALL)
     if not m:
-        return None
+        return {"status": "failed", "error": "no JSON decision object in output",
+                "decision": None}
     try:
         obj = json.loads(m.group(0))
     except Exception:
-        return None
+        return {"status": "failed", "error": "malformed JSON decision",
+                "decision": None}
     if not isinstance(obj, dict):
-        return None
-    sel = obj.get("selected_skill")
+        return {"status": "failed", "error": "decision is not a JSON object",
+                "decision": None}
+    # Missing field != explicit null.
+    if "selected_skill" not in obj:
+        return {"status": "failed", "error": "selected_skill field missing",
+                "decision": None}
+    if "action" not in obj:
+        return {"status": "failed", "error": "action field missing",
+                "decision": None}
+    sel = obj["selected_skill"]
     if sel in ("", "null", "none", "None"):
         sel = None
-    return {
-        "selected_skill": sel,
-        "action": obj.get("action"),
-        "rationale": obj.get("rationale"),
-    }
+    action = obj["action"]
+    if action not in ("apply", "clarify"):
+        return {"status": "failed",
+                "error": f"invalid action {action!r}", "decision": None}
+    # The selected skill must be one of the skills actually presented in the
+    # catalog for this condition (a target-absent catalog omits the target).
+    if sel is not None and catalog_names is not None and sel not in catalog_names:
+        return {"status": "failed",
+                "error": f"selected skill {sel!r} not in supplied catalog",
+                "decision": None}
+    # Cross-field validity.
+    if sel is None and action == "apply":
+        return {"status": "failed",
+                "error": "null selected_skill with action 'apply'", "decision": None}
+    if sel is not None and action == "clarify":
+        return {"status": "failed",
+                "error": "non-null selected_skill with action 'clarify'",
+                "decision": None}
+    return {"status": "success",
+            "decision": {"selected_skill": sel, "action": action,
+                         "rationale": obj.get("rationale")}}
 
 
-def run_kilo(prompt, model, workdir, kilo_bin=KILO_BIN):
+def run_kilo(prompt, model, workdir, kilo_bin=KILO_BIN, catalog_names=None):
     """Run one model call. Returns structured metadata distinguishing a failed
     invocation from a valid null-selection decision."""
     cmd = [kilo_bin, "run", "--model", model, "--variant", "high",
@@ -194,27 +236,17 @@ def run_kilo(prompt, model, workdir, kilo_bin=KILO_BIN):
 
     raw = proc.stdout or ""
     text = _collect_text(raw)
-    decision = extract_decision(text)
+    parsed = extract_decision(text, catalog_names)
     session = _extract_session(raw)
 
-    status = "success"
-    error = None
+    status = parsed["status"]
+    error = parsed.get("error")
     if proc.returncode != 0:
         status = "failed"
         error = f"kilo exited {proc.returncode}"
-    elif decision is None:
-        status = "failed"
-        error = "no parseable decision"
-    elif "selected_skill" not in decision:
-        status = "failed"
-        error = "decision missing 'selected_skill' field"
-    elif decision.get("action") not in ("apply", "clarify"):
-        status = "failed"
-        error = f"decision action {decision.get('action')!r} invalid"
-
     return {"status": status, "error": error, "returncode": proc.returncode,
             "stdout": raw, "stderr": proc.stderr, "session_id": session,
-            "decision": decision}
+            "decision": parsed.get("decision")}
 
 
 def matches(selected, expected, fallbacks):
@@ -241,7 +273,7 @@ def main():
 
     kilo_bin = _kilo_path()
     model_listed = _verify_host_kilo(args.model)
-    kilo_version = _host_kilo_version()
+    kilo_version = _host_kilo_version(kilo_bin)
 
     evals_path = args.evals_json.format(skill=args.skill)
     if not os.path.exists(evals_path):
@@ -252,8 +284,14 @@ def main():
     if case is None:
         print(f"case {args.case_id} not found in {evals_path}", file=sys.stderr)
         sys.exit(2)
-    if "routing" not in case.get("evaluation_modes", []):
-        print(f"case {args.case_id} is not a routing case", file=sys.stderr)
+    modes = case.get("evaluation_modes", [])
+    # Both the legacy "routing" mode and the Layer-A "catalog-routing" mode are
+    # valid for the catalog-routing runner. Existing case files may use either;
+    # this preserves compatibility while preferring the explicit catalog-routing
+    # label for new cases.
+    if not any(m in ("routing", "catalog-routing") for m in modes):
+        print(f"case {args.case_id} is not a routing/catalog-routing case "
+              f"(modes={modes})", file=sys.stderr)
         sys.exit(2)
 
     user_request = case["prompt"]
@@ -267,6 +305,11 @@ def main():
     absent_rows = build_catalog(target_skill)
     catalog_present = render_catalog(present_rows)
     catalog_absent = render_catalog(absent_rows)
+    # The exact catalog names actually presented to the model for each condition.
+    # A target-absent catalog omits the target skill, so a model that "selects"
+    # the target anyway is rejecting against the real supplied catalog.
+    names_present = {name for name, _ in present_rows}
+    names_absent = {name for name, _ in absent_rows}
     prompt_present = build_prompt(catalog_present, user_request)
     prompt_absent = build_prompt(catalog_absent, user_request)
 
@@ -277,7 +320,7 @@ def main():
         "repetitions": args.reps, "conditions": {},
     }
 
-    def run_condition(name, prompt, catalog_text, expected):
+    def run_condition(name, prompt, catalog_text, expected, catalog_names):
         reps = []
         catalog_hash = hashlib.sha256(catalog_text.encode()).hexdigest()
         prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
@@ -285,7 +328,8 @@ def main():
             # Fresh, isolated, empty workdir per call; deleted afterwards.
             workdir = tempfile.mkdtemp(prefix="kilo-routing-")
             try:
-                meta = run_kilo(prompt, args.model, workdir, kilo_bin)
+                meta = run_kilo(prompt, args.model, workdir, kilo_bin,
+                               catalog_names)
             finally:
                 shutil.rmtree(workdir, ignore_errors=True)
             dec = meta["decision"]
@@ -318,8 +362,10 @@ def main():
             "total": args.reps,
         }
 
-    run_condition("target_present", prompt_present, catalog_present, exp_present)
-    run_condition("target_absent", prompt_absent, catalog_absent, exp_absent)
+    run_condition("target_present", prompt_present, catalog_present, exp_present,
+                  names_present)
+    run_condition("target_absent", prompt_absent, catalog_absent, exp_absent,
+                  names_absent)
 
     if args.out:
         os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)

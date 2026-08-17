@@ -116,9 +116,12 @@ pilots):
   `~/.gitconfig`/`~/.ssh`/tokens, **no** mounted Kilo auth). `scripts/run_execution_eval.py`
   runs two **fresh containers** per repetition: guided mounts *guidance only*
   (`SKILL.md` + `references/`, never the `evals/` fixture snapshot) at
-  `/work/guidance/code-review`; baseline mounts **nothing**. Smoke on case 5:
-  distinct container IDs confirmed; guided applied the skill (4184 chars) vs
-  baseline refusal (835 chars).
+   `/work/guidance/code-review`; baseline mounts **nothing**. Smoke on case 5
+   (n=1, infrastructure only): two **distinct fresh containers** confirmed; both
+   started from the identical frozen seed (starting fixture hashes matched the
+   frozen `output_hash`); guided and baseline outputs captured. This is an
+   **infrastructure smoke, not an efficacy claim** (n≥3 + an irrelevant-guidance
+   placebo are still required before any efficacy conclusion).
  - **Boundary probe green.** `scripts/docker_isolation_preflight.py` passes all 23
    checks (isolated home, deterministic git identity, no ssh/token/host-config host
    path leak, no Kilo auth mount, **target-skill guidance absent in baseline AND present,
@@ -148,6 +151,68 @@ pilots):
 These prove the *infrastructure* is sound. What remains before any published
 efficacy claim: n≥3 repetitions per condition, an irrelevant-guidance placebo,
 frozen-assertion grading with quoted evidence, and committed result files.
+
+## Current-head rerun (2026-08-17)
+
+The runner hardening in `fix/evaluation-runner-integrity` (PR #47) was
+**re-run end-to-end on the current head** after the macOS `/tmp` mount fix and
+the corrected fixture/guidance hash semantics. Exact results:
+
+- **HEAD:** `<HEAD-SHA>` (branch `fix/evaluation-runner-integrity`, PR #47).
+- **`docker build -f Dockerfile.eval -t kilo-eval:local .`** — succeeded
+  (`Successfully tagged kilo-eval:local`).
+- **`docker_isolation_preflight.py --image kilo-eval:local --target-skill
+  code-review`** — **23/23 checks passed**. The guided mount now additionally
+  proves `references_present_if_required` (a required `references/` directory
+  that is missing now FAILS the probe; previously this check could not fail).
+- **Catalog-routing smoke** (`run_catalog_routing_eval.py --skill code-review
+  --case-id 1 --reps 3`): `target_present` selected `code-review`/**apply**
+  3/3; `target_absent` returned `null`/**clarify** 3/3. Hardening proven: a
+  decision that *omits* `selected_skill` or `action` is now rejected (it can no
+  longer become an explicit `null` selection), and a non-null selection that is
+  not present in the catalog actually supplied to the model (e.g. a target
+  selected under a target-absent catalog) is rejected.
+- **Execution smoke** (`run_execution_eval.py --skill code-review --case-id 5
+  --reps 1`): two **distinct fresh containers**; guided and baseline both
+  started from the identical **frozen** seed — `canonical_seed_hash`
+  (`sha256:694cc87e…`) equals the frozen fixture `output_hash`/`content_hash`.
+  `guidance_bundle_hash` was recorded and is now required by the validator.
+  **n=1 infrastructure smoke — not an efficacy claim.**
+- **`validate_evaluations.py --check-evidence`** — **PASSED** on the actual
+  current-head smoke files (no errors / no warnings).
+- **`validate_evaluations.py`** (schema) — 0 errors / 0 warnings.
+- **`test_validate_evaluations.py`** — **75 tests pass** (up from 50; 25 new
+  regression tests covering the routing missing-field/catalog-membership
+  defects, the generator source-vs-output hash split, the frozen-hash anchor,
+  the references probe, and the Kilo-path/mode consistency fixes).
+- **`hash_fixtures.py`** — idempotent; the 6 generator fixtures re-hashed under
+  the corrected semantics (worker-visible `output_hash`/`content_hash`, with
+  `setup.sh` **excluded**; `source_hash` still covers `setup.sh`). Second run:
+  `Updated 0`.
+
+### Generator hash semantics corrected
+
+`materialize_fixture_seed` is now the single canonical worker-visible
+materialization. `canonical_hash` and `verify_generator_deterministic` both defer
+to it, so the frozen `output_hash`/`content_hash` always describe exactly the
+artifact the worker receives:
+
+- `source_hash` = hash of the evaluator-only generator source (`setup.sh`);
+- `output_hash` / `content_hash` = hash of the **worker-visible** generated task
+  state (generator source stripped before hashing).
+
+This closes the gap where the frozen hash and the task actually presented to the
+worker were different artifacts.
+
+### Catalog-routing integrity
+
+`extract_decision` now validates the **raw** model JSON: both `selected_skill`
+and `action` must be explicitly present (a missing field is NOT an explicit
+`null`), unknown actions are rejected, and a non-null `selected_skill` must name
+a skill that was actually in the catalog supplied for that condition. The
+frozen-hash anchor plus the guidance-bundle hash mean a malformed, stale,
+partially-mounted, or differently-materialized evaluation cannot masquerade as
+trustworthy evidence.
 
 ## Case-set audit
 

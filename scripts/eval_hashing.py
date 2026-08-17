@@ -8,16 +8,22 @@ Two fixture kinds:
   (recursively, sorted) so the hash is independent of on-disk mtimes.
 * ``generator`` — the fixture is produced by running a generator (``setup.sh``)
   inside a clean, sanitized, host-independent temporary directory. The hash is
-  computed over the generator's **output**, not its source:
+  computed over the WORKER-VISIBLE generated state, with the evaluator-only
+  generator source (``setup.sh``) STRIPPED so it is never part of the recorded
+  hash:
 
   - if the output is a git repository, hash the committed tree
     (``git ls-tree -r HEAD`` content hashes + the tree object id) — this is
     fully content-addressed and therefore independent of commit author/date;
   - otherwise hash the generated files recursively.
 
-A generator fixture records both ``source_hash`` (the generator source) and
-``output_hash`` (the generated tree). ``content_hash`` mirrors ``output_hash``
-so the rest of the validator can treat generators uniformly.
+A generator fixture records both ``source_hash`` (the evaluator-only generator
+source, e.g. ``setup.sh``) and ``output_hash`` / ``content_hash`` (the
+WORKER-VISIBLE generated task state — the generator source is STRIPPED before
+hashing). ``content_hash`` mirrors ``output_hash`` so the rest of the validator
+can treat generators uniformly. The canonical worker-visible materialization is
+``materialize_fixture_seed``; ``canonical_hash`` / ``verify_generator_deterministic``
+both defer to it so frozen hashes always describe exactly what workers receive.
 """
 import hashlib
 import os
@@ -133,7 +139,15 @@ def _generator_output_hash(output_dir: str) -> str:
 
 def run_generator(fixture_dir: str, source: str = "setup.sh",
                   invocation: str = "bash setup.sh"):
-    """Run a generator in a sanitized temp dir; return (output_dir, hash)."""
+    """Run a generator in a sanitized temp dir; return (output_dir, hash).
+
+    The returned ``output_dir`` is the GENERATED workspace and still contains the
+    generator source (e.g. ``setup.sh``). It is the caller's responsibility to
+    strip evaluator-only generator source before presenting the task to a worker
+    (see ``materialize_fixture_seed``). The returned hash covers the generated
+    workspace INCLUDING the generator source; the worker-visible hash is produced
+    by ``materialize_fixture_seed`` and excludes it.
+    """
     env, sandbox = sanitize_env()
     work = tempfile.mkdtemp(prefix="eval-gen-")
     try:
@@ -154,7 +168,8 @@ def run_generator(fixture_dir: str, source: str = "setup.sh",
         h = _generator_output_hash(work)
         return work, h
     finally:
-        pass
+        # The sanitized HOME/XDG sandbox is host-scoped and must never leak.
+        shutil.rmtree(sandbox, ignore_errors=True)
 
 
 def source_hash_of(source_path: str) -> str:
@@ -213,22 +228,31 @@ def canonical_hash(path: str, ftype: str, source: str = "setup.sh",
     """Return the canonical hash for a fixture directory.
 
     For ``committed`` fixtures this hashes the directory contents. For
-    ``generator`` fixtures this runs the generator and hashes its output.
+    ``generator`` fixtures this materializes the worker-visible seed (generator
+    run under a sanitized environment, with the evaluator-only generator source
+    STRIPPED) and hashes THAT — never the generator source. This is the exact
+    artifact the execution worker receives, so the frozen ``output_hash`` /
+    ``content_hash`` describes the worker-visible task state.
     """
     if ftype == "generator":
-        work, h = run_generator(path, source, invocation)
-        shutil.rmtree(work, ignore_errors=True)
+        seed, h = materialize_fixture_seed(path, ftype, source, invocation)
+        shutil.rmtree(seed, ignore_errors=True)
         return h
     return committed_hash(path)
 
 
 def verify_generator_deterministic(fixture_dir: str, source: str = "setup.sh",
-                                   invocation: str = "bash setup.sh"):
-    """Run the generator twice; return the stable output hash or raise."""
-    work1, h1 = run_generator(fixture_dir, source, invocation)
-    shutil.rmtree(work1, ignore_errors=True)
-    work2, h2 = run_generator(fixture_dir, source, invocation)
-    shutil.rmtree(work2, ignore_errors=True)
+                                    invocation: str = "bash setup.sh"):
+    """Run the generator twice; return the stable worker-visible hash or raise.
+
+    Compares two independently materialized WORKER-VISIBLE seeds, so the check is
+    about the artifact actually handed to workers (setup.sh excluded), not the
+    generator source.
+    """
+    seed1, h1 = materialize_fixture_seed(fixture_dir, "generator", source, invocation)
+    shutil.rmtree(seed1, ignore_errors=True)
+    seed2, h2 = materialize_fixture_seed(fixture_dir, "generator", source, invocation)
+    shutil.rmtree(seed2, ignore_errors=True)
     if h1 != h2:
         raise ValueError(
             f"generator {fixture_dir} is NON-DETERMINISTIC: {h1} != {h2}"
