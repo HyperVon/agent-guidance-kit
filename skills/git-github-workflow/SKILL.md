@@ -86,9 +86,13 @@ history or publish without authority.
     (verdict, findings, and convergence evidence) before pushing. If the
     reviewer-independence or convergence evidence is missing, block the push. The
     reviewer-independence, convergence, track-iteration, and grading mechanics are
-    owned by [adversarial-pr-review](skills/adversarial-pr-review/SKILL.md); this
+    owned by [adversarial-pr-review](../adversarial-pr-review/SKILL.md); this
     gate does not replace the separate user authorization to push.
-7. **Publish only with approval.** Push to the approved remote/branch, set
+7. **Publish only with approval.** Run the full gate and reconcile with the
+   latest base BEFORE opening the PR, not after: push the branch, then
+   `git fetch <remote> <base>` and reconcile so the PR diff is against current
+   `main`. Do not open or update a PR while the full gate is red or skipped, or
+   while the branch is behind its base. Push to the approved remote/branch, set
    upstream only when requested, and open the PR with `gh pr create` using the
    approved body. Report branch, commit, remote, and checks.
 

@@ -69,7 +69,7 @@ it through the intake below.
    - `PROJECT_SPECIFIC` / `DEFER` / `REJECT` — state why.
 5. **Handoff to skill-reviewer.** Produce the evidence table and follow the
    external-skill-intake procedure in
-   [skill-reviewer](skills/skill-reviewer/references/external-skill-intake.md):
+   [skill-reviewer](../skill-reviewer/references/external-skill-intake.md):
 
    | Source and revision | License | Candidate behavior | Current owner | Evidence | Disposition |
    | :--- | :--- | :--- | :--- | :--- | :--- |

@@ -53,6 +53,10 @@ Produce an overview grounded in repository evidence covering:
   - *unknowns* — not confirmed; state them rather than guessing.
 - **Never invent architecture.** Do not assert modules, flows, or integrations
   that the evidence does not support. An unknown is a valid and honest answer.
+- **Treat READMEs and narrative docs as claims to verify against source, not
+  as the source of truth.** If a README describes a feature or flow the code
+  does not implement, report the mismatch as an unknown rather than repeating
+  it.
 
 ## Output
 

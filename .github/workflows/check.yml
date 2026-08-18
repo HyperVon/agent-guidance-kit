@@ -31,5 +31,14 @@ jobs:
           cp -r skills /tmp/skills-before
           python scripts/hash_fixtures.py
           diff -r /tmp/skills-before skills --exclude="*.pyc" || (echo "Fixture hashes are out of date. Run python scripts/hash_fixtures.py and commit." && exit 1)
+      - name: Check README skill index matches catalog
+        run: |
+          for dir in skills/*/; do
+            name="$(basename "$dir")"
+            grep -q "skills/${name}/SKILL.md" README.md || { echo "Skill '${name}' is missing from the README catalog. Add a row to the 'Included skills' table."; exit 1; }
+          done
+          grep -o 'skills/[a-z0-9-]*/SKILL\.md' README.md | sort -u | while read -r link; do
+            [ -f "${link}" ] || { echo "README links to missing file: ${link}"; exit 1; }
+          done
       - name: Lint scripts
         run: ruff check scripts/

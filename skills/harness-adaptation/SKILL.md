@@ -51,7 +51,12 @@ When native discovery is missing or unreliable, choose the first applicable stra
    canonical `AGENTS.md` / skill files (e.g. `@AGENTS.md`).
 2. **Narrow projection** — repeat only essential rules when links are not followed.
 3. **Native skill registration** — expose the existing `skills/` directory through a
-   supported project-local path/metadata file without forking content.
+   supported project-local path/metadata file without forking content. When the
+   harness supports an extra-locations setting (e.g. a `skills` array in the
+   harness's project settings file), register the existing `skills/` directory
+   there before considering a generated projection. This is native registration
+   with zero file duplication; record the settings path and the verification
+   command that confirms discovery.
 4. **Manual entrypoint** — for harnesses without persistent instructions, provide a
    reusable prompt telling the harness exactly what to read.
 
