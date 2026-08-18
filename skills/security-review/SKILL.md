@@ -93,6 +93,10 @@ description: >-
   - *Tool Output Poisoning:* Are tool inputs and outputs treated as untrusted boundaries? Can untrusted tool responses trick the agent into invoking destructive tools with malicious arguments?
   - *Ambient Authority & Confused Deputy:* Does the agent or background worker run with broader privileges than required for the task? Can an unauthenticated caller trigger privileged agent operations?
   - *Sensitive Context Leakage:* Does the agent reflect private files, credentials, or internal system prompts into user-visible outputs, tool arguments, or telemetry logs?
+  - *Secrets in Model Context:* Can a secret, token, or credential reach the
+    model's context — via a file read, a tool result, a log line, a pasted
+    prompt, or a rendered output — and then be echoed, committed, or sent
+    onward?
 - Are sensitive data access, retention, redaction, and error behavior explicit?
 - Are dependency, supply-chain, network, and update assumptions evidenced?
 - Do tests demonstrate rejection and fail-closed behavior for the risky cases?

@@ -30,10 +30,15 @@ description: >-
 
 Apply **STRIDE** systematically across every identified trust boundary:
 
-- **S**poofing: Impersonating users, services, webhook senders, or agent identities.
+- **S**poofing: Impersonating users, services, webhook senders, agent
+  identities, or non-network identities (forged email/notification senders,
+  spoofed internal tooling, phishing UI that misdirects a user or agent).
 - **T**ampering: Modifying payloads in transit, poisoning cache/persistence, or tampering with model context and prompt templates.
 - **R**epudiation: Performing sensitive or destructive actions without immutable audit logs.
-- **I**nformation Disclosure: Exposing credentials, PII, cross-tenant data, internal stack traces, or system prompts.
+- **I**nformation Disclosure: Exposing credentials, PII, cross-tenant data,
+  internal stack traces, system prompts, or secrets that reach model context
+  (secret pasted into a prompt, sensitive file read into context, or a log
+  line the model can see).
 - **D**enial of Service: Exhausting API rate limits, computational budgets, worker memory, or token context windows.
 - **E**levation of Privilege: Escaping container/sandbox boundaries, escalating API roles, or executing unauthorized agent tools.
 

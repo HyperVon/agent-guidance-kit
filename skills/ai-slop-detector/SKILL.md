@@ -87,11 +87,11 @@ generated artifacts:
 - **Circular / Duplicate Type Definitions:** Redundant parallel type declarations across multiple modules instead of consuming the canonical schema;
 - **Dead Code and Phantom Abstractions:** Dead or placeholder branches, duplicate helpers, and abstractions without a demonstrated consumer or outcome-level verification;
 - **Narrative Documentation:** Comments and documentation that narrate obvious code, conceal uncertainty, or state behavior not established by source and checks;
-  - **Ungrounded UI Changes:** UI changes with no product/user/job intent, missing loading/empty/error/success/disabled/permission states, broken focus or keyboard behavior, inaccessible contrast, or unverified responsive and reduced-motion behavior.
-  - **Manufactured Defects to Justify Cleanup:** After a request to "clean up" or
-    "remove the slop," do not invent defects to satisfy the request. Every finding
-    still requires an anchor and a demonstrated impact; a vague "this is messy" label
-    is an investigation prompt, never by itself a confirmed defect or edit authority.
+- **Ungrounded UI Changes:** UI changes with no product/user/job intent, missing loading/empty/error/success/disabled/permission states, broken focus or keyboard behavior, inaccessible contrast, or unverified responsive and reduced-motion behavior.
+- **Manufactured Defects to Justify Cleanup:** After a request to "clean up" or
+  "remove the slop," do not invent defects to satisfy the request. Every finding
+  still requires an anchor and a demonstrated impact; a vague "this is messy" label
+  is an investigation prompt, never by itself a confirmed defect or edit authority.
 
 For UI findings, distinguish a product or interaction defect from an optional
 visual preference. Route a dedicated frontend/accessibility review to
@@ -124,6 +124,11 @@ visual preference. Route a dedicated frontend/accessibility review to
    - Make atomic, minimal corrections isolated by defect category (e.g., remove dead branches in one edit; fix swallowed exceptions in another).
    - Never bundle functional enhancements, stylistic reformatting, or architectural renames into a de-slopping cleanup.
    - Run the repository's relevant test suite after each atomic correction to prove zero behavioral regressions.
+   - **Fresh evidence before and after:** Before the first cleanup edit, run the
+     relevant checks and record the baseline (pass/fail, counts). After each
+     atomic correction, re-run not only the test suite but also the original
+     reproduction or failing check that motivated the finding. A cleanup that
+     cannot show the same reproduction passing before and after is not verified.
 
 ## Severity
 

@@ -117,9 +117,9 @@ Risks/Blockers: <any residual risk or deferred work, or "none">
 
 For delegated evaluation workers, the deep isolation, blindness, baseline
 isolation, contamination, and grading rules are owned by
-[skill-evaluation](skills/skill-evaluation/SKILL.md). Follow those constraints
+[skill-evaluation](../skill-evaluation/SKILL.md). Follow those constraints
 and do not reimplement or weaken them here; load its
-[isolation protocol](skills/skill-evaluation/references/isolation-protocol.md)
+[isolation protocol](../skill-evaluation/references/isolation-protocol.md)
 when setting up evaluation workers.
 
 Default sensitive-path denylist:
@@ -175,6 +175,10 @@ For every result:
 4. Re-run affected targeted checks after integration.
 5. Run final repository gates serially from the integrated state.
 6. Close workers and remove only temporary state created for this fan-out.
+7. If the final gate fails, stop and report the failure before cleanup: revert
+   or stash the failed integration, then close workers and remove only the
+   temporary state created for this fan-out. Do not leave a worker, worktree,
+   or process running after a failed integration.
 
 Do not call a worker's green check the final result unless it ran against the
 exact integrated state and did not overlap unsafe shared execution.

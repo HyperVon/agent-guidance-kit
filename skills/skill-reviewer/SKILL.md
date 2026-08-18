@@ -24,6 +24,7 @@ produces recommendations; it does not edit files during a review.
 | `rules-and-skills-audit` | Structural overlap, conflicts, drift, and routing |
 | `documentation-review` | Factual agreement with source or build truth |
 | `skill-authoring` | Applying an explicitly approved edit |
+| `skill-discovery` | Proactive candidate research and provenance for external intake |
 
 Choose one mode:
 

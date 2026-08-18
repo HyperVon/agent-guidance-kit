@@ -144,9 +144,10 @@ private fixtures.
 ## Recording a run
 
 When a run is executed, record the result so the evaluation record stays current.
-The human interface is conversation only (e.g. "run evals," "evaluate a skill," or
-"update the eval summary"); the agent runs the commands and the human does not need
-to run scripts manually:
+The human interface is conversation for routine runs, but a manual CLI/Docker
+path is documented in `docs/evaluations/RUNBOOK.md` when direct execution is
+needed. The agent runs the commands and the human does not need to run scripts
+manually for routine cases.
 
 1. Determine `harness`, `model`, and `reasoning_effort` from runtime metadata when
    available. **If you cannot definitively determine the harness, model, or effort

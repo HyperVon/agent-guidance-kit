@@ -80,11 +80,14 @@ supports persistent instructions or native skill discovery.
 
 ## Projection matrix
 
-| Harness capability | Guidance type | Recommended projection | In-repo example |
+| Harness capability | Guidance type | Recommended projection | Example (other adopting projects) |
 | :--- | :--- | :--- | :--- |
 | Native skill discovery (e.g. Gemini CLI, Claude Code) | Canonical skills (`skills/`) | Native directory discovery without file duplication | `GEMINI.md`, `CLAUDE.md` |
 | On-demand rule matching (e.g. Cursor `.mdc` with globs) | File-scoped guidance | Thin `.mdc` pointer with glob triggers pointing to canonical skill | — |
 | Static always-injected prompt (e.g. Copilot instructions) | Invariants & routing | Compact table index of available skills, loaded only on task match | `.github/copilot-instructions.md` |
+
+These filenames are illustrative examples from other adopting projects, not
+files present in this repository.
 
 Prefer one physical skill owner. Use a supported link only when its behavior is
 documented and portable enough for the target; otherwise propose a generated

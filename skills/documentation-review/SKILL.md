@@ -56,6 +56,11 @@ or defer it. Never broaden a guarantee beyond what the evidence supports.
    - *Export & signature match:* Verify that imported symbols, class names, method signatures, and parameter names match current source exports exactly.
    - *CLI flag validation:* Compare flags against CLI help output (`--help`) or CLI argument parser definitions. Mark flags that no longer exist or changed default values as `WRONG` or `STALE`.
    - *Config syntax validation:* Parse configuration examples (YAML, JSON, TOML) against the current parser schema or configuration models in the repository.
+   - *Screenshot and diagram verification:* For every screenshot or diagram,
+     confirm it reflects the current UI or behavior (run the app/component or
+     inspect the rendered output) rather than an earlier version. A screenshot
+     that shows an outdated layout, old text, or removed feature is `STALE`;
+     changing its caption is not verification.
 3. **Report before broad edits.** For each finding, give the document location,
    claim, evidence anchor, impact, smallest correction, and size. Preserve
    unrelated work and do not invent new documentation scope.

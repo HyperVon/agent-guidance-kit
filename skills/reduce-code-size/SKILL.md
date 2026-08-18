@@ -84,6 +84,8 @@ return it to the appropriate owner instead.
 
 Preserve git blame hygiene: Avoid purely cosmetic reordering of functions or moving files across directories unless the split aligns with an established ownership boundary. Keep changes targeted to minimize merge friction on active branches.
 
+The size objective never overrides the verification requirements. Meeting the LOC target does not excuse a skipped formatter, compiler, linter, or test run; a reduction that cannot pass the full relevant gate is not complete. Stop when the objective is met AND the behavior gate passes.
+
 Do not resolve a size-only review finding by citing a line-count reduction.
 Each retained slice needs behavior-parity evidence, and an explicit waiver is
 preferable to an unverified reduction when a contract or generated source is

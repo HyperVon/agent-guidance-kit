@@ -36,6 +36,11 @@ to what was actually reviewed:
   comment appeals to.
 - **applicable tests** — which checks should pass after a change.
 
+For a GitHub PR, record the PR's head SHA and the diff range at review time
+(e.g. `gh pr view <n> --json headRefOid,baseRefOid`). If the PR has been
+force-pushed or updated since the review, note that the frozen context no
+longer matches the current head and re-freeze before dispositioning.
+
 Re-reading the diff at a different revision than the reviewer saw produces wrong
 dispositions. Confirm the working tree matches the reviewed revision before acting.
 

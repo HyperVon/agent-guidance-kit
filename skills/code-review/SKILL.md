@@ -121,3 +121,10 @@ each correction. Stop when evidence is insufficient, when a proposed fix
 changes architecture or behavior beyond the review request, or when the issue
 belongs to a neighboring skill; report the hand-off or verification gap instead
 of guessing.
+
+Stop and report a blocked review when a required check cannot be run — missing
+credentials, unavailable CI, or an unlicensed tool — and state the exact
+verification gap rather than treating the finding as confirmed. When
+recommending a fix, require fresh evidence that the smallest correction was run
+and passed; never claim a fix is verified without running the exact command and
+inspecting its output.

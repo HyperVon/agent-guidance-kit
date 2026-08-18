@@ -39,6 +39,11 @@ Keep these separate; a finding about one is never evidence about another:
    (`SKILL.md` + `references/`) at `/work/guidance/<name>`; baseline mounts **no**
    guidance. Free models are reached through anonymous Kilo Gateway access
    (`kilo/tencent/hy3:free`); no API key or auth is mounted.
+   Verify the worker runtime version per run: record `kilo --version` (or the
+   image's pinned CLI) from each worker container and require identical versions
+   across all conditions of a comparison. A worker that installs, upgrades, or
+   otherwise runs a different CLI version than the pinned image invalidates that
+   condition; do not score it.
 3. **Protocol validity** — were the conditions genuinely independent and leak-free?
    Without this, any comparison is uninterpretable.
 
