@@ -31,6 +31,21 @@ Per adopting repository policy (see
   branch/commit/PR hygiene steps are in
   [`skills/git-github-workflow/SKILL.md`](skills/git-github-workflow/SKILL.md).
 
+### Blocked-review exception
+
+If a fresh read-only subagent reviewer cannot be launched (harness limitation,
+missing capability, or sandbox restriction), the review is **blocked**: do not
+push the branch. Report the blocked review and the exact capability gap to the
+user instead, and wait for explicit direction.
+
+### Convergence evidence
+
+A completed review is recorded as a compact verdict — `PASS` or up to three
+anchored `path:line` findings — plus the review's commit range. Keep the
+verdict available (session report, PR description, or tracked artifact) so a
+later update push can confirm the final pass covered the current diff and
+reported no additional findings.
+
 ## Review preferences (all harnesses)
 
 This repository also carries the maintainer's review preferences in a Command
