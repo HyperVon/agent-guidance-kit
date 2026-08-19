@@ -5,7 +5,9 @@
     "code-review",
     "security-review",
     "architecture-review",
-    "review-feedback-resolution"
+    "review-feedback-resolution",
+    "systematic-debugging",
+    "implementation-planning"
   ],
   "notes": "Holdout set: held out from ordinary skill editing. These cases are NOT near any skill's evals/evals.json and are invoked separately to test generalization beyond the development cases. Open repository: not secret, only workflow-separated.",
   "cases": [

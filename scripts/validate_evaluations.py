@@ -524,6 +524,7 @@ def check_result_case(base, cs, skill, mode, case_index):
     verdict = cs.get("verdict") or {}
     gp = verdict.get("target_pass")
     bp = verdict.get("baseline_pass")
+    pp = verdict.get("placebo_pass")
     if not isinstance(gp, bool) or not isinstance(bp, bool):
         err(f"{base} case {cid}: missing verdict.target_pass/baseline_pass booleans")
         return
@@ -533,7 +534,13 @@ def check_result_case(base, cs, skill, mode, case_index):
     elif bp and not gp:
         expect = "baseline_only_pass"
     elif gp and bp:
-        expect = "both_pass"
+        # target and baseline both pass: non_discriminating when placebo also
+        # passes (every condition wins, benchmark is ceiling-effected); otherwise
+        # both_pass (benchmark at least separates real guidance from placebo).
+        if pp is True:
+            expect = "non_discriminating"
+        else:
+            expect = "both_pass"
     elif not gp and not bp:
         expect = "both_fail"
     if expect and cat != expect:
@@ -994,7 +1001,7 @@ def check_confusion_set(path, rel):
         # would measure keyword matching instead of discrimination. Prompt text
         # is lowercased and matched on word boundaries. Skip when there is no
         # expected skill (ambiguous cases).
-        if ctype != "counterfactual" and isinstance(exp, str) and exp.strip():
+        if ctype not in COUNTERFACTUAL_TYPES and isinstance(exp, str) and exp.strip():
             low = prompt.lower()
             if re.search(rf"\b{re.escape(exp.lower())}\b", low):
                 err(f"{tag}: prompt contains the expected skill name "
@@ -1026,23 +1033,36 @@ def check_holdout(path, rel):
         return
     if not isinstance(d, dict) or "holdout" not in d:
         err(f"{rel}: holdout file must contain a 'holdout' name")
+    skills = set(d.get("skills") or [])
     cases = d.get("cases")
     if not isinstance(cases, list) or not cases:
         err(f"{rel}: 'cases' must be a non-empty list")
         return
+    ids = [c.get("id") for c in cases]
+    if len(ids) != len(set(ids)):
+        err(f"{rel}: duplicate case ids in holdout")
     for c in cases:
         tag = f"{rel} case {c.get('id')}"
         if not isinstance(c.get("id"), int):
             err(f"{tag}: id must be an integer")
         if not isinstance(c.get("prompt"), str) or not c["prompt"].strip():
             err(f"{tag}: empty prompt")
+            continue
+        ctype = c.get("case_type", "smoke")
+        if ctype not in ALLOWED_CASE_TYPES:
+            err(f"{tag}: bad case_type '{ctype}'")
+            continue
         exp = c.get("expected_skill")
         if exp is None:
-            if c.get("case_type") != "ambiguous-natural":
+            if ctype != "ambiguous-natural":
                 err(f"{tag}: expected_skill null only valid for "
                     f"ambiguous-natural cases")
         elif not isinstance(exp, str) or not exp.strip():
             err(f"{tag}: missing expected_skill")
+        elif exp not in skills:
+            err(f"{tag}: expected_skill {exp!r} not in the holdout's skills")
+        if ctype == "counterfactual" and not c.get("counterfactual_pair"):
+            err(f"{tag}: counterfactual case missing counterfactual_pair")
 
 
 def check_confusion_sets_and_holdouts():

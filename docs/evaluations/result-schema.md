@@ -149,19 +149,27 @@ Each repetition MUST prove:
   for each. The validator requires all `starting_fixture_hash` values to equal
   `canonical_seed_hash`. The condition workers therefore begin from
   byte-identical state and can never share a mutable fixture.
-- **Distinct execution.** `runs.target.container_id` ≠ `runs.baseline.container_id`
-  and `runs.target.session_id` ≠ `runs.baseline.session_id`.
-- **Guidance boundary (probed inside the container).** `target.guidance_verified`
-  is `true` only if an in-container probe found `/work/guidance/task/SKILL.md`;
-  `baseline.guidance_verified_absent` is `true` only if the probe confirmed its
-  *absence*. A bare text claim is not accepted.
+- **Distinct execution.** `conditions.target.container_id` ≠
+  `conditions.baseline.container_id` (and ≠ `conditions.placebo.container_id`
+  when a placebo is present), and likewise for `session_id`. This is verified
+  per-repetition via `distinct_containers` / `distinct_sessions`.
+- **Guidance boundary (probed inside the container).**
+  `conditions.target.guidance_verified` is `true` only if an in-container probe
+  found the mounted skill guidance at `/work/guidance/task/SKILL.md`;
+  `conditions.baseline.guidance_verified_absent` is `true` only if the probe
+  confirmed its *absence* (baseline has no guidance mounted and the probe must
+  return `absent`). A bare text claim is not accepted — `guidance_probe` must be
+  `present`/`absent`/missing as verified inside the container.
 - **Failure is not evidence.** If the Docker/Kilo invocation returned non-zero, the
   container never started, the model output was empty/unparseable, or no session id
-  was produced, the repetition is `run_status="failed"` and the validator
+  was produced, the condition's `run_status="failed"` and the validator
   **rejects** the file. `returncode` must be `0` for all conditions.
-- **Task-state mutation recorded.** `ending_fixture_hash` plus a filesystem
-  snapshot (`filesystem_snapshot_before/after`) prove what each worker actually
-  changed.
+- **Task-state mutation recorded.** `conditions.<name>.ending_fixture_hash`
+  proves what each worker changed relative to `starting_fixture_hash`
+  (they must differ for productive conditions). Optional filesystem snapshots
+  (`conditions.<name>.filesystem_snapshot_before/after`) capture the concrete
+  diff. The `natural_task_identical_across_conditions` flag confirms the task
+  text was byte-identical across conditions.
 
 The validator dispatches on `evidence_type` and checks the file with
 `python3 scripts/validate_evaluations.py --check-evidence`; unknown/malformed

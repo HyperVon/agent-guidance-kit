@@ -1136,7 +1136,9 @@ class ConfusionSetAndHoldoutTests(unittest.TestCase):
         tmp = tempfile.mkdtemp()
         try:
             p = os.path.join(tmp, "review-holdout.json")
-            json.dump({"holdout": "review-holdout-1", "cases": [
+            json.dump({"holdout": "review-holdout-1", "skills": [
+                "code-review", "architecture-review"
+            ], "cases": [
                 {"id": 1, "prompt": "Is this auth change correct?",
                  "expected_skill": "code-review"},
             ]}, open(p, "w"))

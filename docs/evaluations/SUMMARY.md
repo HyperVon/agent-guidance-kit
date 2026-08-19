@@ -42,7 +42,7 @@ The methodology has been corrected and is documented in:
   (which replaces the old `requires_catalog`); the catalog is **generated**, not
   committed inside the task fixture. A `fixture` block records status (`ready`
   once a frozen fixture exists, else `designed_only`).
-- **4 confusion-set families** in `evaluations/confusion-sets/` with 54 shared
+- **4 confusion-set families** in `evaluations/confusion-sets/` with 59 shared
   cross-skill discriminator cases (hard-negative, misleading-keyword,
   counterfactual pairs, multi-intent, ambiguous-natural, workflow-transition).
   Each confusion set lists its candidate `skills`; every case prompt avoids naming
