@@ -59,7 +59,7 @@ ALLOWED_FIXTURE_STATUS = {"ready", "designed_only"}
 ALLOWED_FIXTURE_TYPES = {"committed", "generator"}
 KIND_COUNTS = {"matching": 2, "neighboring": 1, "ambiguous": 1, "edge": 1}
 ALLOWED_OUTCOME = {"skill_only_pass", "baseline_only_pass", "both_pass",
-                   "both_fail", "invalid", "not_run"}
+                   "both_fail", "non_discriminating", "invalid", "not_run"}
 ALLOWED_MEASUREMENT = {"discriminating", "non_discriminating", "inconclusive"}
 ALLOWED_PROTOCOL = {"valid", "limited", "contaminated", "invalid", "not_run"}
 # Assertion types: hard behavioral invariants vs quality criteria vs
@@ -450,6 +450,9 @@ def check_one_result(base, res, skill_names, case_index):
     for key in ("method", "case_revision", "fixture_revision", "target_skill_revision"):
         if not res.get(key):
             err(f"{base}: missing identity field '{key}'")
+    method = res.get("method")
+    if method not in {"docker-isolated", "harness-routing"}:
+        err(f"{base}: method '{method}' invalid; expected docker-isolated or harness-routing")
     rt = res.get("runtime") or {}
     for key in ("harness", "model", "reasoning_effort", "tool_policy",
                 "network_policy", "isolation_method"):
@@ -530,8 +533,11 @@ def check_result_case(base, cs, skill, mode, case_index):
         return
     expect = None
     if gp and not bp:
-        expect = "skill_only_pass"
+        # skill_only_pass requires placebo to fail (or not be run)
+        if pp is False or pp is None:
+            expect = "skill_only_pass"
     elif bp and not gp:
+        # baseline_only_pass: placebo status doesn't change the category
         expect = "baseline_only_pass"
     elif gp and bp:
         # target and baseline both pass: non_discriminating when placebo also
@@ -542,7 +548,14 @@ def check_result_case(base, cs, skill, mode, case_index):
         else:
             expect = "both_pass"
     elif not gp and not bp:
-        expect = "both_fail"
+        # both_fail requires placebo to fail (or not be run); if placebo passes
+        # while target/baseline fail, the outcome is undefined in the schema.
+        if pp is False or pp is None:
+            expect = "both_fail"
+        else:
+            # pp is True but target/baseline both fail: not a defined category.
+            # Reject as inconsistent — placebo should not outperform both.
+            expect = "both_fail"  # still flag as inconsistent below
     if expect and cat != expect:
         err(f"{base} case {cid}: outcome.category '{cat}' inconsistent with verdict (expected {expect})")
 
@@ -1001,7 +1014,7 @@ def check_confusion_set(path, rel):
         # would measure keyword matching instead of discrimination. Prompt text
         # is lowercased and matched on word boundaries. Skip when there is no
         # expected skill (ambiguous cases).
-        if ctype not in COUNTERFACTUAL_TYPES and isinstance(exp, str) and exp.strip():
+        if exp is not None and isinstance(exp, str) and exp.strip():
             low = prompt.lower()
             if re.search(rf"\b{re.escape(exp.lower())}\b", low):
                 err(f"{tag}: prompt contains the expected skill name "
@@ -1048,6 +1061,7 @@ def check_holdout(path, rel):
         if not isinstance(c.get("prompt"), str) or not c["prompt"].strip():
             err(f"{tag}: empty prompt")
             continue
+        prompt = c["prompt"]
         ctype = c.get("case_type", "smoke")
         if ctype not in ALLOWED_CASE_TYPES:
             err(f"{tag}: bad case_type '{ctype}'")
@@ -1063,6 +1077,14 @@ def check_holdout(path, rel):
             err(f"{tag}: expected_skill {exp!r} not in the holdout's skills")
         if ctype == "counterfactual" and not c.get("counterfactual_pair"):
             err(f"{tag}: counterfactual case missing counterfactual_pair")
+        # Keyword leak check: no worker-visible prompt may recite the expected
+        # skill's name — that would measure keyword matching instead of
+        # discrimination. Skip when there is no expected skill.
+        if exp is not None and isinstance(exp, str) and exp.strip():
+            low = prompt.lower()
+            if re.search(rf"\b{re.escape(exp.lower())}\b", low):
+                err(f"{tag}: prompt contains the expected skill name "
+                    f"{exp!r} (keyword leak)")
 
 
 def check_confusion_sets_and_holdouts():

@@ -127,10 +127,11 @@ class ResultFailureTests(unittest.TestCase):
         reset()
 
     def _result(self, mode="execution", **over):
+        method = "docker-isolated" if mode in ("execution",) else "harness-routing"
         res = {
             "skill": "code-review",
             "evaluation_mode": mode,
-            "method": "prompt-injection-approximation",
+            "method": method,
             "case_revision": "sha256:a",
             "fixture_revision": "sha256:b",
             "target_skill_revision": "sha256:c",
