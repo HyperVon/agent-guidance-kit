@@ -176,13 +176,26 @@ Goal: measure the skill's marginal value once it is legitimately active.
     guidance**; the `placebo` worker mounts **irrelevant** guidance at the same
     neutral path. **Never mount the whole skill directory**: doing so leaks the
     `evals/` fixture snapshot (including the expected output) into the worker.
-    The task workspace is mounted once, read-write, at `/work/task` (the
-    worker's cwd); it is a *separate* copy per condition, so no worker can
-    mutate another's state.
-    - **Generator fixtures are evaluator-only.** The generator (`setup.sh`) is run
-      under a sanitized environment (`eval_hashing.run_generator`) and its source is
-      then **stripped** from the seed the worker sees. The worker must never read
-      the generator source / answer key.
+     The task workspace is mounted once, read-write, at `/work/task` (the
+     worker's cwd); it is a *separate* copy per condition, so no worker can
+     mutate another's state.
+     - **Generator fixtures are evaluator-only.** The generator (`setup.sh`) is run
+       under a sanitized environment (`eval_hashing.run_generator`) and its source is
+       then **stripped** from the seed the worker sees. The worker must never read
+       the generator source / answer key.
+     - **Layer B activation uses Kilo's real skill-discovery mechanism.** Merely
+       mounting a `SKILL.md` at an arbitrary neutral path does not cause Kilo to
+       load the skill into the worker's context. The runner places the target
+       skill's `SKILL.md` and `references/` under `.kilo/skills/<name>/` inside
+       the worker's workspace, which is the path Kilo scans at session start to
+       discover project-level skills. The placebo receives the same treatment with
+       an irrelevant skill. The baseline receives no `.kilo/skills/` directory.
+       Activation is proven by two independent signals: (1) a filesystem boundary
+       probe confirms the guidance path is present/absent as expected, and (2) the
+       runner parses the Kilo JSONL output for `read` tool calls against the
+       `.kilo/skills/<name>/SKILL.md` path, recording `skill_loaded: true` and
+       the load events. The validator rejects evidence where the target skill was
+       not discovered or not loaded.
   2. Use the free model through **anonymous Kilo Gateway access** (e.g.
     `kilo/tencent/hy3:free`); no API key or host auth is mounted into the
     container. `kilo run` inside the container needs `--auto` (permission

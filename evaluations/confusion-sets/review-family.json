@@ -49,7 +49,7 @@
       "case_type": "counterfactual",
       "counterfactual_pair": "restructure-1",
       "prompt": "We've decided to restructure these modules. Work out the safest sequence of changes, the intermediate states, and the verification steps.",
-      "expected_skill": "implementation-planning",
+      "expected_skill": "review-feedback-resolution",
       "notes": "Pair B: HOW to execute an already-approved direction. One intent change flips the owner."
     },
     {
@@ -112,7 +112,7 @@
         },
         {
           "user": "I agree with findings 1 and 3. Apply those two only.",
-          "expected_route": "implementation-planning"
+          "expected_route": "review-feedback-resolution"
         }
       ],
       "expected_skill": "review-feedback-resolution",

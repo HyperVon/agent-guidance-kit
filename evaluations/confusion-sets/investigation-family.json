@@ -5,7 +5,8 @@
     "systematic-debugging",
     "codebase-orientation",
     "security-review",
-    "threat-modeling"
+    "threat-modeling",
+    "quality-hardening"
   ],
   "notes": "Difficult shared cases for the investigation cluster. The discriminations: root-cause diagnosis (systematic-debugging) vs descriptive orientation (codebase-orientation) vs finding-level security review of a change (security-review) vs structured threat modeling (threat-modeling). Cross-cutting cases that expect architecture-review or implementation-planning appear in the review-family and design-change-family sets where those skills are candidate options.",
   "cases": [

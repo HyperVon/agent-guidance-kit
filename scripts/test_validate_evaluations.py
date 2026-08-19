@@ -344,14 +344,17 @@ class EvidenceValidationTests(unittest.TestCase):
             "guidance_mounted": True, "guidance_verified": True,
             "guidance_verified_absent": False, "guidance_probe": "present",
             "starting_fixture_hash": "sha256:seed", "ending_fixture_hash": "sha256:g",
-            "output": "target output", "stderr": ""}
+            "output": "target output", "stderr": "",
+            "skill_kilo_path": ".kilo/skills/code-review",
+            "skill_loaded": True, "skill_loads": []}
         baseline = {
             "container_id": "cb", "session_id": "sb",
             "run_status": "success", "returncode": 0,
             "guidance_mounted": False, "guidance_verified": False,
             "guidance_verified_absent": True, "guidance_probe": "absent",
             "starting_fixture_hash": "sha256:seed", "ending_fixture_hash": "sha256:h",
-            "output": "baseline output", "stderr": ""}
+            "output": "baseline output", "stderr": "",
+            "skill_kilo_path": None, "skill_loaded": False, "skill_loads": []}
         rep = {
             "rep": 1,
             "workspace_path": "/work/task",
@@ -371,6 +374,7 @@ class EvidenceValidationTests(unittest.TestCase):
                 "expected_fixture_hash": "sha256:seed",
                 "guidance_bundle_hash": "sha256:bundle",
                 "guidance_mount_path": "/work/guidance/task",
+                "target_skill_kilo_path": ".kilo/skills/code-review",
                 "conditions": ["target", "baseline"],
                 "repetitions": [rep]}
 
@@ -417,6 +421,42 @@ class EvidenceValidationTests(unittest.TestCase):
         ev = self._exec_evidence()
         ev["repetitions"][0]["condition_workspace_ids"]["baseline"] = "ws-target-1"
         self.assertTrue(any("workspace ids" in e
+                            for e in ve.validate_execution_evidence(ev)))
+
+    def test_execution_evidence_missing_target_skill_kilo_path_fails(self):
+        ev = self._exec_evidence()
+        del ev["target_skill_kilo_path"]
+        self.assertTrue(any("target_skill_kilo_path" in e
+                            for e in ve.validate_execution_evidence(ev)))
+
+    def test_execution_evidence_baseline_skill_kilo_path_fails(self):
+        ev = self._exec_evidence()
+        ev["repetitions"][0]["conditions"]["baseline"]["skill_kilo_path"] = \
+            ".kilo/skills/code-review"
+        self.assertTrue(any("baseline: skill_kilo_path" in e
+                            for e in ve.validate_execution_evidence(ev)))
+
+    def test_execution_evidence_target_skill_not_loaded_fails(self):
+        ev = self._exec_evidence()
+        ev["repetitions"][0]["conditions"]["target"]["skill_loaded"] = False
+        self.assertTrue(any("skill_loaded" in e
+                            for e in ve.validate_execution_evidence(ev)))
+
+    def test_execution_evidence_placebo_skill_kilo_path_required(self):
+        ev = self._exec_evidence()
+        ev["conditions"] = ["target", "baseline", "placebo"]
+        placebo = {
+            "container_id": "cp", "session_id": "sp",
+            "run_status": "success", "returncode": 0,
+            "guidance_mounted": True, "guidance_verified": True,
+            "guidance_verified_absent": False, "guidance_probe": "present",
+            "starting_fixture_hash": "sha256:seed", "ending_fixture_hash": "sha256:p",
+            "output": "placebo output", "stderr": "",
+            "skill_kilo_path": ".kilo/skills/security-review",
+            "skill_loaded": True, "skill_loads": []}
+        ev["repetitions"][0]["conditions"]["placebo"] = placebo
+        ev["placebo_skill"] = "security-review"
+        self.assertTrue(any("placebo_skill_kilo_path" in e
                             for e in ve.validate_execution_evidence(ev)))
 
     def test_catalog_routing_evidence_valid(self):
@@ -916,6 +956,7 @@ class ExecutionEvidenceAnchorTests(unittest.TestCase):
             "expected_fixture_hash": "sha256:seed",
             "guidance_bundle_hash": "sha256:bundle",
             "guidance_mount_path": "/work/guidance/task",
+            "target_skill_kilo_path": ".kilo/skills/code-review",
             "conditions": ["target", "baseline"],
             "repetitions": [{
                 "rep": 1,
@@ -932,14 +973,18 @@ class ExecutionEvidenceAnchorTests(unittest.TestCase):
                                "guidance_probe": "present",
                                "starting_fixture_hash": "sha256:seed",
                                "ending_fixture_hash": "sha256:g",
-                               "output": "out", "stderr": ""},
+                               "output": "out", "stderr": "",
+                               "skill_kilo_path": ".kilo/skills/code-review",
+                               "skill_loaded": True, "skill_loads": []},
                     "baseline": {"container_id": "cb", "session_id": "sb",
-                                 "run_status": "success", "returncode": 0,
-                                 "guidance_verified_absent": True,
-                                 "guidance_probe": "absent",
-                                 "starting_fixture_hash": "sha256:seed",
-                                 "ending_fixture_hash": "sha256:h",
-                                 "output": "out", "stderr": ""},
+                                  "run_status": "success", "returncode": 0,
+                                  "guidance_verified_absent": True,
+                                  "guidance_probe": "absent",
+                                  "starting_fixture_hash": "sha256:seed",
+                                  "ending_fixture_hash": "sha256:h",
+                                  "output": "out", "stderr": "",
+                                  "skill_kilo_path": None,
+                                  "skill_loaded": False, "skill_loads": []},
                 },
                 "distinct_containers": True, "distinct_sessions": True,
                 "starting_fixture_hashes_match": True,
@@ -1091,6 +1136,26 @@ class ConfusionSetAndHoldoutTests(unittest.TestCase):
             p = self._write(tmp, "design.json", d)
             ve.check_confusion_set(p, "evaluations/confusion-sets/design.json")
             self.assertEqual(ve.errors, [], ve.errors)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_workflow_transition_route_not_in_skills_rejected(self):
+        d = self._confusion()
+        d["cases"] = [{
+            "id": 1, "case_type": "workflow-transition",
+            "prompt": "p",
+            "turns": [
+                {"user": "u1", "expected_route": "architecture-review"},
+                {"user": "u2", "expected_route": "quality-hardening"},
+            ],
+        }]
+        d["skills"] = ["architecture-review", "implementation-planning"]
+        tmp = tempfile.mkdtemp()
+        try:
+            p = self._write(tmp, "design.json", d)
+            ve.check_confusion_set(p, "evaluations/confusion-sets/design.json")
+            self.assertTrue(any("not in the confusion set's skills" in e
+                                for e in ve.errors), ve.errors)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -1357,16 +1422,22 @@ class ExecutionEvidenceV2Tests(unittest.TestCase):
             "starting_fixture_hash": "sha256:seed",
             "ending_fixture_hash": "sha256:after",
             "output": "worker output", "stderr": "",
-        }
+            "skill_kilo_path": ".kilo/skills/code-review",
+            "skill_loaded": True, "skill_loads": []}
         baseline = dict(cond, container_id="cb", session_id="sb",
                         guidance_mounted=False, guidance_verified=False,
-                        guidance_verified_absent=True, guidance_probe="absent")
+                        guidance_verified_absent=True, guidance_probe="absent",
+                        skill_kilo_path=None, skill_loaded=False, skill_loads=[])
+        placebo_skill = over.get('placebo_skill')
         ev = {
             "evidence_type": "execution",
             "canonical_seed_hash": "sha256:seed",
             "expected_fixture_hash": "sha256:seed",
             "guidance_bundle_hash": "sha256:bundle",
             "guidance_mount_path": "/work/guidance/task",
+            "target_skill_kilo_path": ".kilo/skills/code-review",
+            "placebo_skill_kilo_path": (".kilo/skills/" + placebo_skill)
+                if placebo_skill else None,
             "conditions": ["target", "baseline"],
             "placebo_skill": None, "placebo_bundle_hash": None,
             "repetitions": [{
@@ -1438,7 +1509,8 @@ class ExecutionEvidenceV2Tests(unittest.TestCase):
                             placebo_skill="security-review",
                             placebo_bundle_hash="sha256:p")
         placebo = dict(ev["repetitions"][0]["conditions"]["target"],
-                       container_id="cp", session_id="sp")
+                       container_id="cp", session_id="sp",
+                       skill_kilo_path=".kilo/skills/security-review")
         ev["repetitions"][0]["conditions"]["placebo"] = placebo
         ev["repetitions"][0]["condition_workspace_ids"]["placebo"] = "ws-p"
         self.assertEqual(ve.validate_execution_evidence(ev), [])
@@ -1490,6 +1562,43 @@ class ExecutionRunnerBoundaryTests(unittest.TestCase):
             ree._conditions_arg("target,baseline,bogus")
         self.assertEqual(ree._conditions_arg("baseline,target,target"),
                          ["baseline", "target"])
+
+    def test_materialize_skill_for_kilo_creates_discovery_dir(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            skilldir = os.path.join(tmp, "skill")
+            os.makedirs(os.path.join(skilldir, "references"))
+            open(os.path.join(skilldir, "SKILL.md"), "w").write("# S")
+            open(os.path.join(skilldir, "references", "r.md"), "w").write("r")
+            workspace = os.path.join(tmp, "ws")
+            os.makedirs(workspace)
+            path = ree.materialize_skill_for_kilo(skilldir, "code-review", workspace)
+            self.assertTrue(os.path.exists(os.path.join(path, "SKILL.md")))
+            self.assertTrue(os.path.exists(os.path.join(path, "references", "r.md")))
+            # The SKILL.md body and references must be copied verbatim.
+            self.assertEqual(open(os.path.join(path, "SKILL.md")).read(), "# S")
+            self.assertEqual(open(os.path.join(path, "references", "r.md")).read(), "r")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_extract_skill_loads_detects_read(self):
+        stdout = '\n'.join([
+            '{"type":"tool_use","timestamp":1,"part":{"tool":"read",'
+            '"state":{"input":{"filePath":"/work/task/.kilo/skills/code-review/SKILL.md"}}}}',
+            '{"type":"text","text":"hello"}',
+        ])
+        loads = ree.extract_skill_loads(stdout, "code-review", "/work/task")
+        self.assertEqual(len(loads), 1)
+        self.assertIn("code-review", loads[0]["path"])
+
+    def test_extract_skill_loads_ignores_other_reads(self):
+        stdout = '\n'.join([
+            '{"type":"tool_use","timestamp":1,"part":{"tool":"read",'
+            '"state":{"input":{"filePath":"/work/task/main.py"}}}}',
+            '{"type":"text","text":"hello"}',
+        ])
+        loads = ree.extract_skill_loads(stdout, "code-review", "/work/task")
+        self.assertEqual(loads, [])
 
 
 if __name__ == "__main__":

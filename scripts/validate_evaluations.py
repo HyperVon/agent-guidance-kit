@@ -765,6 +765,38 @@ def validate_execution_evidence(evidence):
                 errs.append("placebo condition present but placebo_skill not "
                             "recorded")
 
+        # Skill discovery/loading evidence (Layer B activation proof).
+        # Mere filesystem presence is not activation; Kilo must be able to
+        # discover the skill through its normal scan and the agent must have
+        # loaded it into context.
+        if not evidence.get("target_skill_kilo_path"):
+            errs.append("execution evidence missing target_skill_kilo_path "
+                        "(target skill not placed for Kilo discovery)")
+        if "placebo" in conds and not evidence.get("placebo_skill_kilo_path"):
+            errs.append("execution evidence missing placebo_skill_kilo_path "
+                        "(placebo skill not placed for Kilo discovery)")
+        t = cmap.get("target") or {}
+        if t.get("skill_kilo_path") != evidence.get("target_skill_kilo_path"):
+            errs.append(f"{tag} target: skill_kilo_path does not match "
+                        f"target_skill_kilo_path (target skill not discoverable "
+                        f"in worker workspace)")
+        if not t.get("skill_loaded"):
+            errs.append(f"{tag} target: skill_loaded != true "
+                        f"(agent did not read the target SKILL.md from "
+                        f".kilo/skills/; guidance may not be active)")
+        b = cmap.get("baseline") or {}
+        if b.get("skill_kilo_path"):
+            errs.append(f"{tag} baseline: skill_kilo_path is set "
+                        f"(baseline must not receive the target skill)")
+        if "placebo" in conds:
+            p = cmap.get("placebo") or {}
+            if p.get("skill_kilo_path") != evidence.get("placebo_skill_kilo_path"):
+                errs.append(f"{tag} placebo: skill_kilo_path does not match "
+                            f"placebo_skill_kilo_path")
+            if not p.get("skill_loaded"):
+                errs.append(f"{tag} placebo: skill_loaded != true "
+                            f"(agent did not read the placebo SKILL.md)")
+
         # Cross-condition isolation.
         cids = [cmap[n].get("container_id") for n in conds]
         sids = [cmap[n].get("session_id") for n in conds]
@@ -1025,6 +1057,10 @@ def check_confusion_set(path, rel):
                 err(f"{tag}: turn missing non-empty 'user' text")
             if "expected_route" in t and not isinstance(t.get("expected_route"), str):
                 err(f"{tag}: turn expected_route must be a skill name")
+            route = t.get("expected_route")
+            if route is not None and route not in skills:
+                err(f"{tag}: turn expected_route {route!r} not in the "
+                    f"confusion set's skills")
         if ctype == "workflow-transition" and not c.get("turns"):
             err(f"{tag}: workflow-transition case must carry ordered 'turns'")
         if c.get("notes") is not None and not isinstance(c.get("notes"), str):
@@ -1085,6 +1121,16 @@ def check_holdout(path, rel):
             if re.search(rf"\b{re.escape(exp.lower())}\b", low):
                 err(f"{tag}: prompt contains the expected skill name "
                     f"{exp!r} (keyword leak)")
+        for t in c.get("turns", []):
+            if not isinstance(t, dict) or not isinstance(t.get("user"), str) \
+                    or not t["user"].strip():
+                err(f"{tag}: turn missing non-empty 'user' text")
+            if "expected_route" in t and not isinstance(t.get("expected_route"), str):
+                err(f"{tag}: turn expected_route must be a skill name")
+            route = t.get("expected_route")
+            if route is not None and route not in skills:
+                err(f"{tag}: turn expected_route {route!r} not in the "
+                    f"holdout's skills")
 
 
 def check_confusion_sets_and_holdouts():

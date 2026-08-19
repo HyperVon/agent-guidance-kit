@@ -221,11 +221,14 @@ def extract_decision(text, catalog_names=None):
                          "rationale": obj.get("rationale")}}
 
 
-def run_kilo(prompt, model, workdir, kilo_bin=KILO_BIN, catalog_names=None):
+def run_kilo(prompt, model, workdir, kilo_bin=KILO_BIN, catalog_names=None,
+             session_id=None):
     """Run one model call. Returns structured metadata distinguishing a failed
     invocation from a valid null-selection decision."""
     cmd = [kilo_bin, "run", "--model", model, "--variant", "high",
            "--format", "json", "--pure", prompt]
+    if session_id:
+        cmd += ["--session", session_id, "--continue"]
     try:
         proc = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True,
                               timeout=600)
@@ -306,59 +309,134 @@ def run_confusion_set(confusion_path, args, kilo_bin):
     }
     for case in d.get("cases", []):
         cid = case.get("id")
-        prompt = build_confusion_prompt(catalog_text, case.get("prompt", ""),
-                                        skills)
-        reps = []
-        for i in range(args.reps):
-            workdir = tempfile.mkdtemp(prefix="kilo-routing-")
-            try:
-                meta = run_kilo(prompt, args.model, workdir, kilo_bin,
-                                catalog_names)
-            finally:
-                shutil.rmtree(workdir, ignore_errors=True)
-            dec = meta["decision"]
-            sel = dec.get("selected_skill") if dec else None
-            act = dec.get("action") if dec else None
-            ok = False
-            if meta["status"] == "success":
-                ok = matches(sel, case.get("expected_skill"), [])
-            reps.append({
-                "rep": i + 1,
-                "status": meta["status"],
-                "error": meta.get("error"),
-                "returncode": meta["returncode"],
-                "session_id": meta["session_id"],
-                "stderr": meta["stderr"],
-                "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest(),
-                "output_hash": hashlib.sha256(
-                    (meta["stdout"] or "").encode()).hexdigest(),
-                "decision": {"selected_skill": sel, "action": act,
-                             "rationale": dec.get("rationale") if dec else None},
-                "match": ok,
+        case_type = case.get("case_type")
+        turns = case.get("turns")
+        if turns and case_type in ("workflow-transition", "harness-native"):
+            reps = []
+            for i in range(args.reps):
+                workdir = tempfile.mkdtemp(prefix="kilo-routing-")
+                try:
+                    turn_results = []
+                    session_id = None
+                    for turn_i, turn in enumerate(turns, 1):
+                        turn_prompt = build_confusion_prompt(
+                            catalog_text, turn.get("user", ""), skills
+                        )
+                        meta = run_kilo(
+                            turn_prompt, args.model, workdir, kilo_bin,
+                            catalog_names, session_id=session_id,
+                        )
+                        if meta["status"] == "success" and meta["session_id"]:
+                            session_id = meta["session_id"]
+                        dec = meta.get("decision") or {}
+                        sel = dec.get("selected_skill")
+                        act = dec.get("action")
+                        expected = turn.get("expected_route")
+                        ok = False
+                        if meta["status"] == "success":
+                            ok = matches(sel, expected, [])
+                        turn_results.append({
+                            "turn": turn_i,
+                            "session_id": session_id,
+                            "user": turn.get("user"),
+                            "expected_route": expected,
+                            "selected_skill": sel,
+                            "action": act,
+                            "pass": ok,
+                            "status": meta["status"],
+                            "error": meta.get("error"),
+                            "prompt_hash": hashlib.sha256(
+                                turn_prompt.encode()).hexdigest(),
+                            "output_hash": hashlib.sha256(
+                                (meta.get("stdout") or "").encode()).hexdigest(),
+                        })
+                    reps.append({
+                        "rep": i + 1,
+                        "session_id": session_id,
+                        "turns": turn_results,
+                        "passed": sum(1 for t in turn_results if t["pass"]),
+                        "total": len(turns),
+                    })
+                finally:
+                    shutil.rmtree(workdir, ignore_errors=True)
+            results["cases"].append({
+                "id": cid,
+                "case_type": case_type,
+                "expected_skill": case.get("expected_skill"),
+                "turns": turns,
+                "repetitions": reps,
+                "passed": sum(1 for r in reps
+                              if r["passed"] == len(turns)),
+                "total": args.reps,
             })
-        results["cases"].append({
-            "id": cid,
-            "case_type": case.get("case_type"),
-            "expected_skill": case.get("expected_skill"),
-            "turns": case.get("turns"),
-            "repetitions": reps,
-            "passed": sum(1 for r in reps if r["match"]),
-            "total": args.reps,
-            "confusions": [r["decision"]["selected_skill"]
-                           for r in reps if r["status"] == "success"
-                           and r["decision"]["selected_skill"]
-                           and r["decision"]["selected_skill"]
-                           != case.get("expected_skill")],
-        })
+        else:
+            prompt = build_confusion_prompt(catalog_text, case.get("prompt", ""),
+                                            skills)
+            reps = []
+            for i in range(args.reps):
+                workdir = tempfile.mkdtemp(prefix="kilo-routing-")
+                try:
+                    meta = run_kilo(prompt, args.model, workdir, kilo_bin,
+                                    catalog_names)
+                finally:
+                    shutil.rmtree(workdir, ignore_errors=True)
+                dec = meta["decision"]
+                sel = dec.get("selected_skill") if dec else None
+                act = dec.get("action") if dec else None
+                ok = False
+                if meta["status"] == "success":
+                    ok = matches(sel, case.get("expected_skill"), [])
+                reps.append({
+                    "rep": i + 1,
+                    "status": meta["status"],
+                    "error": meta.get("error"),
+                    "returncode": meta["returncode"],
+                    "session_id": meta["session_id"],
+                    "stderr": meta["stderr"],
+                    "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest(),
+                    "output_hash": hashlib.sha256(
+                        (meta["stdout"] or "").encode()).hexdigest(),
+                    "decision": {"selected_skill": sel, "action": act,
+                                 "rationale": dec.get("rationale") if dec else None},
+                    "match": ok,
+                })
+            results["cases"].append({
+                "id": cid,
+                "case_type": case_type,
+                "expected_skill": case.get("expected_skill"),
+                "turns": turns,
+                "repetitions": reps,
+                "passed": sum(1 for r in reps if r["match"]),
+                "total": args.reps,
+                "confusions": [r["decision"]["selected_skill"]
+                               for r in reps if r["status"] == "success"
+                               and r["decision"]["selected_skill"]
+                               and r["decision"]["selected_skill"]
+                               != case.get("expected_skill")],
+            })
     if args.out:
         os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
         json.dump(results, open(args.out, "w"), indent=2)
         print(f"wrote evidence: {args.out}")
     for case in results["cases"]:
-        print(f"case {case['id']} [{case.get('case_type')}]: "
-              f"expected={case['expected_skill']!r} "
-              f"passed {case['passed']}/{case['total']} "
-              f"confusions={case['confusions']}")
+        if case.get("turns"):
+            total_turns = len(case["turns"])
+            fully_passed = sum(1 for r in case["repetitions"]
+                               if r["passed"] == total_turns)
+            print(f"case {case['id']} [{case.get('case_type')}]: "
+                  f"workflow-transition {fully_passed}/{case['total']} reps "
+                  f"fully passed")
+            for r in case["repetitions"]:
+                for t in r.get("turns", []):
+                    status = "PASS" if t["pass"] else "FAIL"
+                    print(f"  rep{r['rep']} turn{t['turn']}: {status} "
+                          f"expected={t['expected_route']!r} "
+                          f"selected={t['selected_skill']!r}")
+        else:
+            print(f"case {case['id']} [{case.get('case_type')}]: "
+                  f"expected={case['expected_skill']!r} "
+                  f"passed {case['passed']}/{case['total']} "
+                  f"confusions={case['confusions']}")
 
 
 def main():

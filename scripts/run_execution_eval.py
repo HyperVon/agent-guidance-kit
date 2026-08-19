@@ -139,6 +139,64 @@ def materialize_guidance(skill_dir, skill_name):
     return dst
 
 
+def materialize_skill_for_kilo(skill_dir, skill_name, workspace):
+    """Create ``.kilo/skills/<skill-name>/`` in the worker's workspace so Kilo
+    discovers the skill through its normal startup scan.
+
+    This is the activation mechanism for Layer B.  Merely mounting a
+    ``SKILL.md`` at an arbitrary neutral path does not cause Kilo to load the
+    skill into the worker's context.  Kilo discovers skills from
+    ``.kilo/skills/`` (project-level) in the working directory at session
+    start; once discovered, the agent may read the ``SKILL.md`` into context
+    when it decides the task matches the skill description.
+
+    The placebo condition gets the same mechanism with an irrelevant skill.
+    The baseline receives no ``.kilo/skills/`` directory at all.
+    """
+    kilo_skills = os.path.join(workspace, ".kilo", "skills", skill_name)
+    os.makedirs(kilo_skills, exist_ok=True)
+    skill_md = os.path.join(skill_dir, "SKILL.md")
+    if os.path.exists(skill_md):
+        shutil.copy(skill_md, os.path.join(kilo_skills, "SKILL.md"))
+    refs = os.path.join(skill_dir, "references")
+    if os.path.isdir(refs):
+        shutil.copytree(refs, os.path.join(kilo_skills, "references"),
+                        dirs_exist_ok=True)
+    return kilo_skills
+
+
+def extract_skill_loads(stdout, skill_name, workspace_path):
+    """Detect whether the agent actually loaded a skill by reading its SKILL.md.
+
+    Returns a list of ``{path, timestamp}`` dicts for each detected load event
+    in the Kilo JSONL output.  A skill is considered ``loaded`` when the agent
+    issues a ``read`` tool call against the ``.kilo/skills/<skill>/SKILL.md``
+    path inside the worker workspace.
+    """
+    skill_md_rel = os.path.join(".kilo", "skills", skill_name, "SKILL.md")
+    loads = []
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except Exception:
+            continue
+        if obj.get("type") == "tool_use":
+            part = obj.get("part", {})
+            if part.get("tool") == "read":
+                file_path = part.get("state", {}).get("input", {}).get("filePath", "")
+                if skill_md_rel in file_path or (
+                    skill_name in file_path and "SKILL.md" in file_path
+                ):
+                    loads.append({
+                        "path": file_path,
+                        "timestamp": obj.get("timestamp"),
+                    })
+    return loads
+
+
 def guidance_bundle_hash(guidance_dir):
     """Deterministic hash of the EXACT guidance artifact mounted read-only into the
     target worker: SKILL.md plus references/** (sorted by relative path, each file
@@ -472,6 +530,11 @@ def main():
         "skill_hash": skill_hash,
         "guidance_bundle_hash": guidance_bundle,
         "guidance_mount_path": GUIDANCE_MOUNT,
+        "target_skill_kilo_path": os.path.join(".kilo", "skills", args.skill),
+        "placebo_skill_kilo_path": (
+            os.path.join(".kilo", "skills", args.placebo_skill)
+            if "placebo" in args.conditions else None
+        ),
         "expected_fixture_hash": expected_fixture_hash,
         "canonical_seed_hash": None,  # filled in after the first seed is materialized
         "conditions": list(args.conditions),
@@ -499,6 +562,7 @@ def main():
             "ending_fixture_hash": after,
             "output": meta["output"],
             "stderr": meta["stderr"],
+            "stdout": meta.get("stdout", ""),
             "filesystem_snapshot_before": snap_before,
             "filesystem_snapshot_after": snap_after,
             "reason": meta["reason"],
@@ -512,6 +576,20 @@ def main():
             evidence["canonical_seed_hash"] = HASH_PREFIX + seed_hash
             cond_fx = {name: _copy_seed(seed) for name in args.conditions}
 
+            # Layer B activation: place the target/placebo skills in
+            # ``.kilo/skills/<name>/`` inside each worker's workspace so Kilo
+            # discovers them through its normal startup scan.  The baseline
+            # receives no skill directory and therefore cannot discover the
+            # target.  This is the mechanism that proves activation: not merely
+            # that a file exists, but that the runtime's own discovery surface
+            # was provided with the skill.
+            for name in args.conditions:
+                if name == "target":
+                    materialize_skill_for_kilo(skill_dir, args.skill, cond_fx[name])
+                elif name == "placebo" and placebo_dir:
+                    materialize_skill_for_kilo(placebo_dir, args.placebo_skill,
+                                               cond_fx[name])
+
             cond_meta = {}
             for name in args.conditions:
                 guid = None
@@ -521,6 +599,27 @@ def main():
                     guid = placebo_dir
                 cond_meta[name] = run_condition(name, natural_task,
                                                 cond_fx[name], guid)
+                # Detect whether the agent actually loaded the skill by reading
+                # its SKILL.md from the .kilo/skills/ discovery path.
+                if name == "target":
+                    loads = extract_skill_loads(
+                        cond_meta[name]["stdout"], args.skill, WORKSPACE_MOUNT)
+                    cond_meta[name]["skill_kilo_path"] = os.path.join(
+                        ".kilo", "skills", args.skill)
+                    cond_meta[name]["skill_loaded"] = bool(loads)
+                    cond_meta[name]["skill_loads"] = loads
+                elif name == "placebo" and placebo_dir:
+                    loads = extract_skill_loads(
+                        cond_meta[name]["stdout"], args.placebo_skill,
+                        WORKSPACE_MOUNT)
+                    cond_meta[name]["skill_kilo_path"] = os.path.join(
+                        ".kilo", "skills", args.placebo_skill)
+                    cond_meta[name]["skill_loaded"] = bool(loads)
+                    cond_meta[name]["skill_loads"] = loads
+                else:
+                    cond_meta[name]["skill_kilo_path"] = None
+                    cond_meta[name]["skill_loaded"] = False
+                    cond_meta[name]["skill_loads"] = []
 
             rep = {
                 "rep": i + 1,

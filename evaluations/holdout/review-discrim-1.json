@@ -7,7 +7,9 @@
     "architecture-review",
     "review-feedback-resolution",
     "systematic-debugging",
-    "implementation-planning"
+    "implementation-planning",
+    "quality-hardening",
+    "requirements-and-design"
   ],
   "notes": "Holdout set: held out from ordinary skill editing. These cases are NOT near any skill's evals/evals.json and are invoked separately to test generalization beyond the development cases. Open repository: not secret, only workflow-separated.",
   "cases": [
@@ -40,6 +42,33 @@
       "prompt": "We've decided to restructure the user-service modules. Work out the safest sequence of changes, intermediate states, and verification steps.",
       "expected_skill": "implementation-planning",
       "notes": "Pair B: executing an already-approved direction. One intent change flips the owner."
+    },
+    {
+      "id": 5,
+      "case_type": "hard-negative",
+      "prompt": "The auth endpoint accepts any JWT with a valid signature, even if the token was issued for a different tenant. Find the vulnerability and propose the smallest safe fix.",
+      "expected_skill": "security-review",
+      "notes": "Security vocabulary with a concrete vulnerability. Dominant job is finding-level security review, not general code review or systematic debugging."
+    },
+    {
+      "id": 6,
+      "case_type": "workflow-transition",
+      "prompt": "Our payment service occasionally double-charges under concurrent retries. The root cause is a known race between the retry loop and the webhook handler.",
+      "turns": [
+        {
+          "user": "Our payment service occasionally double-charges under concurrent retries. The root cause is a known race between the retry loop and the webhook handler. Harden it: add a regression test first, then the fix, then verify.",
+          "expected_route": "quality-hardening"
+        }
+      ],
+      "expected_skill": "quality-hardening",
+      "notes": "Workflow transition from investigation to hardening. The agent must not re-diagnose or re-review; the root cause is already established."
+    },
+    {
+      "id": 7,
+      "case_type": "misleading-keyword",
+      "prompt": "We need to add invoice PDF downloads. Customers should be able to download them from the billing page or receive them by email. Figure out the requirements before we write any code.",
+      "expected_skill": "requirements-and-design",
+      "notes": "Requirements vocabulary in a feature context. The dominant job is clarifying behavior and selecting an approach, not implementation planning or code review."
     }
   ]
 }

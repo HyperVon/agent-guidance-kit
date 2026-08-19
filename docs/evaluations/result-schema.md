@@ -40,7 +40,14 @@ parses and checks. The block is JSON.
     "natural_task_identical_across_conditions": true,
     "natural_task_hash": "sha256:…",
     "routing_mechanism": null,
-    "conditions": ["target", "baseline", "placebo"]
+    "conditions": ["target", "baseline", "placebo"],
+    "target_skill_kilo_path": ".kilo/skills/code-review",
+    "placebo_skill_kilo_path": ".kilo/skills/security-review",
+    "target_skill_loaded": true,
+    "placebo_skill_loaded": true,
+    "skill_loads": [
+      {"path": ".kilo/skills/code-review/SKILL.md", "timestamp": "…"}
+    ]
   },
   "runs": {
     "target":   { "session_id": "t1", "container_id": "ct1" },
