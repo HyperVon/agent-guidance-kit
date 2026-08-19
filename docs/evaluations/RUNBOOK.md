@@ -10,7 +10,7 @@ operationalizes them. Where this file and `SKILL.md` disagree, `SKILL.md` wins;
 fix this file, do not weaken `SKILL.md`.
 
 > **Why this document exists in its current form.** An earlier version of this
-> methodology force-injected the target `SKILL.md` into the WITH-SKILL worker for
+> methodology force-injected the target `SKILL.md` into the `target` worker for
 > *every* case — including routing/neighboring cases. That can measure
 > post-activation behavior, but it **cannot establish routing quality**, because
 > the router was never given a chance to decide. This runbook separates the two
@@ -24,16 +24,16 @@ fix this file, do not weaken `SKILL.md`.
 
 Keep these separate at all times:
 
-1. **Routing quality** — when a natural user request arrives, does the harness
-   select/load the correct skill? Does it avoid loading the target skill for a
-   neighboring request? Does it resolve ambiguity per the documented routing
-   contract?
-2. **Post-activation / execution efficacy** — once a skill has *legitimately*
-   been selected, does its guidance improve behavior relative to the harness
-   default? (correctness, verification discipline, scope control, authority
-   boundaries, etc.)
-3. **Protocol validity** — were the two conditions actually independent and
-   leak-free? Without this, any comparison is uninterpretable.
+1. **Catalog discriminability (Layer A)** — given a natural user request and a
+   neutral skill catalog, can a model select the correct owner? This is a
+   **portable model-as-classifier proxy**, not a harness-routing measurement. It
+   cannot prove the real harness selects correctly — that requires Tier 3.
+2. **Execution efficacy (Layer B, post-activation)** — once a skill has
+   *legitimately* been selected, does its guidance improve behavior relative to
+   the harness default? (correctness, verification discipline, scope control,
+   authority boundaries, etc.)
+3. **Protocol validity** — were the conditions actually independent and leak-free?
+   Without this, any comparison is uninterpretable.
 
 A conclusion about one of these must never be inferred from a run that only
 measured another. In particular: **a forced post-activation handoff failure is
@@ -41,51 +41,59 @@ NOT evidence about routing.**
 
 ## 2. Case design
 
-Each case set (`skills/<skill>/evals/evals.json`) contains five cases:
+Three case tiers live in the repository:
 
-- 2 **matching** — clearly belong to the skill.
-- 1 **neighboring** — belongs to a nearby skill or ordinary workflow.
-- 1 **ambiguous** — requires clarification or a stated routing tie-breaker.
-- 1 **edge / behavior** — a difficult boundary case.
+- **`skills/<skill>/evals/evals.json`** (per-skill smoke + routing cases): five
+  cases per skill by default — 2 **matching**, 1 **neighboring**, 1
+  **ambiguous**, 1 **edge**. Each declares `evaluation_modes`: a subset of
+  `["routing", "execution"]`.
+- **`evaluations/confusion-sets/<name>.json`** — shared cross-skill discriminator
+  cases grouped by cluster (the hardest cases). These host counterfactual pairs
+  and workflow-transition turns. Every case prompt must avoid naming the expected
+  skill.
+- **`evaluations/holdout/<name>.json`** — holdout cases stored outside skill
+  directories so ordinary edits do not consume them; used for generalization
+  testing.
 
-Each case declares `evaluation_modes`: a subset of the three-layer modes
-`["routing", "catalog-routing", "harness-routing", "execution"]`.
+Each per-skill case declares `evaluation_modes`: a subset of
+`["routing", "execution"]`.
 
-- A **routing** case asks whether the *harness* selects this skill. It uses the
-  natural user request verbatim and is **never** force-injected with the target
-  skill. Its oracle lives in `routing` (expected selected skill for the
-  present/absent catalog conditions) and is graded from **harness-selection
-  evidence**, not from whether the worker explains the choice.
-- A **catalog-routing** case (Layer A) is the *portable* form of routing: a fresh
-  model call (no harness, no tools, no repo) is given a neutral catalog built from
-  every skill's frontmatter plus the user request, and must return a structured
-  `{"selected_skill": ...}` decision. It is harness-independent and always
-  runnable (see `scripts/run_catalog_routing_eval.py`).
-- A **harness-routing** case (Layer C) is the optional harness-integration form:
-  the real harness's routing/discovery decides. It requires the harness to *expose
-  the selected skill as evidence*; where it cannot, the case falls back to
-  `catalog-routing` or is marked `not_run`.
+- A **routing** case asks whether the *harness* selects this skill (or, at
+  Layer A, whether a catalog classifier selects it). It uses the natural user
+  request verbatim and is **never** force-injected with the target skill. Its
+  oracle lives in `routing` (expected selected skill for present/absent catalog
+  conditions) and is graded from **harness-selection evidence**, not from whether
+  the worker explains the choice.
 - An **execution** case asks whether *this skill's guidance* beats the default
-  once loaded. It deliberately provides the target guidance to the guided worker.
+  once loaded. It provides the target guidance to the `target` condition only;
+  the `baseline` gets no guidance and the `placebo` gets irrelevant guidance.
   Its oracle lives in `execution` (`expected_output` + `assertions`).
 - A case may carry both modes (e.g. a matching case can test both "is it
   selected?" and "once selected, does it help?"). A routing-only case must not
-  carry an `execution` block (no handoff-prose assertions), and an execution-only
-  case must not carry a `routing`/`routing_context` block.
+  carry an `execution` block (no handoff-prose assertions), and an
+  execution-only case must not carry a `routing`/`routing_context` block.
 
 Routing and execution are **different oracles with different evidence**; a
 post-activation handoff failure is NOT evidence about routing. See
-[routing-experiments.md](routing-experiments.md) for the three experiment types
+[routing-experiments.md](routing-experiments.md) for the experiment types
 (availability / description-regression / execution-efficacy).
 
+Each case carries a `case_type` classifying its design intent (default `smoke`
+for legacy per-skill packs; discriminator-family values live in confusion sets).
 Do not assume every case is used for both modes. Keep oracles faithful to the
-current `SKILL.md`; re-read the skill before scoring. Skill-design fixes that
-the audit surfaces are a *separate* backlog item — do not edit a skill merely to
+current `SKILL.md`; re-read the skill before scoring. Skill-design fixes that the
+audit surfaces are a *separate* backlog item — do not edit a skill merely to
 make its eval pass.
 
-## 3. Routing evaluation protocol
+## 3. Routing evaluation protocols
 
-Goal: measure the actual router.
+Two routing protocols exist. They are **not interchangeable** and must not be
+confused with execution conditions (target/baseline/placebo):
+
+### 3a. Harness routing (Layer C — the real test)
+
+Goal: measure the actual router. Only run this where the harness can capture
+selection evidence.
 
 1. Give the worker the **natural user request** from the case `prompt`.
 2. **Do not** manually inject the target skill body, name, or path.
@@ -93,21 +101,20 @@ Goal: measure the actual router.
 4. **Capture which skill/guidance was selected or loaded** using harness
    evidence (loaded-skill manifest, startup log, tool-call that names a skill
    file, `AGENTS.md` projection, etc.). Prose self-report is not sufficient.
- 5. Evaluate:
-    - **matching** → target skill should be selected/loaded;
-    - **neighboring** → target skill should *not* be selected; the correct owner
-      should be (in **both** the target-present and target-absent catalogs);
-    - **ambiguous** → documented clarification or tie-breaker behavior should
-      occur.
- 6. The routing test exercises the skill's **frontmatter `name` +
-    `description`** (its discoverability surface), because that is what routing
-    depends on. Keep that description accurate and distinct.
+5. Evaluate:
+   - **matching** → target skill should be selected/loaded;
+   - **neighboring** → target skill should *not* be selected; the correct owner
+     should be (in **both** the target-present and target-absent catalogs);
+   - **ambiguous** → documented clarification or tie-breaker behavior should
+     occur.
+6. The routing test exercises the skill's **frontmatter `name` + `description`**
+   (its discoverability surface), because that is what routing depends on. Keep
+   that description accurate and distinct.
 
 This is the **routing availability experiment** (catalog present vs target
 removed). To measure a *description change* instead, run the **description
 regression experiment** (candidate description vs prior description). See
-[routing-experiments.md](routing-experiments.md) — do not call both simply
-"WITH-SKILL vs BASELINE".
+[routing-experiments.md](routing-experiments.md).
 
 **If the harness cannot expose or verify the selected/loaded skill identity**,
 mark the routing comparison **`protocol_status: limited`** (or `not_run`) and do
@@ -115,38 +122,78 @@ mark the routing comparison **`protocol_status: limited`** (or `not_run`) and do
 never be recorded as a routing result. Routing success is primarily the captured
 selected skill, not a worker's self-report.
 
+### 3b. Catalog discriminability (Layer A — portable proxy)
+
+Goal: a portable, harness-independent check of whether skill descriptions are
+distinct enough for a model to select the right owner. This is a **proxy**, not
+a harness-routing measurement. `scripts/run_catalog_routing_eval.py`:
+
+1. Build a neutral catalog from every skill's frontmatter (`name` + `description`).
+2. For each case, construct a disambiguation prompt from the natural request +
+   the candidate skill names from one confusion set (or the target skill + its
+   neighbors). The candidate set is the **only** names the model may select.
+3. Call the model once (no harness, no tools, no repo) and capture the
+   structured `{"selected_skill": ...}` decision.
+4. Compare against the expected skill, building a confusion matrix
+   (intended-vs-selected) and a per-skill precision/recall table.
+5. Record the full matrix. A skill that routes correctly in isolation but is
+   frequently confused with a neighbor by Layer A is a candidate for a
+   description fix — but that fix is only validated by Layer C, not by Layer A
+   alone.
+
+### 3c. Confusion sets and discrimination
+
+Confusion sets (in `evaluations/confusion-sets/`) are the discriminating cases for
+Layer A. Each set groups a cluster of genuinely-confusable skills and contains:
+
+- **hard-negative** cases — the expected skill is the closest plausible neighbor;
+- **misleading-keyword** cases — security/review vocabulary that must NOT override intent;
+- **counterfactual** pairs — same scenario, different deliverable (A: diagnose; B: act);
+- **multi-intent** cases — two requested jobs, first priority must win;
+- **ambiguous-natural** cases — genuine ambiguity where `expected_skill` is null
+  (the router should clarify);
+- **workflow-transition** cases — multi-turn, ownership must move between skills.
+
+**Catalog-discriminability is a proxy.** Layer A accuracy never substitutes for a
+captured harness-selection log at Layer C. Catalog routing results inform whether
+descriptions are distinct enough to warrant a harness-routing experiment — they
+do not themselves measure the harness router.
+
 ## 4. Execution-efficacy protocol (Layer B, Docker-isolated)
 
 Goal: measure the skill's marginal value once it is legitimately active.
 
- 1. Run **two fresh Docker containers** from a reusable image (`Dockerfile.eval`,
-    built as `kilo-eval:local`) — one guided, one baseline (see
+  1. Run **fresh, independent Docker containers** from a reusable image
+    (`Dockerfile.eval`, built as `kilo-eval:local`) — one per condition:
+
+    `target`, `baseline`, and optionally `placebo` (see
     `isolation-protocol.md` and `scripts/run_execution_eval.py`). For each
-    repetition the runner derives **one pristine seed** from the fixture, then makes
-    **two independent copies** (guided workspace, baseline workspace) and verifies
-    both copies hash-identically *before* the run. The guided worker receives the
-    target **guidance only** (`SKILL.md` + `references/`) mounted read-only at
-    `/work/guidance/<name>`; the baseline worker mounts **no guidance** and is never
-    told the skill's name. **Never mount the whole skill directory**: doing so leaks
-    the `evals/` fixture snapshot (including the expected output) into the guided
-    worker. The task workspace is mounted once, read-write, at `/work/task` (the
-    worker's cwd); it is a *separate* copy per condition, so the guided worker can
-    never mutate the baseline's state and vice-versa.
+    repetition the runner derives **one pristine seed** from the fixture, then
+    makes **one independent copy per condition** and verifies all copies
+    hash-identically *before* the run. The `target` worker receives the target
+    **guidance only** (`SKILL.md` + `references/`) mounted read-only at the
+    **neutral** path `/work/guidance/task`; the `baseline` worker mounts **no
+    guidance**; the `placebo` worker mounts **irrelevant** guidance at the same
+    neutral path. **Never mount the whole skill directory**: doing so leaks the
+    `evals/` fixture snapshot (including the expected output) into the worker.
+    The task workspace is mounted once, read-write, at `/work/task` (the
+    worker's cwd); it is a *separate* copy per condition, so no worker can
+    mutate another's state.
     - **Generator fixtures are evaluator-only.** The generator (`setup.sh`) is run
       under a sanitized environment (`eval_hashing.run_generator`) and its source is
       then **stripped** from the seed the worker sees. The worker must never read
       the generator source / answer key.
- 2. Use the free model through **anonymous Kilo Gateway access** (e.g.
+  2. Use the free model through **anonymous Kilo Gateway access** (e.g.
     `kilo/tencent/hy3:free`); no API key or host auth is mounted into the
     container. `kilo run` inside the container needs `--auto` (permission
     auto-approval) to actually perform the task rather than auto-rejecting tools.
     - The model is **pinned**, not auto-routed: `--auto` is only permission
-      auto-approval; model selection is fixed by `--model`. Both the guided and
-      baseline workers use the identical model so the comparison is fair.
+      auto-approval; model selection is fixed by `--model`. All conditions use
+      the identical model so the comparison is fair.
     - **Free-model restriction is a cost-safety gate, not a scientific
       requirement.** The `require_free_model` guard refuses a non-`:free` model
       unless `--allow-paid-model` is passed. A paid model is methodologically valid
-      as long as guided and baseline use the identical resolved model/runtime; the
+      as long as all conditions use the identical resolved model/runtime; the
       guard only prevents accidental spend. The free-model catalog changes over
       time — update `DEFAULT_MODEL` in `run_execution_eval.py` /
       `run_catalog_routing_eval.py` when the current free model is retired.
@@ -154,28 +201,35 @@ Goal: measure the skill's marginal value once it is legitimately active.
       (`ARG KILO_CLI_VERSION`); rebuilding the eval source never silently changes
       the worker runtime. The runner records `kilo --version`, the image id/digest,
       and node version in the evidence.
- 3. Keep model, harness, reasoning effort, tools, network, and output location
-    equivalent between the two fresh containers. Record both container IDs and
+  3. Keep model, harness, reasoning effort, tools, network, and output location
+    equivalent across all condition containers. Record all container IDs and
     session IDs; they MUST differ (a shared container means the conditions were not
     independent). The runner records, per repetition, the starting and ending
     fixture hashes and a filesystem snapshot (git diff / file listing) so the
-    evidence proves both workers started from an identical seed and shows what each
+    evidence proves all workers started from an identical seed and shows what each
     actually changed.
- 4. **A failed run is not evidence.** If a Docker/Kilo invocation returns non-zero,
+  4. **A failed run is not evidence.** If a Docker/Kilo invocation returns non-zero,
     the container never starts, the model output is unparseable/empty, or no session
     id is produced, the repetition is marked `run_status="failed"` and the validator
     **rejects** the whole evidence file. A broken, contaminated, or failed run can
     never masquerade as trustworthy evidence. A boundary probe inside the container
-    confirms guidance presence (guided) / absence (baseline) at the real
-    `/work/guidance/<name>/SKILL.md` path.
- 5. Clearly label this suite **execution / post-activation**. Its results are
+    confirms guidance presence (target/placebo) / absence (baseline) at the neutral
+    `/work/guidance/task/SKILL.md` path.
+  5. **The natural task is byte-identical across all conditions.** The worker-visible
+    prompt is the natural user request only — it must not name the skill, the
+    condition, the case ID, or the evaluation. The runner records a
+    `natural_task_hash` per repetition and the validator requires
+    `natural_task_identical_across_conditions: true`.
+  6. Clearly label this suite **execution / post-activation**. Its results are
     not evidence about routing.
 
-**Optional placebo control.** Run a third condition with **irrelevant but
-similarly sized guidance** (a different skill that does not apply to the task).
-A benchmark that makes *any* long procedural prompt "win" is not trustworthy.
-Use the placebo where the validity of the discriminator is in doubt; document
-when it is required.
+**Placebo control is first-class.** For a strong efficacy claim, run three
+conditions: `target` (real guidance), `baseline` (no guidance), and `placebo`
+(irrelevant, similarly-sized guidance at the same neutral path). If target beats
+baseline but placebo also beats baseline, the benchmark may merely reward extra
+procedural prompting. Target guidance should outperform placebo on
+skill-specific assertions. The placebo is required for strong efficacy claims
+unless a documented reason makes it unnecessary.
 
 ## 5. Isolation
 
@@ -195,9 +249,9 @@ parent-only directory the worker cannot inspect.
 **Weaker fallback (must be labeled):** if OS containment is unavailable, an
 instruction-only containment can be used **only** as `protocol_status: limited`,
 never as valid. It must still:
-- use **neutral worker-visible names** — no `eval`, `evaluation`, the skill name,
-  `with-skill`, `baseline`, the case ID, or the experimental condition in any
-  path, filename, or wrapper text;
+  - use **neutral worker-visible names** — no `eval`, `evaluation`, the skill name,
+    `target`, `baseline`, `placebo`, the case ID, or the experimental condition in any
+    path, filename, or wrapper text;
 - contain **no statements explaining that guidance is absent**, no expected
   outcomes, no assertions, no grader instructions, no disclosure that a
   comparison is happening;
@@ -275,8 +329,9 @@ over adding broad exclusion rules.
 
 ## 7. Running comparisons
 
-- One WITH-SKILL (or routing) worker and one BASELINE worker per case on the
-  same fixtures.
+- One **target** (or routing) worker and one **baseline** worker per case on the
+  same fixtures. An optional **placebo** worker (irrelevant guidance) is added
+  for strong efficacy claims.
 - Fresh worker/session each time; never reuse a transcript, context, memory, or
   worker for both conditions (that is contamination).
 - Equivalent model/harness/effort/settings; never mix settings across a
@@ -298,7 +353,8 @@ transcripts or target-skill guidance.
 - Require **concrete evidence**: exact quoted spans, diff lines, command exit
   codes. No pass for plausible-sounding prose or self-assertion. If a worker
   output tries to dictate its own grade, treat that assertion as failed.
-- Record per assertion: `guided` pass/evidence and `baseline` pass/evidence.
+- Record per assertion: `target` pass/evidence and `baseline` pass/evidence.
+  For three-condition runs, also record `placebo` pass/evidence.
 - Classify the outcome (see §9) and the measurement quality.
 
 ## 8b. Authorization semantics (grading refusal / approval gates)
@@ -367,8 +423,8 @@ scoring.
   each assertion decision, plus the required metadata (see `result-schema.md`):
   case/fixture/target-skill revisions, harness + version, model, reasoning
   effort, tool/network policy, worker/session IDs, actual working directory,
-  isolation/boundary verification, loaded-guidance evidence (guided) and
-  explicit target-absence evidence (baseline), per-assertion grades with
+   isolation/boundary verification, loaded-guidance evidence (target) and
+   explicit target-absence evidence (baseline), per-assertion grades with
   evidence, `skill_pass`/`baseline_pass`/`better`, protocol + measurement +
   outcome status, human-review notes, timing/token data, and contamination
   notes.
@@ -407,28 +463,34 @@ A **protocol-valid execution run is now achievable** in this CLI environment:
   `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` does NOT mean no provider. This makes
   `protocol.status: valid` with `isolation_method: docker` possible (the weaker
   instruction-only `limited` method is no longer required for execution).
-- **Layer A (catalog-routing)** is fully portable and always runnable: a fresh
-  model call over a generated neutral catalog (no harness, no tools). See
-  `scripts/run_catalog_routing_eval.py`.
-- **Layer C (harness-routing)** remains optional and is blocked where the harness
-  cannot expose the selected skill as evidence; such cases fall back to Layer A or
-  are marked `not_run`.
+- **Layer A (catalog-discriminability)** — the portable model-as-classifier proxy,
+  not a harness-routing measurement: a fresh model call over a generated neutral
+  catalog (no harness, no tools) that returns a structured `{"selected_skill": ...}`.
+  See `scripts/run_catalog_routing_eval.py`. Confusion sets produce the confusion
+  matrix.
+- **Layer C (harness-routing)** — optional Tier 3; blocked where the harness cannot
+  expose the selected skill as evidence; such cases fall back to Layer A or are
+  marked `not_run`.
 
 For a protocol-valid run today:
 
 1. Build **frozen committed fixtures** per case (`fixture.status: "ready"` +
    `content_hash`); otherwise mark `designed_only`.
-2. **Routing cases:** prefer Layer A catalog-routing (portable, model-as-classifier);
-   use Layer C harness-routing when the harness exposes selection evidence.
- 3. **Execution cases:** two fresh Docker containers from **independent seed copies**
-    (guided gets guidance-only mount at `/work/guidance/<name>`; baseline gets none),
-    anonymous free model, `--auto` so the worker executes, distinct container/session
-    IDs, and per-rep starting/ending fixture hashes recorded.
- 4. Neutral names; no condition labels; run `scripts/docker_isolation_preflight.py`
-    before scoring (must pass all 23 boundary checks, including the real
-    `/work/guidance/<name>/SKILL.md` presence/absence probes).
- 5. Fresh containers; equivalent settings; at least 3 repetitions for any confirmed
-    efficacy claim.
+2. **Routing cases:** prefer Layer A catalog-discriminability (portable,
+   model-as-classifier) over a confusion set; use Layer C harness-routing when the
+   harness exposes selection evidence. Catalog accuracy never substitutes for a
+   captured harness-selection log.
+3. **Execution cases:** fresh Docker containers from **independent seed copies** (one
+   per condition — `target` gets neutral-path guidance at `/work/guidance/task`,
+   `baseline` gets none, optional `placebo` gets irrelevant guidance at the same path),
+   anonymous free model, `--auto` so the worker executes, distinct container/session
+   IDs, identical natural-task hash across conditions, and per-rep starting/ending
+   fixture hashes recorded.
+4. Neutral names; no condition labels visible to workers; run
+   `scripts/docker_isolation_preflight.py` before scoring (must pass all boundary
+   checks, including the real `/work/guidance/task/SKILL.md` presence/absence probes).
+5. Fresh containers; equivalent settings; at least 3 repetitions for any confirmed
+   efficacy claim.
  6. A repetition whose Docker/Kilo run failed is recorded `run_status="failed"` and
     the validator rejects the evidence — never silently accepted. Grade with quoted
     evidence; retain raw evidence in the ignored `.eval-evidence/` dir; validate with

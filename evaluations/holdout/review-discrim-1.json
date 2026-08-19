@@ -1,0 +1,43 @@
+{
+  "holdout": "review-discrim-1",
+  "cluster": "review",
+  "skills": [
+    "code-review",
+    "security-review",
+    "architecture-review",
+    "review-feedback-resolution"
+  ],
+  "notes": "Holdout set: held out from ordinary skill editing. These cases are NOT near any skill's evals/evals.json and are invoked separately to test generalization beyond the development cases. Open repository: not secret, only workflow-separated.",
+  "cases": [
+    {
+      "id": 1,
+      "case_type": "misleading-keyword",
+      "prompt": "This change adds a JWT scope check to the auth middleware. Don't do a broad security audit - I only need to know whether the implementation is correct and mergeable.",
+      "expected_skill": "code-review",
+      "notes": "Security vocabulary (JWT, scope) must not override the explicit deliverable: a merge-readiness correctness verdict on one diff."
+    },
+    {
+      "id": 2,
+      "case_type": "hard-negative",
+      "prompt": "The checkout flow sometimes double-charges. Before we change anything, trace where the invariant was violated.",
+      "expected_skill": "systematic-debugging",
+      "notes": "Debugging vocabulary in a payment context. The dominant job is root-cause diagnosis."
+    },
+    {
+      "id": 3,
+      "case_type": "counterfactual",
+      "counterfactual_pair": "holdout-restructure-1",
+      "prompt": "Our user-service modules have become tangled and every change touches the same five files. Review the current shape and tell me whether we should restructure.",
+      "expected_skill": "architecture-review",
+      "notes": "Pair A: deciding WHAT to do. Paired case flips to implementation-planning."
+    },
+    {
+      "id": 4,
+      "case_type": "counterfactual",
+      "counterfactual_pair": "holdout-restructure-1",
+      "prompt": "We've decided to restructure the user-service modules. Work out the safest sequence of changes, intermediate states, and verification steps.",
+      "expected_skill": "implementation-planning",
+      "notes": "Pair B: executing an already-approved direction. One intent change flips the owner."
+    }
+  ]
+}

@@ -256,10 +256,118 @@ def matches(selected, expected, fallbacks):
     return selected is None or selected in fallbacks
 
 
+def build_confusion_prompt(catalog_text, user_request, candidates):
+    """Neutral router prompt over a catalog restricted to the confusion set.
+
+    The candidate skill names are NOT listed anywhere in the prompt: the model
+    must map the request to a catalog entry by description alone, which is
+    exactly what catalog discriminability measures. This form is used for the
+    repository-level confusion-set cases.
+    """
+    return (
+        "You are a neutral skill router. You will receive (1) a catalog of "
+        "available skills and (2) a user request. Choose the single best skill "
+        "for the request. If no skill clearly fits, return selected_skill=null "
+        "and action=\"clarify\".\n\n"
+        "Respond with ONLY a single JSON object and no other text, of the form:\n"
+        "{\"selected_skill\": \"<skill name or null>\", "
+        "\"action\": \"apply\"|\"clarify\", \"rationale\": \"<one sentence>\"}\n\n"
+        f"=== CATALOG ===\n{catalog_text}\n\n"
+        f"=== USER REQUEST ===\n{user_request}\n"
+    )
+
+
+def run_confusion_set(confusion_path, args, kilo_bin):
+    """Run a catalog-discriminability pass over an entire confusion set.
+
+    Each case is presented to a fresh model call with a catalog restricted to
+    the confusion set's skills, and the intended-vs-selected route is recorded
+    so confusion patterns (e.g. intended security-review, selected code-review)
+    can be aggregated. No case prompt contains the expected skill's name.
+    """
+    d = json.load(open(confusion_path))
+    name = d.get("confusion_set")
+    skills = d.get("skills") or []
+    catalog_rows = [row for row in build_catalog(None) if row[0] in skills]
+    catalog_text = render_catalog(catalog_rows)
+    catalog_names = {row[0] for row in catalog_rows}
+    catalog_hash = hashlib.sha256(catalog_text.encode()).hexdigest()
+
+    results = {
+        "evidence_type": "confusion-set",
+        "confusion_set": name,
+        "cluster": d.get("cluster"),
+        "skills": skills,
+        "model": args.model,
+        "kilo_version": _host_kilo_version(kilo_bin),
+        "repetitions": args.reps,
+        "catalog_hash": catalog_hash,
+        "cases": [],
+    }
+    for case in d.get("cases", []):
+        cid = case.get("id")
+        prompt = build_confusion_prompt(catalog_text, case.get("prompt", ""),
+                                        skills)
+        reps = []
+        for i in range(args.reps):
+            workdir = tempfile.mkdtemp(prefix="kilo-routing-")
+            try:
+                meta = run_kilo(prompt, args.model, workdir, kilo_bin,
+                                catalog_names)
+            finally:
+                shutil.rmtree(workdir, ignore_errors=True)
+            dec = meta["decision"]
+            sel = dec.get("selected_skill") if dec else None
+            act = dec.get("action") if dec else None
+            ok = False
+            if meta["status"] == "success":
+                ok = matches(sel, case.get("expected_skill"), [])
+            reps.append({
+                "rep": i + 1,
+                "status": meta["status"],
+                "error": meta.get("error"),
+                "returncode": meta["returncode"],
+                "session_id": meta["session_id"],
+                "stderr": meta["stderr"],
+                "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest(),
+                "output_hash": hashlib.sha256(
+                    (meta["stdout"] or "").encode()).hexdigest(),
+                "decision": {"selected_skill": sel, "action": act,
+                             "rationale": dec.get("rationale") if dec else None},
+                "match": ok,
+            })
+        results["cases"].append({
+            "id": cid,
+            "case_type": case.get("case_type"),
+            "expected_skill": case.get("expected_skill"),
+            "turns": case.get("turns"),
+            "repetitions": reps,
+            "passed": sum(1 for r in reps if r["match"]),
+            "total": args.reps,
+            "confusions": [r["decision"]["selected_skill"]
+                           for r in reps if r["status"] == "success"
+                           and r["decision"]["selected_skill"]
+                           and r["decision"]["selected_skill"]
+                           != case.get("expected_skill")],
+        })
+    if args.out:
+        os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+        json.dump(results, open(args.out, "w"), indent=2)
+        print(f"wrote evidence: {args.out}")
+    for case in results["cases"]:
+        print(f"case {case['id']} [{case.get('case_type')}]: "
+              f"expected={case['expected_skill']!r} "
+              f"passed {case['passed']}/{case['total']} "
+              f"confusions={case['confusions']}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--skill", required=True)
     ap.add_argument("--case-id", type=int, required=True)
+    ap.add_argument("--confusion-set",
+                    help="path to an evaluations/confusion-sets/<name>.json "
+                         "file; run every case in it (ignores --skill/--case-id)")
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--allow-paid-model", action="store_true",
                     help="allow a non-free model (cost-safety opt-in)")
@@ -274,6 +382,10 @@ def main():
     kilo_bin = _kilo_path()
     model_listed = _verify_host_kilo(args.model)
     kilo_version = _host_kilo_version(kilo_bin)
+
+    if args.confusion_set:
+        run_confusion_set(args.confusion_set, args, kilo_bin)
+        return
 
     evals_path = args.evals_json.format(skill=args.skill)
     if not os.path.exists(evals_path):

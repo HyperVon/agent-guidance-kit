@@ -186,7 +186,7 @@ def hash_workspace(path: str) -> str:
     """Deterministic content hash of a (possibly git) workspace.
 
     Uses the git-aware hasher for git repositories and a plain recursive file
-    hash otherwise. This is what the execution runner uses to prove a guided and
+    hash otherwise. This is what the execution runner uses to prove a target and
     a baseline worker started from byte-identical copies and to record the
     pre/post task-state mutation.
     """

@@ -34,23 +34,36 @@ this file holds the filesystem/sandbox procedure and troubleshooting.
   an immediate file manifest before the task begins. A path mentioned in a prompt
   is not isolation.
 
-## Docker execution layer (production-valid isolation)
+## Execution isolation tiers
 
-Layer B (execution efficacy) runs each worker in a **fresh Docker container** built
-from `Dockerfile.eval` (image `kilo-eval:local`). This is the OS-level isolation the
-protocol requires for a `valid` run and replaces the weaker instruction-only fallback.
+The execution efficacy layer (Layer B) runs each condition worker in a fresh
+container. The isolation tier determines the protocol status that is achievable:
 
- - **Fresh container per worker.** Guided and baseline are *separate* `docker run --rm`
-   invocations; record both container IDs and session IDs — they must differ. A shared
-   container means the conditions were not independent (contamination).
- - **Independent seed copies.** For each repetition the runner derives **one pristine
-   seed** from the fixture, then makes **two independent copies** (one per condition) and
-   verifies both hash-identically *before* the run. The guided and baseline workers never
-   share a mutable fixture: each writes only to its own copy mounted at `/work/task`.
- - **Guidance-only mount for the guided worker.** Mount *only* `SKILL.md` +
-   `references/` read-only at `/work/guidance/<name>`. **Never mount the whole skill
-   directory** — that would leak the `evals/` fixture snapshot (including the expected
-   output) into the guided worker.
+- **Tier 1 — fast developer mode** (sanitized environment, no OS sandbox): use
+  only for prompt iteration and cheap discrimination checks; always mark
+  `protocol_status: limited`.
+- **Tier 2 — strict isolated** (Docker OS-level containment): the only tier that
+  can reach `protocol_status: valid` for execution efficacy. Each condition runs
+  in a **fresh Docker container** built from `Dockerfile.eval` (image
+  `kilo-eval:local`), with a verified boundary probe.
+
+  - **Fresh container per condition.** `target`, `baseline` (and optional
+    `placebo`) are *separate* `docker run --rm` invocations; record all
+    container IDs and session IDs — they must differ. A shared container means
+    the conditions were not independent (contamination).
+  - **Independent seed copies.** For each repetition the runner derives **one
+    pristine seed** from the fixture, then makes **one independent copy per
+    condition** and verifies all copies hash-identically *before* the run. The
+    condition workers never share a mutable fixture: each writes only to its own
+    copy mounted at `/work/task`.
+  - **Guidance-only mount for the target condition.** Mount *only* `SKILL.md` +
+    `references/` read-only at the **neutral** path `/work/guidance/task`.
+    **Never mount the whole skill directory** — that would leak the `evals/`
+    fixture snapshot (including the expected output) into the target worker.
+    The path is always `task/` regardless of the skill, so it never encodes the
+    canonical skill name, the condition, a case id, or the evaluation purpose.
+    The placebo condition mounts a different (irrelevant) skill's guidance at
+    the same neutral path.
  - **Generator fixtures are evaluator-only.** The generator (`setup.sh`) is run under a
    sanitized environment and its **source is stripped** from the seed the worker sees, so
    the worker never reads the answer key / construction logic.
@@ -67,19 +80,19 @@ protocol requires for a `valid` run and replaces the weaker instruction-only fal
  - **Deterministic, non-attributable git identity.** `HOME=/home/eval` with
    `user.name "Eval Worker"` / `user.email "eval-worker@example.invalid"` baked into the
    image, so any git work the worker does cannot leak the host author.
- - **Boundary probe inside the container.** After the run, a probe checks
-   `/work/guidance/<name>/SKILL.md` **presence** (guided) / **absence** (baseline). The
-   runner records `guidance_verified` / `guidance_verified_absent` from this probe; a bare
-   text claim is not accepted.
- - **Failure is not evidence.** A Docker/Kilo invocation that returns non-zero, never
-   starts a container, produces empty/unparseable model output, or yields no session id is
-   recorded `run_status="failed"`; the validator **rejects** the whole evidence file.
- - **Boundary probe before scoring.** Run `scripts/docker_isolation_preflight.py`
-   (`--image kilo-eval:local`). All 23 checks must pass: isolated home, deterministic git
-   identity, no ssh dir, no token env, no host `.gitconfig`/path leak, no mounted Kilo
-   auth, **target skill guidance absent in the baseline mount** AND **present, readable,
-   hash-matched, and with references in the guided mount** at the real
-   `/work/guidance/<name>/SKILL.md` path. Any failure invalidates the run.
+  - **Boundary probe inside the container.** After the run, a probe checks
+    `/work/guidance/task/SKILL.md` **presence** (target/placebo) / **absence**
+    (baseline). The runner records `guidance_verified` /
+    `guidance_verified_absent` from this probe; a bare text claim is not accepted.
+  - **Failure is not evidence.** A Docker/Kilo invocation that returns non-zero, never
+    starts a container, produces empty/unparseable model output, or yields no session id is
+    recorded `run_status="failed"`; the validator **rejects** the whole evidence file.
+  - **Boundary probe before scoring.** Run `scripts/docker_isolation_preflight.py`
+    (`--image kilo-eval:local`). All boundary checks must pass: isolated home, deterministic git
+    identity, no ssh dir, no token env, no host `.gitconfig`/path leak, no mounted Kilo
+    auth, **target skill guidance absent in the baseline mount** AND **present, readable,
+    hash-matched, and with references in the target/placebo mount** at the real
+    `/work/guidance/task/SKILL.md` (neutral) path. Any failure invalidates the run.
 
 ## Boundary probe
 
@@ -108,6 +121,6 @@ the profile and denied-path probes.
 | :--- | :--- | :--- |
 | Worker starts in the catalog repository or can see sibling evaluation metadata | Condition is contaminated | Discard the run |
 | Baseline worker receives the target skill's name, path, description, catalog entry, injection label, or skill-list metadata through system prompt, banner, tool manifest, or other automatic projection | Condition is contaminated even if skill text is not loaded | Mark contaminated, do not score |
-| Discovered `AGENTS.md` guidance carries the injection | Baseline may leak the condition | Use separate neutral variants; the guided variant may name a neutral guidance path, the baseline must not mention that path or use an `if-exists` check |
+| Discovered `AGENTS.md` guidance carries the injection | The baseline may leak the condition | Use separate neutral variants; the `target` variant may name a neutral guidance path, the baseline must not mention that path or use an `if-exists` check |
 | Harness cannot create and verify independent contexts (including absence of target-skill identity in baseline-visible system metadata) | No valid comparison possible | Leave the matrix untested, report the limitation |
 | An interrupted pair, partial case, or model-switch run | Mixed with completed result | Exclude rather than silently combine |

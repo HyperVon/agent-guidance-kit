@@ -1,36 +1,66 @@
 #!/usr/bin/env python3
 """Execution-efficacy evaluation runner (Docker-isolated layer B).
 
-For each repetition, runs TWO fresh, independent Docker containers:
+For each repetition, runs fresh, independent Docker containers — one per
+condition. The supported conditions are:
 
-  * guided   : an independent COPY of the pristine fixture + target skill
-               guidance mounted read-only; the worker is told the skill exists.
-  * baseline : a SEPARATE independent COPY of the same pristine fixture, NO
-               skill guidance, NO skill mention; the same natural task.
+  * ``target``: an independent COPY of the pristine fixture plus
+    the target guidance mounted read-only at a NEUTRAL path; the worker
+    receives ONLY the natural task.
+  * ``baseline`` (harness/default): a SEPARATE independent COPY of the same
+                           pristine fixture, NO guidance; the SAME natural task.
+  * ``placebo`` (optional): a SEPARATE independent COPY of the same pristine
+                           fixture plus IRRELEVANT, similarly-sized guidance
+                           (a different skill) mounted at the SAME neutral
+                           path; the SAME natural task.
+
+TREATMENT-BOUNDARY CONTRACT (see skills/skill-evaluation/SKILL.md and
+docs/evaluations/RUNBOOK.md):
+
+  * The natural user task text is BYTE-IDENTICAL across all conditions. The
+    target/baseline/placebo workers must not be told that an evaluation is
+    happening, which condition they are in, the target skill's canonical name,
+    the expected outcome, the scoring rubric, or that another condition exists.
+  * The guidance is exposed at a NEUTRAL path — ``/work/guidance/task/SKILL.md``
+    — that never encodes the skill name, the condition, a case id, or the
+    evaluation purpose. The worker-visible prompt is the natural task only.
+  * The only way a worker learns guidance exists is by its runtime environment
+    (the mounted read-only guidance tree). No prompt text names it.
+  * The placebo condition receives an irrelevant skill's guidance at the SAME
+    neutral path, so "presence of extra procedural guidance" is controlled for.
 
 Crucial correctness properties (see docs/evaluations/isolation-protocol.md):
 
-  * The guided and baseline workers never share a mutable fixture. Each gets its
-    own copy made from one pristine seed; we verify both copies hash-identically
-    BEFORE the run and record both starting and ending hashes.
+  * The conditions never share a mutable fixture. Each gets its own copy made
+    from one pristine seed; we verify all copies hash-identically BEFORE the
+    run and record starting and ending hashes.
   * Generator source (e.g. ``setup.sh``) is evaluator-only. It is run under a
     sanitized environment by ``eval_hashing.materialize_fixture_seed`` and then
     STRIPPED from the seed the worker sees.
   * A failed Docker/Kilo invocation (non-zero return code, missing container,
     unparseable/empty model output, missing session) is recorded as
     ``run_status="failed"`` and can never masquerade as valid evidence. The
-    validator rejects any repetition whose guided or baseline worker failed.
-  * The guidance boundary is verified INSIDE the container by a probe that checks
-    ``/work/guidance/<skill>/SKILL.md`` presence (guided) / absence (baseline).
+    validator rejects any repetition whose worker failed.
+  * The guidance boundary is verified INSIDE the container by a probe that
+    checks ``/work/guidance/task/SKILL.md`` presence (target/placebo) /
+    absence (baseline).
 
-Both workers use the same pinned, anonymous free model (cost-safety gate), so the
-only systematic difference is whether the target guidance is present.
+All workers use the same pinned, anonymous free model (cost-safety gate), so
+the only systematic difference between conditions is the mounted guidance.
 
 Usage:
     python3 scripts/run_execution_eval.py \
         --skill code-review --case-id 5 \
         --model kilo/tencent/hy3:free --reps 1 \
+        --conditions target baseline \
         --out .eval-evidence/exec-code-review-case5.json
+
+    # Strong-efficacy run with the placebo control:
+    python3 scripts/run_execution_eval.py \
+        --skill code-review --case-id 5 \
+        --placebo-skill security-review \
+        --conditions target baseline placebo \
+        --out .eval-evidence/exec-code-review-case5-placebo.json
 """
 import argparse
 import hashlib
@@ -49,9 +79,17 @@ from eval_hashing import (source_hash_of, hash_workspace,
 IMAGE = "kilo-eval:local"
 # The evaluation runs on a pinned, anonymous FREE model by default. This is a
 # COST-SAFETY gate (accidental spend protection), NOT a scientific requirement:
-# guided and baseline simply must use the identical resolved model/runtime. Pass
+# The target, baseline, and placebo conditions simply must use the identical
+# resolved model/runtime. Pass
 # --allow-paid-model to use a non-free model deliberately.
 DEFAULT_MODEL = "kilo/tencent/hy3:free"
+
+# Neutral worker-visible guidance mount. It deliberately does NOT encode the
+# skill name, the condition, a case id, or the evaluation purpose. In a real
+# harness the equivalent is the harness's own guidance-loading surface, which
+# is part of the runtime condition and identical across conditions.
+GUIDANCE_MOUNT = "/work/guidance/task"
+WORKSPACE_MOUNT = "/work/task"
 
 # Docker Desktop on macOS only bind-mounts paths under its shared roots (the
 # project, which lives under /Users). system temp dirs like /var/folders are NOT
@@ -81,25 +119,31 @@ def _mkdtemp(prefix):
 def materialize_guidance(skill_dir, skill_name):
     """Build a temp dir with ONLY the guidance (SKILL.md + references/).
 
-    Mounted read-only at /work/guidance/<skill_name>. Crucially it EXCLUDES the
-    evals/ tree (which contains the fixture snapshot), so the guided worker can
-    never see the expected output it is supposed to produce.
+    Mounted read-only at the NEUTRAL path ``/work/guidance/task`` (see
+    GUIDANCE_MOUNT). The directory is always staged as ``task/`` so the mount
+    target is identical for the target and placebo conditions, and never
+    encodes the skill name, the condition, or the evaluation purpose.
+    Crucially it EXCLUDES the evals/ tree (which contains the fixture
+    snapshot), so the target worker can never see the expected output it is
+    supposed to produce.
     """
     dst = _mkdtemp(prefix="kilo-guidance-")
+    task = os.path.join(dst, "task")
+    os.makedirs(task)
     skill_md = os.path.join(skill_dir, "SKILL.md")
     if os.path.exists(skill_md):
-        shutil.copy(skill_md, os.path.join(dst, "SKILL.md"))
+        shutil.copy(skill_md, os.path.join(task, "SKILL.md"))
     refs = os.path.join(skill_dir, "references")
     if os.path.isdir(refs):
-        shutil.copytree(refs, os.path.join(dst, "references"))
+        shutil.copytree(refs, os.path.join(task, "references"))
     return dst
 
 
 def guidance_bundle_hash(guidance_dir):
     """Deterministic hash of the EXACT guidance artifact mounted read-only into the
-    guided worker: SKILL.md plus references/** (sorted by relative path, each file
+    target worker: SKILL.md plus references/** (sorted by relative path, each file
     hashed by content). This is the frozen bundle the evaluator intends to inject,
-    recorded so the validator can prove the guided worker received exactly this
+    recorded so the validator can prove the target worker received exactly this
     guidance (the mount is read-only; the worker cannot alter the source bundle).
     """
     if not os.path.isdir(guidance_dir):
@@ -233,7 +277,7 @@ def _verify_runtime(image, model):
     return out
 
 
-def run_container(image, model, prompt, fixture_dir, guidance_dir, skill_name):
+def run_container(image, model, prompt, fixture_dir, guidance_dir):
     """Run one worker container; return structured execution metadata.
 
     {
@@ -242,6 +286,11 @@ def run_container(image, model, prompt, fixture_dir, guidance_dir, skill_name):
       "output": str, "guidance_probe": "present"|"absent"|None,
       "status": "success"|"failed", "reason": str|None
     }
+
+    The worker-visible prompt is the natural task ONLY — no skill name, no
+    condition label, no evaluation mention. Guidance (if any) is mounted at the
+    neutral ``GUIDANCE_MOUNT`` path, which is identical for the target and
+    placebo conditions.
 
     A run is successful ONLY if: docker/Kilo returned 0, a container id exists,
     the output was parsed, a session id exists, and model text was produced.
@@ -257,21 +306,21 @@ def run_container(image, model, prompt, fixture_dir, guidance_dir, skill_name):
         with open(promptfile, "w") as _pf:
             _pf.write(prompt)
         cmd = ["docker", "run", "--rm", "--cidfile", cidfile,
-               "-v", f"{fixture_dir}:/work/task",
+               "-v", f"{fixture_dir}:{WORKSPACE_MOUNT}",
                "-v", f"{promptfile}:/work/prompt.txt:ro"]
         if guidance_dir:
-            cmd += ["-v", f"{guidance_dir}:/work/guidance/{skill_name}:ro"]
+            cmd += ["-v", f"{guidance_dir}:{GUIDANCE_MOUNT}:ro"]
         # ENTRYPOINT is `kilo`; override to bash so we can run kilo then a boundary
         # probe that records whether the guidance path is actually present/absent.
         script = (
             "set +e\n"
             f"kilo run --model {model} --variant high --format json --pure --auto "
-            "--dir /work/task \"$(cat /work/prompt.txt)\" < /dev/null "
+            f"--dir {WORKSPACE_MOUNT} \"$(cat /work/prompt.txt)\" < /dev/null "
             "> /tmp/kilo.out 2> /tmp/kilo.err\n"
             "KILO_RC=$?\n"
             "cat /tmp/kilo.out\n"
             "cat /tmp/kilo.err >&2\n"
-            f"if [ -e \"/work/guidance/{skill_name}/SKILL.md\" ]; then "
+            f"if [ -e \"{GUIDANCE_MOUNT}/SKILL.md\" ]; then "
             "echo GUIDANCE_PROBE:present; else echo GUIDANCE_PROBE:absent; fi\n"
             "exit $KILO_RC\n"
         )
@@ -316,6 +365,31 @@ def run_container(image, model, prompt, fixture_dir, guidance_dir, skill_name):
         shutil.rmtree(tmpd, ignore_errors=True)
 
 
+CONDITIONS = ("target", "baseline", "placebo")
+
+
+def _conditions_arg(value):
+    """Parse --conditions; require at least target+baseline; unique order kept."""
+    parts = [p.strip() for p in value.split(",") if p.strip()]
+    bad = [p for p in parts if p not in CONDITIONS]
+    if bad:
+        raise argparse.ArgumentTypeError(
+            f"unknown condition(s) {bad}; choose from {', '.join(CONDITIONS)}")
+    if not parts:
+        raise argparse.ArgumentTypeError("at least one condition required")
+    # Keep the first occurrence order; dedupe.
+    seen, out = set(), []
+    for p in parts:
+        if p not in seen:
+            seen.add(p)
+            out.append(p)
+    if "target" not in out or "baseline" not in out:
+        raise argparse.ArgumentTypeError(
+            "--conditions must include at least 'target' and 'baseline' "
+            "(placebo is optional)")
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--skill", required=True)
@@ -325,9 +399,24 @@ def main():
     ap.add_argument("--reps", type=int, default=1)
     ap.add_argument("--allow-paid-model", action="store_true",
                     help="allow a non-free model (cost-safety opt-in)")
+    ap.add_argument("--conditions", type=_conditions_arg,
+                    default=["target", "baseline"],
+                    help="comma-separated conditions to run: target,baseline[,placebo]")
+    ap.add_argument("--placebo-skill", help="skill whose guidance is the "
+                    "irrelevant placebo (required when 'placebo' is in --conditions)")
     ap.add_argument("--out")
     args = ap.parse_args()
     require_free_model(args.model, args.allow_paid_model)
+
+    if "placebo" in args.conditions and not args.placebo_skill:
+        print("--placebo-skill <skill> is required when 'placebo' is in "
+              "--conditions (an irrelevant, similarly-sized guidance source)",
+              file=sys.stderr)
+        sys.exit(2)
+    if args.placebo_skill and args.placebo_skill == args.skill:
+        print("--placebo-skill must differ from the target skill "
+              "(placebo is irrelevant guidance)", file=sys.stderr)
+        sys.exit(2)
 
     skill_dir = os.path.join(ROOT, "skills", args.skill)
     evals_path = os.path.join(skill_dir, "evals", "evals.json")
@@ -345,10 +434,23 @@ def main():
 
     runtime = _verify_runtime(args.image, args.model)
 
+    # The natural task is the ONLY worker-visible prompt text, byte-identical
+    # across all conditions. Nothing here names the skill, the condition, the
+    # case, or the evaluation.
     natural_task = case["prompt"]
     guidance_src = materialize_guidance(skill_dir, args.skill)
     skill_hash = source_hash_of(os.path.join(skill_dir, "SKILL.md"))
     guidance_bundle = guidance_bundle_hash(guidance_src)
+
+    placebo_dir = None
+    placebo_hash = None
+    if "placebo" in args.conditions:
+        pdir = os.path.join(ROOT, "skills", args.placebo_skill)
+        if not os.path.exists(os.path.join(pdir, "SKILL.md")):
+            print(f"placebo skill dir missing: {pdir}", file=sys.stderr)
+            sys.exit(2)
+        placebo_dir = materialize_guidance(pdir, args.placebo_skill)
+        placebo_hash = guidance_bundle_hash(placebo_dir)
 
     # The frozen fixture hash the worker is SUPPOSED to receive. For a generator
     # fixture this is the worker-visible output_hash (setup.sh already stripped);
@@ -369,97 +471,97 @@ def main():
         "model_listed": runtime.get("model_listed"),
         "skill_hash": skill_hash,
         "guidance_bundle_hash": guidance_bundle,
+        "guidance_mount_path": GUIDANCE_MOUNT,
         "expected_fixture_hash": expected_fixture_hash,
         "canonical_seed_hash": None,  # filled in after the first seed is materialized
+        "conditions": list(args.conditions),
+        "placebo_skill": args.placebo_skill if "placebo" in args.conditions else None,
+        "placebo_bundle_hash": placebo_hash,
         "repetitions": [],
     }
 
+    def run_condition(name, prompt, workspace, guidance):
+        before = HASH_PREFIX + hash_workspace(workspace)
+        snap_before = _snapshot(workspace)
+        meta = run_container(args.image, args.model, prompt, workspace, guidance)
+        after = HASH_PREFIX + hash_workspace(workspace)
+        snap_after = _snapshot(workspace)
+        return {
+            "container_id": meta["container_id"],
+            "session_id": meta["session_id"],
+            "run_status": meta["status"],
+            "returncode": meta["returncode"],
+            "guidance_mounted": guidance is not None,
+            "guidance_verified": (meta["guidance_probe"] == "present"),
+            "guidance_verified_absent": (meta["guidance_probe"] == "absent"),
+            "guidance_probe": meta["guidance_probe"],
+            "starting_fixture_hash": before,
+            "ending_fixture_hash": after,
+            "output": meta["output"],
+            "stderr": meta["stderr"],
+            "filesystem_snapshot_before": snap_before,
+            "filesystem_snapshot_after": snap_after,
+            "reason": meta["reason"],
+        }
+
     try:
         for i in range(args.reps):
-            # One pristine seed; two independent worker copies.
+            # One pristine seed; one independent worker copy per condition.
             seed, seed_hash = materialize_fixture_seed(
                 fx_src, ftype, source, invocation)
             evidence["canonical_seed_hash"] = HASH_PREFIX + seed_hash
-            g_fx = _copy_seed(seed)
-            b_fx = _copy_seed(seed)
-            g_before = HASH_PREFIX + hash_workspace(g_fx)
-            b_before = HASH_PREFIX + hash_workspace(b_fx)
+            cond_fx = {name: _copy_seed(seed) for name in args.conditions}
 
-            g_prompt = (natural_task + "\n\nA skill named '" + args.skill +
-                        "' is available at /work/guidance/" + args.skill +
-                        "/SKILL.md; read it and follow its guidance.")
-            b_prompt = natural_task
-
-            # Pre-run snapshots (before the worker mutates the mounted copy).
-            g_snap_before, b_snap_before = _snapshot(g_fx), _snapshot(b_fx)
-
-            g_meta = run_container(args.image, args.model, g_prompt, g_fx,
-                                   guidance_src, args.skill)
-            b_meta = run_container(args.image, args.model, b_prompt, b_fx,
-                                   None, args.skill)
-
-            g_after = HASH_PREFIX + hash_workspace(g_fx)
-            b_after = HASH_PREFIX + hash_workspace(b_fx)
-
-            # Post-run snapshots (after the worker mutated the mounted copy).
-            g_snap_after, b_snap_after = _snapshot(g_fx), _snapshot(b_fx)
+            cond_meta = {}
+            for name in args.conditions:
+                guid = None
+                if name == "target":
+                    guid = guidance_src
+                elif name == "placebo":
+                    guid = placebo_dir
+                cond_meta[name] = run_condition(name, natural_task,
+                                                cond_fx[name], guid)
 
             rep = {
                 "rep": i + 1,
-                "workspace_path": "/work/task",
+                "workspace_path": WORKSPACE_MOUNT,
+                "guidance_mount_path": GUIDANCE_MOUNT,
                 "canonical_seed_hash": HASH_PREFIX + seed_hash,
-                "guided_workspace_id": os.path.basename(g_fx),
-                "baseline_workspace_id": os.path.basename(b_fx),
-                "guided": {
-                    "container_id": g_meta["container_id"],
-                    "session_id": g_meta["session_id"],
-                    "run_status": g_meta["status"],
-                    "returncode": g_meta["returncode"],
-                    "skill_mounted": True,
-                    "skill_hash": skill_hash,
-                    "guidance_verified": (g_meta["guidance_probe"] == "present"),
-                    "guidance_probe": g_meta["guidance_probe"],
-                    "starting_fixture_hash": g_before,
-                    "ending_fixture_hash": g_after,
-                    "output": g_meta["output"],
-                    "stderr": g_meta["stderr"],
-                    "filesystem_snapshot_before": g_snap_before,
-                    "filesystem_snapshot_after": g_snap_after,
-                    "reason": g_meta["reason"],
-                },
-                "baseline": {
-                    "container_id": b_meta["container_id"],
-                    "session_id": b_meta["session_id"],
-                    "run_status": b_meta["status"],
-                    "returncode": b_meta["returncode"],
-                    "skill_mounted": False,
-                    "guidance_verified_absent": (b_meta["guidance_probe"] == "absent"),
-                    "guidance_probe": b_meta["guidance_probe"],
-                    "starting_fixture_hash": b_before,
-                    "ending_fixture_hash": b_after,
-                    "output": b_meta["output"],
-                    "stderr": b_meta["stderr"],
-                    "filesystem_snapshot_before": b_snap_before,
-                    "filesystem_snapshot_after": b_snap_after,
-                    "reason": b_meta["reason"],
-                },
-                "distinct_containers": (g_meta["container_id"]
-                                        and g_meta["container_id"]
-                                        != b_meta["container_id"]),
-                "distinct_sessions": (g_meta["session_id"]
-                                      and g_meta["session_id"]
-                                      != b_meta["session_id"]),
-                "starting_fixture_hashes_match": (g_before == b_before == HASH_PREFIX + seed_hash),
-                "workspace_paths_differ": (os.path.basename(g_fx)
-                                           != os.path.basename(b_fx)),
+                "natural_task_hash": hashlib.sha256(
+                    natural_task.encode()).hexdigest(),
+                "natural_task_identical_across_conditions": True,
+                "condition_workspace_ids": {
+                    name: os.path.basename(cond_fx[name])
+                    for name in args.conditions},
+                "conditions": {},
+                "distinct_containers": True,
+                "distinct_sessions": True,
+                "starting_fixture_hashes_match": True,
+                "workspace_paths_differ": True,
             }
+            for name in args.conditions:
+                rep["conditions"][name] = cond_meta[name]
+            # Cross-condition isolation facts (computed from actual captures).
+            cids = [cond_meta[n]["container_id"] for n in args.conditions]
+            sids = [cond_meta[n]["session_id"] for n in args.conditions]
+            starts = [cond_meta[n]["starting_fixture_hash"] for n in args.conditions]
+            wids = [os.path.basename(cond_fx[n]) for n in args.conditions]
+            rep["distinct_containers"] = (
+                all(cids) and len(set(cids)) == len(cids))
+            rep["distinct_sessions"] = (
+                all(sids) and len(set(sids)) == len(sids))
+            rep["starting_fixture_hashes_match"] = (
+                len(set(starts)) == 1 and starts[0] == HASH_PREFIX + seed_hash)
+            rep["workspace_paths_differ"] = (len(set(wids)) == len(wids))
             evidence["repetitions"].append(rep)
 
-            shutil.rmtree(g_fx, ignore_errors=True)
-            shutil.rmtree(b_fx, ignore_errors=True)
+            for name in args.conditions:
+                shutil.rmtree(cond_fx[name], ignore_errors=True)
             shutil.rmtree(seed, ignore_errors=True)
     finally:
         shutil.rmtree(guidance_src, ignore_errors=True)
+        if placebo_dir:
+            shutil.rmtree(placebo_dir, ignore_errors=True)
         shutil.rmtree(SHARED_TMP, ignore_errors=True)
 
     if args.out:
@@ -468,15 +570,21 @@ def main():
         print(f"wrote evidence: {args.out}")
 
     for r in evidence["repetitions"]:
-        g, b = r["guided"], r["baseline"]
-        print(f"rep{r['rep']}: guided[{g['run_status']}] cids "
-              f"{str(g['container_id'])[:12]}/{str(b['container_id'])[:12]} "
-              f"distinct={r['distinct_containers']} "
-              f"start_match={r['starting_fixture_hashes_match']}")
-        print(f"  guided output ({len(g['output'])} chars, "
-              f"after-hash {g['ending_fixture_hash'][:10]}), "
-              f"baseline output ({len(b['output'])} chars, "
-              f"after-hash {b['ending_fixture_hash'][:10]})")
+        parts = []
+        for name in args.conditions:
+            cm = r["conditions"][name]
+            parts.append(f"{name}[{cm['run_status']}] "
+                         f"{str(cm['container_id'])[:12]} "
+                         f"start={cm['starting_fixture_hash'][:10]}")
+        print(f"rep{r['rep']}: {' '.join(parts)}")
+        print(f"  distinct_containers={r['distinct_containers']} "
+              f"distinct_sessions={r['distinct_sessions']} "
+              f"start_match={r['starting_fixture_hashes_match']} "
+              f"task_hash={r['natural_task_hash'][:10]}")
+        for name in args.conditions:
+            cm = r["conditions"][name]
+            print(f"  {name}: output {len(cm['output'])} chars, "
+                  f"after-hash {cm['ending_fixture_hash'][:10]}")
 
 
 if __name__ == "__main__":

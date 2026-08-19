@@ -5,7 +5,9 @@ Status dimensions are kept separate (per the corrected methodology):
 - **Fixtures** — `ready` (frozen committed fixture with `content_hash`) vs
   `designed_only` (case defined, not yet executable).
 - **Routing** — does a *harness-selection* run exist? (real router, captured
-  selected skill). `not_run` unless measured that way.
+  selected skill). `not_run` unless measured that way. Catalog-discriminability
+  (Layer A) is a portable model-as-classifier proxy, not a harness-routing
+  measurement — see the confusion-set matrix, not the per-skill routing column.
 - **Execution** — does a *post-activation* run exist? `exploratory` (force-injected,
   instruction-only, historical) vs `pending` vs `valid`.
 - **Protocol** — `valid` / `limited` / `invalid` / `not_run`.
@@ -27,13 +29,13 @@ Status dimensions are kept separate (per the corrected methodology):
 > `gitconfig`/`gh` token present). **However, Layer B (execution) now runs inside
 > Docker** (`Dockerfile.eval` → `kilo-eval:local`: fresh containers, deterministic
 > git identity, no host secrets, no mounted auth, anonymous free model
-> `kilo/tencent/hy3:free`), and **Layer A (catalog-routing) is fully portable** and
+> `kilo/tencent/hy3:free`), and **Layer A (catalog-discriminability) is fully portable** and
 > runs on the host. Both were smoke-proven on the `code-review` pilot (distinct
-> container IDs; guided applied the skill vs baseline refusal; catalog-routing
+> container IDs; target applied the skill vs baseline refusal; catalog-
 > selected the target when present and declined when absent). **Layer C
 > (harness-routing) stays `not_run`** where the harness cannot expose the selected
 > skill. Net: for the four pilot skills **execution infra = proven**,
-> **catalog-routing = proven**, **harness-routing = `not_run` (blocked)**,
+> **catalog-discriminability = proven**, **harness-routing = `not_run` (blocked)**,
 > protocol `not_run` (no graded n≥3 run published yet), repeats 0. The historical
 > exploratory pilots remain `invalid` and were not reused.
 
@@ -75,7 +77,7 @@ skills: code-review, git-github-workflow, review-feedback-resolution,
 security-review). Routing measured for 0/26. Execution validated for 0/26 (4
 exploratory invalid pilots only).
 
-**Phase 1 (2026-08-16) + follow-up, four pilot skills:** Layer A catalog-routing and
+**Phase 1 (2026-08-16) + follow-up, four pilot skills:** Layer A catalog-discriminability and
 Layer B Docker execution **infrastructure proven** (single-rep smoke on `code-review`;
 distinct containers, independent seed copies, baseline received no guidance, free
 anonymous model reachable, runner failure correctly rejected). Layer C harness-routing

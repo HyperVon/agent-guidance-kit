@@ -3,23 +3,26 @@
 
 Starts worker containers and asserts, from INSIDE the container, that:
 
-  BASELINE condition (no guidance mounted):
+    baseline condition (no guidance mounted):
     * isolated HOME (/home/eval) with the deterministic eval git identity;
     * no ~/.ssh, no host ~/.gitconfig, no GH_TOKEN/GITHUB_TOKEN;
     * no host path leak (e.g. /Users/<user>);
     * no mounted Kilo auth store;
-    * target skill guidance ABSENT at the REAL mount path
-      /work/guidance/<skill>/SKILL.md;
+    * guidance ABSENT at the neutral mount path /work/guidance/task/SKILL.md;
     * the mounted fixture actually arrived (/work/task/MARKER);
-    * no sibling workspace / guided output leakage.
+    * no sibling workspace leakage.
 
-  GUIDED condition (guidance mounted at /work/guidance/<skill>):
-    * guidance PRESENT and readable at /work/guidance/<skill>/SKILL.md;
+  GUIDED condition (guidance mounted at the neutral /work/guidance/task):
+    * guidance PRESENT and readable at /work/guidance/task/SKILL.md;
     * its sha256 matches the evaluator-computed SKILL.md hash;
     * references/ is available when the skill ships one;
     * the mounted fixture arrived (/work/task/MARKER).
 
-This is the automated gate that must pass before any guided/baseline execution
+The neutral mount path deliberately does not encode the skill name, the
+condition, a case id, or the evaluation purpose — the worker-visible prompt is
+the natural task only.
+
+This is the automated gate that must pass before any target/baseline execution
 run is trusted.
 
 Usage:
@@ -38,7 +41,8 @@ from eval_hashing import source_hash_of
 
 SHARED_TMP = os.path.join(ROOT, ".docker-tmp")
 
-GUIDANCE_MOUNT = "/work/guidance/__TARGET_SKILL__/SKILL.md"
+GUIDANCE_MOUNT = "/work/guidance/task/SKILL.md"
+GUIDANCE_DIR = "/work/guidance/task"
 FIXTURE_MOUNT = "/work/task"
 
 
@@ -98,14 +102,14 @@ else
   check "mount_arrived" false
 fi
 
-# No sibling workspace / guided output leakage.
-if [ -e "/work/sibling" ] || [ -e "/work/guided_output" ]; then
+# No sibling workspace leakage.
+if [ -e "/work/sibling" ]; then
   check "no_sibling_leak" false
 else
   check "no_sibling_leak" true
 fi
-""".replace("__FIXTURE_MOUNT__", FIXTURE_MOUNT) + (
-        # Guided-only checks
+    """.replace("__FIXTURE_MOUNT__", FIXTURE_MOUNT) + (
+        # Target-only checks (guidance mounted)
         r"""
 GUIDANCE_PATH="__GUIDANCE_MOUNT__"
 if [ -e "$GUIDANCE_PATH" ]; then
@@ -134,7 +138,7 @@ if [ -e "$GUIDANCE_PATH" ]; then
    check "guidance_hash_match" false
  fi
 """.replace("__GUIDANCE_MOUNT__", GUIDANCE_MOUNT)
-   .replace("__GUIDANCE_DIR__", "/work/guidance/__TARGET_SKILL__")
+   .replace("__GUIDANCE_DIR__", GUIDANCE_DIR)
    .replace("__EXPECTED_HASH__", expected_hash)
     .replace("__REFS_REQUIRED__", "true" if refs_expected else "false")
         if guidance_present else
@@ -161,7 +165,7 @@ def run_probe(image, target_skill, guidance_dir, fixture_dir, expected_hash,
     cmd = ["docker", "run", "--rm", "--entrypoint", "bash",
            "-v", f"{fixture_dir}:{FIXTURE_MOUNT}:ro"]
     if guidance_dir:
-        cmd += ["-v", f"{guidance_dir}:/work/guidance/{target_skill}:ro"]
+        cmd += ["-v", f"{guidance_dir}:{GUIDANCE_DIR}:ro"]
     cmd += [image, "-c", script]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
     out = proc.stdout
@@ -196,21 +200,24 @@ def main():
     has_refs = os.path.isdir(os.path.join(skill_dir, "references"))
 
     # Baseline probe: fixture only, no guidance.
-    print("=== BASELINE probe (no guidance) ===")
+    print("=== baseline probe (no guidance) ===")
     base_report = run_probe(args.image, args.target_skill, None, fixture,
                             expected_hash, guidance_present=False,
                             refs_expected=has_refs)
-    # Guided probe: fixture + guidance mounted.
+    # Guided probe: fixture + guidance mounted at the NEUTRAL path
+    # (/work/guidance/task), staged as task/ exactly like the runner does.
     print("=== GUIDED probe (guidance mounted) ===")
     guidance_dir = None
     if os.path.exists(skill_md):
         guidance_dir = tempfile.mkdtemp(prefix="kilo-guidance-", dir=SHARED_TMP)
         import shutil
-        shutil.copy(skill_md, os.path.join(guidance_dir, "SKILL.md"))
+        task = os.path.join(guidance_dir, "task")
+        os.makedirs(task)
+        shutil.copy(skill_md, os.path.join(task, "SKILL.md"))
         refs = os.path.join(skill_dir, "references")
         if has_refs:
-            shutil.copytree(refs, os.path.join(guidance_dir, "references"))
-    guided_report = run_probe(args.image, args.target_skill, guidance_dir,
+            shutil.copytree(refs, os.path.join(task, "references"))
+    target_report = run_probe(args.image, args.target_skill, guidance_dir,
                               fixture, expected_hash, guidance_present=True,
                               refs_expected=has_refs)
 
@@ -232,7 +239,7 @@ def main():
             print(f"  [{'PASS' if item['ok'] else 'FAIL'}] {label}/{item['name']}")
 
     report("baseline", base_report)
-    report("guided", guided_report)
+    report("target", target_report)
 
     print(f"\nIsolation preflight: {passed}/{total} checks passed")
     if failures:

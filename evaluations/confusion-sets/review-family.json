@@ -1,0 +1,136 @@
+{
+  "confusion_set": "review-family",
+  "cluster": "review",
+  "skills": [
+    "code-review",
+    "adversarial-pr-review",
+    "security-review",
+    "review-feedback-resolution",
+    "frontend-quality-review",
+    "documentation-review",
+    "threat-modeling",
+    "architecture-review",
+    "implementation-planning",
+    "systematic-debugging"
+  ],
+  "notes": "Difficult shared cases for the review cluster plus the most common cross-cluster confusions (design, debugging, threat modeling). All expected skills are included in the candidate pool so the router must discriminate on intent, not keyword matching. Each case is deliberately written so the expected skill is NOT named in the prompt. Hard negatives come from the closest plausible neighbor (e.g. security-review vs code-review on a security-sensitive auth diff), never from an unrelated workflow.",
+  "cases": [
+    {
+      "id": 1,
+      "case_type": "hard-negative",
+      "prompt": "This PR changes how access tokens are checked before the request reaches the handler. I mainly want to know whether the change is correct and whether it creates a way for callers to get privileges they shouldn't have. I don't need a broad security audit of the whole system.",
+      "expected_skill": "code-review",
+      "notes": "Misleading security keywords (tokens, privileges). Dominant job: correctness-and-mergeability review of one diff, explicitly bounded away from a system-wide audit."
+    },
+    {
+      "id": 2,
+      "case_type": "misleading-keyword",
+      "prompt": "Our agent workflow fetches web pages and feeds them into an LLM that can call tools. I want a structured analysis of where the trust boundaries are and which abuse paths matter, with mitigations tied to components - not a line-by-line review of this week's diff.",
+      "expected_skill": "threat-modeling",
+      "notes": "Security-flavored vocabulary, but the deliverable is a trust-boundary/abuse-path model, not a review of a change. The security-review description names finding-in-code; this request names no code."
+    },
+    {
+      "id": 3,
+      "case_type": "hard-negative",
+      "prompt": "Review the unresolved comments on PR #47 and tell me which findings are valid, which are duplicates, and which I should push back on with evidence.",
+      "expected_skill": "review-feedback-resolution",
+      "notes": "Nearest neighbors are code-review (PR language) and adversarial-pr-review (multi-agent). The dominant job is dispositioning existing feedback, not producing a fresh review."
+    },
+    {
+      "id": 4,
+      "case_type": "counterfactual",
+      "counterfactual_pair": "restructure-1",
+      "prompt": "These modules have become tangled. Review the current design and tell me whether we should restructure them.",
+      "expected_skill": "architecture-review",
+      "notes": "Pair A: deciding WHAT to do. The paired case (same repo, one intent flip) expects implementation-planning."
+    },
+    {
+      "id": 5,
+      "case_type": "counterfactual",
+      "counterfactual_pair": "restructure-1",
+      "prompt": "We've decided to restructure these modules. Work out the safest sequence of changes, the intermediate states, and the verification steps.",
+      "expected_skill": "implementation-planning",
+      "notes": "Pair B: HOW to execute an already-approved direction. One intent change flips the owner."
+    },
+    {
+      "id": 6,
+      "case_type": "misleading-keyword",
+      "prompt": "Our repo's guidance says every PR touching auth needs an adversarial multi-model review before publish, and I just opened one. Spin up the independent reviewers and give me the converged verdict on my auth diff.",
+      "expected_skill": "adversarial-pr-review",
+      "notes": "Explicit policy trigger plus multi-reviewer workflow: the adversarial process is the deliverable, not a single-reviewer pass."
+    },
+    {
+      "id": 7,
+      "case_type": "hard-negative",
+      "prompt": "The new checkout flow in our React app has focus issues and the submit button doesn't disable during the async save. Review these interaction and state problems before we ship.",
+      "expected_skill": "frontend-quality-review",
+      "notes": "Code-review is the tempting neighbor; the dominant job is UI/interaction quality on a specific surface, not general correctness."
+    },
+    {
+      "id": 8,
+      "case_type": "hard-negative",
+      "prompt": "Our README says the CLI flag is --output, but the help text says --out. Also the quickstart references an env var we removed. Tell me what's wrong with the docs.",
+      "expected_skill": "documentation-review",
+      "notes": "Doc-vs-truth accuracy is the job; the artifacts are docs, not code."
+    },
+    {
+      "id": 9,
+      "case_type": "misleading-keyword",
+      "prompt": "I'm debugging why the authorization test intermittently fails in CI but not locally. Don't review the overall security design yet - I want the failure explained first.",
+      "expected_skill": "systematic-debugging",
+      "notes": "Strong security vocabulary (authorization), explicit scope fence toward root-cause diagnosis. Routers that match on 'authorization' go wrong."
+    },
+    {
+      "id": 10,
+      "case_type": "hard-negative",
+      "prompt": "This service has become difficult to change and there are also several failing tests after the latest refactor. I want to figure out what we should tackle first.",
+      "expected_skill": "architecture-review",
+      "notes": "Partial-evidence ambiguity: debugging vocabulary plus design pain. The dominant question is about structure/changeability; the failing tests are evidence for the review, not the deliverable."
+    },
+    {
+      "id": 11,
+      "case_type": "ambiguous-natural",
+      "prompt": "Can you look at this and tell me what's wrong?",
+      "expected_skill": null,
+      "notes": "Terse request with no artifact named and no problem class. A strong router asks for the artifact and the symptom; no skill is a valid owner without clarification."
+    },
+    {
+      "id": 12,
+      "case_type": "multi-intent",
+      "prompt": "The PR fixes an auth bug but also changes how callers are authorized. I mainly need to know whether the change is correct enough to merge.",
+      "expected_skill": "code-review",
+      "notes": "Several skills look plausible (security, architecture). The dominant requested job is a merge-readiness correctness verdict on the change."
+    },
+    {
+      "id": 13,
+      "case_type": "workflow-transition",
+      "prompt": "Review the unresolved comments on PR #47.",
+      "turns": [
+        {
+          "user": "Review the unresolved comments on PR #47 and tell me which are valid.",
+          "expected_route": "review-feedback-resolution"
+        },
+        {
+          "user": "I agree with findings 1 and 3. Apply those two only.",
+          "expected_route": "implementation-planning"
+        }
+      ],
+      "expected_skill": "review-feedback-resolution",
+      "notes": "The agent must not remain trapped in the review skill after intent changes to scoped application."
+    },
+    {
+      "id": 14,
+      "case_type": "hard-negative",
+      "prompt": "I accepted the three findings from the review. Make the minimal fixes for exactly those, and tell me which checks you actually ran.",
+      "expected_skill": "implementation-planning",
+      "notes": "Implementation/change workflow with verification discipline; not a fresh review and not feedback dispositioning."
+    },
+    {
+      "id": 15,
+      "case_type": "hard-negative",
+      "prompt": "Audit our README, ADRs, and agent guidance against the current source and tell me where the claims no longer match the code.",
+      "expected_skill": "documentation-review",
+      "notes": "Doc-vs-truth accuracy across multiple doc artifacts; skill-reviewer is the tempting neighbor but the artifacts are docs, not skills."
+    }
+  ]
+}

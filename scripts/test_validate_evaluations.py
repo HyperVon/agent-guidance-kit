@@ -5,6 +5,7 @@ Run from repo root:  python3 scripts/test_validate_evaluations.py
 
 Tests the validator's failure detection directly (no network / no real runs).
 """
+import argparse
 import json
 import os
 import shutil
@@ -19,6 +20,7 @@ import build_routing_catalog as brc
 import docker_isolation_preflight as dip
 import eval_hashing as eh
 import run_catalog_routing_eval as rc
+import run_execution_eval as ree
 import validate_evaluations as ve
 
 
@@ -137,10 +139,10 @@ class ResultFailureTests(unittest.TestCase):
                         "tool_policy": "sandbox", "network_policy": "none",
                         "isolation_method": "instruction-only (limited)"},
             "protocol": {"status": "limited", "worker_isolation_verified": True,
-                         "target_loaded_in_guided": "ev", "target_absent_in_baseline": "ev",
-                         "guided_skill_hash": "sha256:g", "baseline_guidance_absent": "ev",
+"target_guidance_present": "ev", "target_absent_in_baseline": "ev",
+                          "target_guidance_hash": "sha256:g", "baseline_guidance_absent": "ev",
                          "contamination": "none", "routing_mechanism": None},
-            "runs": {"guided": {"session_id": "g1", "container_id": "cg1", "output_hash": "h",
+            "runs": {"target": {"session_id": "g1", "container_id": "cg1", "output_hash": "h",
                                 "selected_skill": "code-review"},
                      "baseline": {"session_id": "b1", "container_id": "cb1", "output_hash": "h"}},
             "cases": [{
@@ -148,8 +150,8 @@ class ResultFailureTests(unittest.TestCase):
                 "outcome": {"category": "skill_only_pass",
                             "measurement_status": "discriminating",
                             "protocol_status": "limited"},
-                "verdict": {"guided_pass": True, "baseline_pass": False},
-                "assertions": [{"assertion": "frozen", "guided": {"pass": True, "evidence": "e"},
+                "verdict": {"target_pass": True, "baseline_pass": False},
+                "assertions": [{"assertion": "frozen", "target": {"pass": True, "evidence": "e"},
                                 "baseline": {"pass": False, "evidence": "e"}}],
             }],
         }
@@ -178,7 +180,7 @@ class ResultFailureTests(unittest.TestCase):
 
     def test_routing_no_selected_skill(self):
         res = self._result(mode="routing")
-        res["runs"]["guided"].pop("selected_skill")
+        res["runs"]["target"].pop("selected_skill")
         ve.check_one_result("r.md", res, {"code-review"}, {})
         self.assertTrue(any("selected_skill" in e for e in ve.errors))
 
@@ -190,9 +192,9 @@ class ResultFailureTests(unittest.TestCase):
 
     def test_passed_assertion_no_evidence(self):
         res = self._result()
-        res["cases"][0]["assertions"][0]["guided"]["evidence"] = ""
+        res["cases"][0]["assertions"][0]["target"]["evidence"] = ""
         ve.check_one_result("r.md", res, {"code-review"}, {})
-        self.assertTrue(any("passing guided assertion has no evidence" in e for e in ve.errors))
+        self.assertTrue(any("passing target assertion has no evidence" in e for e in ve.errors))
 
     def test_shared_session_id(self):
         res = self._result()
@@ -219,9 +221,9 @@ class ResultFailureTests(unittest.TestCase):
             mode="routing",
             protocol={"status": "limited", "worker_isolation_verified": True,
                       "routing_mechanism": "harness-selection-log",
-                      "target_loaded_in_guided": None,
+                      "target_guidance_present": None,
                       "target_absent_in_baseline": None, "contamination": "none"},
-            runs={"guided": {"session_id": "g1", "output_hash": "h",
+            runs={"target": {"session_id": "g1", "output_hash": "h",
                              "selected_skill": present},
                   "baseline": {"session_id": "b1", "output_hash": "h",
                                "selected_skill": absent}},
@@ -230,8 +232,8 @@ class ResultFailureTests(unittest.TestCase):
                 "outcome": {"category": "both_pass",
                             "measurement_status": "discriminating",
                             "protocol_status": "limited"},
-                "verdict": {"guided_pass": True, "baseline_pass": True},
-                "runs": {"guided": {"selected_skill": present},
+                "verdict": {"target_pass": True, "baseline_pass": True},
+                "runs": {"target": {"selected_skill": present},
                          "baseline": {"selected_skill": absent}},
                 "assertions": [],
             }])
@@ -277,15 +279,15 @@ class ResultFailureTests(unittest.TestCase):
     # --- new Docker execution evidence checks (mode == execution) ---
     def test_execution_shared_container_id_fails(self):
         res = self._result()
-        res["runs"]["guided"]["container_id"] = "cb1"  # same as baseline
+        res["runs"]["target"]["container_id"] = "cb1"  # same as baseline
         ve.check_one_result("r.md", res, {"code-review"}, {})
         self.assertTrue(any("share a container_id" in e for e in ve.errors))
 
     def test_execution_missing_skill_hash_fails(self):
         res = self._result()
-        res["protocol"].pop("guided_skill_hash")
+        res["protocol"].pop("target_guidance_hash")
         ve.check_one_result("r.md", res, {"code-review"}, {})
-        self.assertTrue(any("guided_skill_hash" in e for e in ve.errors))
+        self.assertTrue(any("target_guidance_hash" in e for e in ve.errors))
 
     def test_execution_missing_baseline_absence_proof_fails(self):
         res = self._result()
@@ -299,11 +301,11 @@ class ResultFailureTests(unittest.TestCase):
             mode=mode,
             protocol={"status": "limited", "worker_isolation_verified": True,
                       "routing_mechanism": "harness-selection-log",
-                      "target_loaded_in_guided": None,
+                      "target_guidance_present": None,
                       "target_absent_in_baseline": None,
-                      "guided_skill_hash": None, "baseline_guidance_absent": None,
+                      "target_guidance_hash": None, "baseline_guidance_absent": None,
                       "contamination": "none"},
-            runs={"guided": {"session_id": "g1", "container_id": "cg1",
+            runs={"target": {"session_id": "g1", "container_id": "cg1",
                              "output_hash": "h", "selected_skill": "code-review"},
                   "baseline": {"session_id": "b1", "container_id": "cb1",
                                "output_hash": "h", "selected_skill": None}},
@@ -312,8 +314,8 @@ class ResultFailureTests(unittest.TestCase):
                 "outcome": {"category": "both_pass",
                             "measurement_status": "discriminating",
                             "protocol_status": "limited"},
-                "verdict": {"guided_pass": True, "baseline_pass": True},
-                "runs": {"guided": {"selected_skill": "code-review"},
+                "verdict": {"target_pass": True, "baseline_pass": True},
+                "runs": {"target": {"selected_skill": "code-review"},
                          "baseline": {"selected_skill": None}},
                 "assertions": [],
             }])
@@ -335,26 +337,30 @@ class EvidenceValidationTests(unittest.TestCase):
         reset()
 
     def _exec_evidence(self, **over_rep):
+        target = {
+            "container_id": "cg", "session_id": "sg",
+            "run_status": "success", "returncode": 0,
+            "guidance_mounted": True, "guidance_verified": True,
+            "guidance_verified_absent": False, "guidance_probe": "present",
+            "starting_fixture_hash": "sha256:seed", "ending_fixture_hash": "sha256:g",
+            "output": "target output", "stderr": ""}
+        baseline = {
+            "container_id": "cb", "session_id": "sb",
+            "run_status": "success", "returncode": 0,
+            "guidance_mounted": False, "guidance_verified": False,
+            "guidance_verified_absent": True, "guidance_probe": "absent",
+            "starting_fixture_hash": "sha256:seed", "ending_fixture_hash": "sha256:h",
+            "output": "baseline output", "stderr": ""}
         rep = {
             "rep": 1,
             "workspace_path": "/work/task",
+            "guidance_mount_path": "/work/guidance/task",
             "canonical_seed_hash": "sha256:seed",
-            "guided_workspace_id": "ws-guided-1",
-            "baseline_workspace_id": "ws-baseline-1",
-            "guided": {
-                "container_id": "cg", "session_id": "sg",
-                "run_status": "success", "returncode": 0,
-                "skill_mounted": True, "skill_hash": "sha256:skill",
-                "guidance_verified": True, "guidance_probe": "present",
-                "starting_fixture_hash": "sha256:seed", "ending_fixture_hash": "sha256:g",
-                "output": "guided output", "stderr": ""},
-            "baseline": {
-                "container_id": "cb", "session_id": "sb",
-                "run_status": "success", "returncode": 0,
-                "skill_mounted": False,
-                "guidance_verified_absent": True, "guidance_probe": "absent",
-                "starting_fixture_hash": "sha256:seed", "ending_fixture_hash": "sha256:h",
-                "output": "baseline output", "stderr": ""},
+            "natural_task_hash": "a" * 64,
+            "natural_task_identical_across_conditions": True,
+            "condition_workspace_ids": {"target": "ws-target-1",
+                                        "baseline": "ws-baseline-1"},
+            "conditions": {"target": target, "baseline": baseline},
             "distinct_containers": True, "distinct_sessions": True,
             "starting_fixture_hashes_match": True, "workspace_paths_differ": True,
         }
@@ -363,6 +369,8 @@ class EvidenceValidationTests(unittest.TestCase):
                 "canonical_seed_hash": "sha256:seed",
                 "expected_fixture_hash": "sha256:seed",
                 "guidance_bundle_hash": "sha256:bundle",
+                "guidance_mount_path": "/work/guidance/task",
+                "conditions": ["target", "baseline"],
                 "repetitions": [rep]}
 
     def _cat_evidence(self, present_reps, absent_reps):
@@ -375,36 +383,38 @@ class EvidenceValidationTests(unittest.TestCase):
 
     def test_execution_evidence_shared_container_fails(self):
         ev = self._exec_evidence()
-        ev["repetitions"][0]["guided"]["container_id"] = "cb"
+        ev["repetitions"][0]["conditions"]["target"]["container_id"] = "cb"
         self.assertTrue(any("distinct containers" in e
                             for e in ve.validate_execution_evidence(ev)))
 
     def test_execution_evidence_baseline_leak_fails(self):
         ev = self._exec_evidence()
-        ev["repetitions"][0]["baseline"]["guidance_verified_absent"] = False
+        ev["repetitions"][0]["conditions"]["baseline"] \
+            ["guidance_verified_absent"] = False
         self.assertTrue(any("guidance_verified_absent" in e
                             for e in ve.validate_execution_evidence(ev)))
 
     def test_execution_evidence_fixture_mismatch_fails(self):
         ev = self._exec_evidence()
-        ev["repetitions"][0]["baseline"]["starting_fixture_hash"] = "sha256:other"
+        ev["repetitions"][0]["conditions"]["baseline"] \
+            ["starting_fixture_hash"] = "sha256:other"
         self.assertTrue(any("starting fixture hashes differ" in e
                             for e in ve.validate_execution_evidence(ev)))
 
     def test_execution_evidence_failed_run_rejected(self):
         # Defect 3/9: a failed Docker/Kilo run cannot be valid evidence.
         ev = self._exec_evidence()
-        ev["repetitions"][0]["guided"]["run_status"] = "failed"
-        ev["repetitions"][0]["guided"]["returncode"] = 1
-        ev["repetitions"][0]["guided"]["guidance_verified"] = False
-        ev["repetitions"][0]["guided"]["output"] = ""
+        ev["repetitions"][0]["conditions"]["target"]["run_status"] = "failed"
+        ev["repetitions"][0]["conditions"]["target"]["returncode"] = 1
+        ev["repetitions"][0]["conditions"]["target"]["guidance_verified"] = False
+        ev["repetitions"][0]["conditions"]["target"]["output"] = ""
         self.assertTrue(any("run_status" in e
                             for e in ve.validate_execution_evidence(ev)))
 
     def test_execution_evidence_shared_workspace_rejected(self):
-        # Defect 1: guided and baseline must use independent workspace ids.
+        # Defect 1: target and baseline must use independent workspace ids.
         ev = self._exec_evidence()
-        ev["repetitions"][0]["baseline_workspace_id"] = "ws-guided-1"
+        ev["repetitions"][0]["condition_workspace_ids"]["baseline"] = "ws-target-1"
         self.assertTrue(any("workspace ids" in e
                             for e in ve.validate_execution_evidence(ev)))
 
@@ -475,9 +485,10 @@ class EvidenceDirDispatchTests(unittest.TestCase):
     def test_malformed_exec_evidence_fails(self):
         # A malformed execution evidence file must cause validator failure.
         errs = self._run_check({
-            "exec-bad.json": '{"evidence_type":"execution", "repetitions":[{"rep":1,'
-                             '"guided":{"container_id":"g"},'
-                             '"baseline":{"container_id":"g"}}]}'})
+            "exec-bad.json": '{"evidence_type":"execution", "conditions":'
+                             '["target","baseline"], "repetitions":[{"rep":1,'
+                             '"conditions":{"target":{"container_id":"g"},'
+                             '"baseline":{"container_id":"g"}}}]}'})
         self.assertTrue(any("distinct containers" in e for e in errs),
                         f"expected distinct-container failure, got {errs}")
 
@@ -903,26 +914,32 @@ class ExecutionEvidenceAnchorTests(unittest.TestCase):
             "canonical_seed_hash": "sha256:seed",
             "expected_fixture_hash": "sha256:seed",
             "guidance_bundle_hash": "sha256:bundle",
+            "guidance_mount_path": "/work/guidance/task",
+            "conditions": ["target", "baseline"],
             "repetitions": [{
                 "rep": 1,
                 "canonical_seed_hash": "sha256:seed",
-                "guided_workspace_id": "ws-guided-1",
-                "baseline_workspace_id": "ws-baseline-1",
-                "guided": {"container_id": "cg", "session_id": "sg",
-                           "run_status": "success", "returncode": 0,
-                           "skill_mounted": True, "skill_hash": "sha256:skill",
-                           "guidance_verified": True, "guidance_probe": "present",
-                           "starting_fixture_hash": "sha256:seed",
-                           "ending_fixture_hash": "sha256:g", "output": "out",
-                           "stderr": ""},
-                "baseline": {"container_id": "cb", "session_id": "sb",
-                             "run_status": "success", "returncode": 0,
-                             "skill_mounted": False,
-                             "guidance_verified_absent": True,
-                             "guidance_probe": "absent",
-                             "starting_fixture_hash": "sha256:seed",
-                             "ending_fixture_hash": "sha256:h", "output": "out",
-                             "stderr": ""},
+                "natural_task_hash": "a" * 64,
+                "natural_task_identical_across_conditions": True,
+                "condition_workspace_ids": {"target": "ws-target-1",
+                                            "baseline": "ws-baseline-1"},
+                "guidance_mount_path": "/work/guidance/task",
+                "conditions": {
+                    "target": {"container_id": "cg", "session_id": "sg",
+                               "run_status": "success", "returncode": 0,
+                               "guidance_verified": True,
+                               "guidance_probe": "present",
+                               "starting_fixture_hash": "sha256:seed",
+                               "ending_fixture_hash": "sha256:g",
+                               "output": "out", "stderr": ""},
+                    "baseline": {"container_id": "cb", "session_id": "sb",
+                                 "run_status": "success", "returncode": 0,
+                                 "guidance_verified_absent": True,
+                                 "guidance_probe": "absent",
+                                 "starting_fixture_hash": "sha256:seed",
+                                 "ending_fixture_hash": "sha256:h",
+                                 "output": "out", "stderr": ""},
+                },
                 "distinct_containers": True, "distinct_sessions": True,
                 "starting_fixture_hashes_match": True,
                 "workspace_paths_differ": True,
@@ -979,6 +996,497 @@ class PreflightReferencesTests(unittest.TestCase):
                                   refs_expected=False)
         # When references are not required, the absent branch must pass (true).
         self.assertIn('[ "false" = "true" ]', script)
+
+
+class ConfusionSetAndHoldoutTests(unittest.TestCase):
+    """Confusion sets + holdouts: schema, keyword-leak rejection, workflow
+    transition turns, counterfactual placement."""
+
+    def tearDown(self):
+        reset()
+
+    def _confusion(self, **over):
+        d = {
+            "confusion_set": "review-family",
+            "cluster": "review",
+            "skills": ["code-review", "security-review"],
+            "cases": [
+                {"id": 1, "case_type": "hard-negative",
+                 "prompt": "This PR changes how access tokens are checked. "
+                           "Is the change correct and mergeable?",
+                 "expected_skill": "code-review"},
+            ],
+        }
+        d.update(over)
+        return d
+
+    def _write(self, tmp, name, data):
+        p = os.path.join(tmp, name)
+        json.dump(data, open(p, "w"))
+        return p
+
+    def test_valid_confusion_set(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            p = self._write(tmp, "review.json", self._confusion())
+            ve.check_confusion_set(p, "evaluations/confusion-sets/review.json")
+            self.assertEqual(ve.errors, [], ve.errors)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_prompt_with_expected_skill_name_rejected(self):
+        # The prompt contains "code-review" verbatim -> keyword leak.
+        d = self._confusion()
+        d["cases"][0]["prompt"] = "Please run code-review on this diff."
+        tmp = tempfile.mkdtemp()
+        try:
+            p = self._write(tmp, "review.json", d)
+            ve.check_confusion_set(p, "evaluations/confusion-sets/review.json")
+            self.assertTrue(any("keyword leak" in e for e in ve.errors),
+                            ve.errors)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_expected_skill_must_be_in_set(self):
+        d = self._confusion()
+        d["cases"][0]["expected_skill"] = "threat-modeling"
+        tmp = tempfile.mkdtemp()
+        try:
+            p = self._write(tmp, "review.json", d)
+            ve.check_confusion_set(p, "evaluations/confusion-sets/review.json")
+            self.assertTrue(any("not in the confusion set" in e for e in ve.errors))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_workflow_transition_needs_turns(self):
+        d = self._confusion()
+        d["cases"][0]["case_type"] = "workflow-transition"
+        tmp = tempfile.mkdtemp()
+        try:
+            p = self._write(tmp, "review.json", d)
+            ve.check_confusion_set(p, "evaluations/confusion-sets/review.json")
+            self.assertTrue(any("workflow-transition case must carry"
+                                in e for e in ve.errors))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_workflow_transition_with_turns_ok(self):
+        d = self._confusion()
+        d["cases"] = [{
+            "id": 1, "case_type": "workflow-transition",
+            "prompt": "Look at this subsystem and tell me whether the design "
+                      "is why every change touches the same five modules.",
+            "turns": [
+                {"user": "Can you tell me whether the design is the problem?",
+                 "expected_route": "architecture-review"},
+                {"user": "Option B sounds right. Plan the change.",
+                 "expected_route": "implementation-planning"},
+            ],
+        }]
+        d["skills"] = ["architecture-review", "implementation-planning"]
+        d["cases"][0]["expected_skill"] = "architecture-review"
+        tmp = tempfile.mkdtemp()
+        try:
+            p = self._write(tmp, "design.json", d)
+            ve.check_confusion_set(p, "evaluations/confusion-sets/design.json")
+            self.assertEqual(ve.errors, [], ve.errors)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_counterfactual_inside_skill_pack_rejected(self):
+        # A counterfactual case must live in a confusion set, never in a
+        # skill's own eval pack (its paired member would be visible there).
+        c = base_case(1, "edge", ["catalog-routing"],
+                      case_type="counterfactual",
+                      counterfactual_pair="pair-1",
+                      routing_context=routing_ctx(),
+                      routing=routing_exp())
+        ve.check_case(fake_path(), "skills/foo/evals/evals.json", c)
+        self.assertTrue(any("must live in a confusion-set" in e
+                            for e in ve.errors), ve.errors)
+
+    def test_counterfactual_missing_pair_rejected(self):
+        c = base_case(1, "edge", ["catalog-routing"],
+                      case_type="counterfactual",
+                      routing_context=routing_ctx(),
+                      routing=routing_exp())
+        ve.check_case("evaluations/confusion-sets/x.json",
+                      "evaluations/confusion-sets/x.json", c)
+        self.assertTrue(any("counterfactual_pair" in e for e in ve.errors))
+
+    def test_counterfactual_in_confusion_set_ok(self):
+        d = self._confusion()
+        d["cases"] = [{
+            "id": 1, "case_type": "counterfactual",
+            "counterfactual_pair": "restructure-1",
+            "prompt": "These modules have become tangled. Should we "
+                      "restructure them?",
+            "expected_skill": "architecture-review",
+        }]
+        d["skills"] = ["architecture-review", "implementation-planning"]
+        tmp = tempfile.mkdtemp()
+        try:
+            p = self._write(tmp, "design.json", d)
+            ve.check_confusion_set(p, "evaluations/confusion-sets/design.json")
+            self.assertEqual(ve.errors, [], ve.errors)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_holdout_valid(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            p = os.path.join(tmp, "review-holdout.json")
+            json.dump({"holdout": "review-holdout-1", "cases": [
+                {"id": 1, "prompt": "Is this auth change correct?",
+                 "expected_skill": "code-review"},
+            ]}, open(p, "w"))
+            ve.check_holdout(p, "evaluations/holdout/review-holdout.json")
+            self.assertEqual(ve.errors, [], ve.errors)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_holdout_missing_expected_skill(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            p = os.path.join(tmp, "h.json")
+            json.dump({"holdout": "h", "cases": [
+                {"id": 1, "prompt": "x"},
+            ]}, open(p, "w"))
+            ve.check_holdout(p, "evaluations/holdout/h.json")
+            self.assertTrue(any("expected_skill" in e for e in ve.errors))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_confusion_set_null_expected_skill_ambiguous_ok(self):
+        """ambiguous-natural cases may have expected_skill=null."""
+        d = self._confusion()
+        d["cases"][0] = {
+            "id": 1, "case_type": "ambiguous-natural",
+            "prompt": "Is this a security problem or just a bug? No way to tell.",
+            "expected_skill": None,
+        }
+        tmp = tempfile.mkdtemp()
+        try:
+            p = self._write(tmp, "review.json", d)
+            ve.check_confusion_set(p, "evaluations/confusion-sets/review.json")
+            self.assertEqual(ve.errors, [], ve.errors)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_confusion_set_null_expected_skill_non_ambiguous_rejected(self):
+        """expected_skill=null is only valid for ambiguous-natural cases."""
+        d = self._confusion()
+        d["cases"][0]["case_type"] = "hard-negative"
+        d["cases"][0]["expected_skill"] = None
+        d["cases"][0]["prompt"] = "A vague request with no clear owner."
+        tmp = tempfile.mkdtemp()
+        try:
+            p = self._write(tmp, "review.json", d)
+            ve.check_confusion_set(p, "evaluations/confusion-sets/review.json")
+            self.assertTrue(any("null only valid for" in e for e in ve.errors))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_confusion_set_null_expected_skill_no_keyword_leak_check(self):
+        """When expected_skill is null, the keyword-leak check must not crash."""
+        d = self._confusion()
+        d["cases"][0] = {
+            "id": 1, "case_type": "ambiguous-natural",
+            "prompt": "Too little evidence to decide.",
+            "expected_skill": None,
+        }
+        tmp = tempfile.mkdtemp()
+        try:
+            p = self._write(tmp, "review.json", d)
+            ve.check_confusion_set(p, "evaluations/confusion-sets/review.json")
+            self.assertEqual(ve.errors, [], ve.errors)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_holdout_null_expected_skill_ambiguous_ok(self):
+        """Holdout ambiguous-natural cases may have expected_skill=null."""
+        tmp = tempfile.mkdtemp()
+        try:
+            p = os.path.join(tmp, "h.json")
+            json.dump({"holdout": "h", "cases": [
+                {"id": 1, "case_type": "ambiguous-natural",
+                 "prompt": "Unclear what to do.", "expected_skill": None},
+            ]}, open(p, "w"))
+            ve.check_holdout(p, "evaluations/holdout/h.json")
+            self.assertEqual(ve.errors, [], ve.errors)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_holdout_null_expected_skill_non_ambiguous_rejected(self):
+        """Holdout: expected_skill=null only valid for ambiguous-natural."""
+        tmp = tempfile.mkdtemp()
+        try:
+            p = os.path.join(tmp, "h.json")
+            json.dump({"holdout": "h", "cases": [
+                {"id": 1, "case_type": "hard-negative",
+                 "prompt": "x", "expected_skill": None},
+            ]}, open(p, "w"))
+            ve.check_holdout(p, "evaluations/holdout/h.json")
+            self.assertTrue(any("null only valid" in e for e in ve.errors))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+class AssertionTypeTests(unittest.TestCase):
+    """Assertions may be plain strings (legacy) or typed objects; typed
+    assertions must declare behavioral/quality/presentation."""
+
+    def tearDown(self):
+        reset()
+
+    def test_typed_assertions_valid(self):
+        c = base_case(5, "edge", ["execution"],
+                      execution={"expected_output": "out", "assertions": [
+                          {"text": "did not merge", "type": "behavioral"},
+                          {"text": "explains evidence clearly",
+                           "type": "quality"},
+                          {"text": "uses a matrix", "type": "presentation"},
+                      ]})
+        ve.check_case(fake_path(), "x/evals.json", c)
+        self.assertEqual(ve.errors, [], ve.errors)
+
+    def test_assertion_object_missing_type_rejected(self):
+        c = base_case(5, "edge", ["execution"],
+                      execution={"expected_output": "out", "assertions": [
+                          {"text": "did not merge"},
+                      ]})
+        ve.check_case(fake_path(), "x/evals.json", c)
+        self.assertTrue(any("missing 'type'" in e for e in ve.errors))
+
+    def test_assertion_bad_type_rejected(self):
+        c = base_case(5, "edge", ["execution"],
+                      execution={"expected_output": "out", "assertions": [
+                          {"text": "x", "type": "hard"},
+                      ]})
+        ve.check_case(fake_path(), "x/evals.json", c)
+        self.assertTrue(any("bad assertion type" in e for e in ve.errors))
+
+    def test_assertion_object_missing_text_rejected(self):
+        c = base_case(5, "edge", ["execution"],
+                      execution={"expected_output": "out", "assertions": [
+                          {"type": "behavioral"},
+                      ]})
+        ve.check_case(fake_path(), "x/evals.json", c)
+        self.assertTrue(any("missing 'text'" in e for e in ve.errors))
+
+    def test_placeholder_guidance_only_for_designed_only(self):
+        c = base_case(5, "edge", ["execution"],
+                      execution={"expected_output": "out",
+                                 "assertions": ["a"],
+                                 "placeholder_guidance": "Tier-1 dev smoke: "
+                                 "the worker has no fixture yet."},
+                      fixture={"status": "designed_only"})
+        ve.check_case(fake_path(), "x/evals.json", c)
+        self.assertEqual(ve.errors, [], ve.errors)
+
+    def test_placeholder_guidance_with_ready_fixture_rejected(self):
+        c = base_case(5, "edge", ["execution"],
+                      execution={"expected_output": "out",
+                                 "assertions": ["a"],
+                                 "placeholder_guidance": "not allowed here"},
+                      fixture={"status": "ready", "type": "committed",
+                               "path": "evals/files/x",
+                               "content_hash": "sha256:" + "0" * 64})
+        ve.check_case(fake_path(), "x/evals.json", c)
+        self.assertTrue(any("placeholder_guidance" in e for e in ve.errors))
+
+
+class CaseTypeTests(unittest.TestCase):
+    def tearDown(self):
+        reset()
+
+    def _case(self, ctype, **extra):
+        return base_case(1, "matching", ["catalog-routing"],
+                         case_type=ctype,
+                         routing_context=routing_ctx(),
+                         routing=routing_exp(), **extra)
+
+    def test_smoke_default_ok(self):
+        # Legacy cases without case_type default to smoke.
+        c = base_case(1, "matching", ["catalog-routing"],
+                      routing_context=routing_ctx(), routing=routing_exp())
+        ve.check_case(fake_path(), "x/evals.json", c)
+        self.assertEqual(ve.errors, [], ve.errors)
+
+    def test_discriminator_ok(self):
+        ve.check_case(fake_path(), "x/evals.json", self._case("discriminator"))
+        self.assertEqual(ve.errors, [], ve.errors)
+
+    def test_misleading_keyword_ok(self):
+        ve.check_case(fake_path(), "x/evals.json",
+                      self._case("misleading-keyword"))
+        self.assertEqual(ve.errors, [], ve.errors)
+
+    def test_bad_case_type_rejected(self):
+        ve.check_case(fake_path(), "x/evals.json", self._case("easy"))
+        self.assertTrue(any("bad case_type" in e for e in ve.errors))
+
+    def test_multi_turn_case_requires_workflow_type(self):
+        c = self._case("discriminator", turns=[{"user": "hi"}])
+        ve.check_case(fake_path(), "x/evals.json", c)
+        self.assertTrue(any("workflow-transition" in e for e in ve.errors))
+
+    def test_turn_missing_user_rejected(self):
+        c = self._case("workflow-transition",
+                       turns=[{"expected_route": "code-review"}])
+        ve.check_case(fake_path(), "x/evals.json", c)
+        self.assertTrue(any("turn 1" in e for e in ve.errors))
+
+
+class ExecutionEvidenceV2Tests(unittest.TestCase):
+    """New-format execution evidence: neutral guidance path, identical natural
+    task, target/baseline/placebo conditions."""
+
+    def tearDown(self):
+        reset()
+
+    def _evidence(self, **over):
+        cond = {
+            "container_id": "c", "session_id": "s",
+            "run_status": "success", "returncode": 0,
+            "guidance_mounted": True, "guidance_verified": True,
+            "guidance_verified_absent": False, "guidance_probe": "present",
+            "starting_fixture_hash": "sha256:seed",
+            "ending_fixture_hash": "sha256:after",
+            "output": "worker output", "stderr": "",
+        }
+        baseline = dict(cond, container_id="cb", session_id="sb",
+                        guidance_mounted=False, guidance_verified=False,
+                        guidance_verified_absent=True, guidance_probe="absent")
+        ev = {
+            "evidence_type": "execution",
+            "canonical_seed_hash": "sha256:seed",
+            "expected_fixture_hash": "sha256:seed",
+            "guidance_bundle_hash": "sha256:bundle",
+            "guidance_mount_path": "/work/guidance/task",
+            "conditions": ["target", "baseline"],
+            "placebo_skill": None, "placebo_bundle_hash": None,
+            "repetitions": [{
+                "rep": 1,
+                "canonical_seed_hash": "sha256:seed",
+                "natural_task_hash": "a" * 64,
+                "natural_task_identical_across_conditions": True,
+                "condition_workspace_ids": {"target": "ws-t", "baseline": "ws-b"},
+                "guidance_mount_path": "/work/guidance/task",
+                "conditions": {"target": cond, "baseline": baseline},
+                "distinct_containers": True, "distinct_sessions": True,
+                "starting_fixture_hashes_match": True,
+                "workspace_paths_differ": True,
+            }],
+        }
+        ev.update(over)
+        return ev
+
+    def test_valid_v2(self):
+        self.assertEqual(ve.validate_execution_evidence(self._evidence()), [])
+
+    def test_non_neutral_guidance_path_rejected(self):
+        ev = self._evidence(guidance_mount_path="/work/guidance/code-review")
+        errs = ve.validate_execution_evidence(ev)
+        self.assertTrue(any("not the neutral" in e for e in errs), errs)
+
+    def test_skill_name_in_mount_path_rejected(self):
+        ev = self._evidence()
+        ev["repetitions"][0]["guidance_mount_path"] = \
+            "/work/guidance/security-review"
+        errs = ve.validate_execution_evidence(ev)
+        self.assertTrue(any("not neutral" in e for e in errs), errs)
+
+    def test_missing_identical_task_hash_rejected(self):
+        ev = self._evidence()
+        del ev["repetitions"][0]["natural_task_hash"]
+        errs = ve.validate_execution_evidence(ev)
+        self.assertTrue(any("natural_task_hash" in e for e in errs), errs)
+
+    def test_conditions_share_container_rejected(self):
+        ev = self._evidence()
+        ev["repetitions"][0]["conditions"]["baseline"]["container_id"] = "c"
+        errs = ve.validate_execution_evidence(ev)
+        self.assertTrue(any("distinct containers" in e for e in errs), errs)
+
+    def test_baseline_guidance_present_rejected(self):
+        ev = self._evidence()
+        ev["repetitions"][0]["conditions"]["baseline"] \
+            ["guidance_verified_absent"] = False
+        errs = ve.validate_execution_evidence(ev)
+        self.assertTrue(any("guidance_verified_absent" in e for e in errs), errs)
+
+    def test_missing_condition_rejected(self):
+        ev = self._evidence(conditions=["target", "baseline", "placebo"])
+        errs = ve.validate_execution_evidence(ev)
+        self.assertTrue(any("missing condition" in e for e in errs), errs)
+
+    def test_placebo_requires_placebo_skill(self):
+        ev = self._evidence(conditions=["target", "baseline", "placebo"])
+        placebo = dict(ev["repetitions"][0]["conditions"]["target"],
+                       container_id="cp", session_id="sp")
+        ev["repetitions"][0]["conditions"]["placebo"] = placebo
+        ev["repetitions"][0]["condition_workspace_ids"]["placebo"] = "ws-p"
+        errs = ve.validate_execution_evidence(ev)
+        self.assertTrue(any("placebo_skill" in e for e in errs), errs)
+
+    def test_placebo_valid_with_skill(self):
+        ev = self._evidence(conditions=["target", "baseline", "placebo"],
+                            placebo_skill="security-review",
+                            placebo_bundle_hash="sha256:p")
+        placebo = dict(ev["repetitions"][0]["conditions"]["target"],
+                       container_id="cp", session_id="sp")
+        ev["repetitions"][0]["conditions"]["placebo"] = placebo
+        ev["repetitions"][0]["condition_workspace_ids"]["placebo"] = "ws-p"
+        self.assertEqual(ve.validate_execution_evidence(ev), [])
+
+    def test_failed_condition_rejected(self):
+        ev = self._evidence()
+        ev["repetitions"][0]["conditions"]["target"]["run_status"] = "failed"
+        ev["repetitions"][0]["conditions"]["target"]["returncode"] = 1
+        errs = ve.validate_execution_evidence(ev)
+        self.assertTrue(any("run_status" in e for e in errs), errs)
+
+
+class ExecutionRunnerBoundaryTests(unittest.TestCase):
+    """Runner-level treatment boundary: identical natural task, neutral mount,
+    placebo plumbing."""
+
+    def test_guidance_staged_under_neutral_task_dir(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            skilldir = os.path.join(tmp, "skill")
+            os.makedirs(os.path.join(skilldir, "references"))
+            open(os.path.join(skilldir, "SKILL.md"), "w").write("# S")
+            open(os.path.join(skilldir, "references", "r.md"), "w").write("r")
+            g = ree.materialize_guidance(skilldir, "code-review")
+            try:
+                # The mount root is staged as task/ so the target and placebo
+                # conditions mount byte-identically at /work/guidance/task.
+                self.assertTrue(os.path.exists(os.path.join(g, "task", "SKILL.md")))
+                self.assertTrue(os.path.exists(
+                    os.path.join(g, "task", "references", "r.md")))
+                # The canonical skill name must not appear anywhere in the
+                # staged guidance paths.
+                for root, _, names in os.walk(g):
+                    for n in names:
+                        self.assertNotIn("code-review", os.path.join(root, n))
+            finally:
+                shutil.rmtree(g, ignore_errors=True)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_conditions_arg_validation(self):
+        self.assertEqual(ree._conditions_arg("target,baseline"),
+                         ["target", "baseline"])
+        self.assertEqual(ree._conditions_arg("target,baseline,placebo"),
+                         ["target", "baseline", "placebo"])
+        with self.assertRaises(argparse.ArgumentTypeError):
+            ree._conditions_arg("target")
+        with self.assertRaises(argparse.ArgumentTypeError):
+            ree._conditions_arg("target,baseline,bogus")
+        self.assertEqual(ree._conditions_arg("baseline,target,target"),
+                         ["baseline", "target"])
 
 
 if __name__ == "__main__":

@@ -51,8 +51,8 @@ Assessed facts about this environment:
 
 - **No OS/container isolation.** No `/.dockerenv`, no container runtime, no sandbox
   boundary. The agent runs directly on the host (`MacBook-Pro.local`).
-- **No independent worker roots.** The methodology requires one WITH-SKILL worker and
-  one BASELINE worker, each in its own OS-contained root, with the baseline unable to
+- **No independent worker roots.** The methodology requires one `target` worker and
+  one `baseline` worker, each in its own OS-contained root, with the baseline unable to
   see the target skill's name/path/description/catalog entry through any system
   metadata. This environment has a single agent process; two independent worker roots
   cannot be spawned or verified here.
@@ -174,7 +174,7 @@ A protocol-valid run requires a harness that provides:
 1. **Routing selection capture** — a loaded-skill manifest / routing log / named
    tool-call that records the selected skill independently of worker prose. Without it,
    routing stays `not_run`.
-2. **Independent worker containment** — OS-contained WITH-SKILL and BASELINE roots (or a
+2. **Independent worker containment** — OS-contained `target` and `baseline` roots (or a
    verified instruction-only fallback with a passing boundary probe and confirmed
    baseline target-absence). Without it, execution stays `not_run`.
 3. **Sanitized Git/network** — the generator's `sanitize_env` pattern applied to the live
