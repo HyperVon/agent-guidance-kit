@@ -17,6 +17,11 @@ Two fixture kinds:
     fully content-addressed and therefore independent of commit author/date;
   - otherwise hash the generated files recursively.
 
+  Fixture-local bare remotes are represented by sorted symbolic-HEAD/ref
+  manifests, while their raw storage and the working repository's raw config
+  remain excluded. Working-repository remote URLs and current-branch upstream
+  keys are included in normalized form.
+
 A generator fixture records both ``source_hash`` (the evaluator-only generator
 source, e.g. ``setup.sh``) and ``output_hash`` / ``content_hash`` (the
 WORKER-VISIBLE generated task state — the generator source is STRIPPED before
@@ -30,6 +35,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+from urllib.parse import unquote, urlsplit
 
 HASH_PREFIX = "sha256:"
 
@@ -80,12 +86,151 @@ def _files_recursive(path):
     return sorted(files)
 
 
+def _normalized_relpath(path, root):
+    """Return a repository-relative path with portable separators."""
+    return os.path.relpath(os.path.realpath(path), os.path.realpath(root)).replace(
+        os.sep, "/"
+    )
+
+
+def _git_output(args, *, cwd=None, git_dir=None):
+    cmd = ["git"]
+    if cwd is not None:
+        cmd += ["-C", cwd]
+    if git_dir is not None:
+        cmd += ["--git-dir", git_dir]
+    cmd += list(args)
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if proc.returncode != 0:
+        return None
+    return proc.stdout.strip()
+
+
+def _normalize_fixture_remote_url(url, workspace):
+    """Keep external URLs intact while making local fixture paths portable."""
+    raw = url.strip()
+    if not raw:
+        return raw
+
+    is_windows_path = len(raw) > 1 and raw[1] == ":" and raw[0].isalpha()
+    parsed = urlsplit("") if is_windows_path else urlsplit(raw)
+    if parsed.scheme and parsed.scheme != "file":
+        return raw
+    if parsed.scheme == "file":
+        if parsed.netloc not in ("", "localhost"):
+            return raw
+        candidate = unquote(parsed.path)
+    else:
+        # Preserve scp-style external URLs such as git@github.com:org/repo.git.
+        if "@" in raw and ":" in raw and not os.path.isabs(raw):
+            return raw
+        candidate = raw
+
+    if os.path.isabs(candidate):
+        absolute = os.path.realpath(candidate)
+    else:
+        absolute = os.path.realpath(os.path.join(workspace, candidate))
+    workspace_abs = os.path.realpath(workspace)
+    try:
+        if os.path.commonpath((absolute, workspace_abs)) != workspace_abs:
+            return raw
+    except ValueError:
+        return raw
+    relative = os.path.relpath(absolute, workspace_abs).replace(os.sep, "/")
+    return "fixture://" + relative
+
+
+def _bare_repo_semantic_manifest(path, workspace):
+    """Return a deterministic semantic manifest for a bare Git repository."""
+    if _git_output(["rev-parse", "--is-bare-repository"], git_dir=path) != "true":
+        return None
+    relative = _normalized_relpath(path, workspace)
+    head = _git_output(["symbolic-ref", "--quiet", "HEAD"], git_dir=path)
+    refs = _git_output(
+        ["for-each-ref", "--format=%(refname) %(objectname)"], git_dir=path,
+    )
+    ref_lines = sorted(line.strip() for line in (refs or "").splitlines()
+                       if line.strip())
+    return "\n".join([
+        "BARE_REMOTE:" + relative,
+        "HEAD=" + (head or "(detached)"),
+        "REFS:",
+        *ref_lines,
+    ])
+
+
+def _discover_bare_repositories(workspace):
+    """Find fixture-local bare repositories without traversing their internals."""
+    workspace = os.path.realpath(workspace)
+    working_git = os.path.realpath(os.path.join(workspace, ".git"))
+    found = []
+    for root, dirs, _ in os.walk(workspace, topdown=True):
+        kept = []
+        for name in dirs:
+            candidate = os.path.join(root, name)
+            if os.path.realpath(candidate) == working_git:
+                continue
+            if name != ".origin.git" and not name.endswith(".git"):
+                kept.append(name)
+                continue
+            if _bare_repo_semantic_manifest(candidate, workspace) is None:
+                kept.append(name)
+                continue
+            found.append(candidate)
+        dirs[:] = kept
+    return sorted(found, key=lambda p: _normalized_relpath(p, workspace))
+
+
+def _working_repo_semantic_manifest(workspace):
+    """Return the task-relevant, normalized subset of working-repo Git config."""
+    if not os.path.isdir(os.path.join(workspace, ".git")):
+        return None
+    branch = _git_output(["symbolic-ref", "--quiet", "--short", "HEAD"],
+                         cwd=workspace)
+    branch = branch or "(detached)"
+    lines = ["WORKING_REPO", "BRANCH=" + branch]
+
+    remotes = _git_output(
+        ["config", "--local", "--get-regexp", r"^remote\..+\.url$"],
+        cwd=workspace,
+    )
+    for line in sorted((remotes or "").splitlines()):
+        parts = line.split(None, 1)
+        if len(parts) == 2:
+            key, value = parts
+            lines.append(
+                "REMOTE_URL=" + key + "="
+                + _normalize_fixture_remote_url(value, workspace)
+            )
+
+    if branch != "(detached)":
+        for suffix in ("remote", "merge"):
+            key = "branch." + branch + "." + suffix
+            value = _git_output(["config", "--local", "--get", key],
+                                cwd=workspace)
+            lines.append("UPSTREAM=" + key + "=" + (value or "(unset)"))
+    return "\n".join(lines)
+
+
+def _semantic_git_state(workspace, bare_repositories):
+    entries = []
+    working = _working_repo_semantic_manifest(workspace)
+    if working is not None:
+        entries.append(working)
+    for path in bare_repositories:
+        manifest = _bare_repo_semantic_manifest(path, workspace)
+        if manifest is not None:
+            entries.append(manifest)
+    return entries
+
+
 def committed_hash(path: str) -> str:
     h = hashlib.sha256()
     for rel in _files_recursive(path):
         full = os.path.join(path, rel)
         fh = _sha256_of(open(full, "rb").read())
-        h.update((rel + ":" + fh).encode())
+        rel_posix = rel.replace(os.sep, "/")
+        h.update((rel_posix + ":" + fh).encode())
     return h.hexdigest()
 
 
@@ -104,6 +249,7 @@ def _generator_output_hash(output_dir: str) -> str:
     git_dir = os.path.join(output_dir, ".git")
     if os.path.isdir(git_dir):
         try:
+            bare_repositories = _discover_bare_repositories(output_dir)
             def _git(*args):
                 return subprocess.check_output(
                     ["git", "-C", output_dir] + list(args), text=True,
@@ -121,6 +267,8 @@ def _generator_output_hash(output_dir: str) -> str:
             meta.append("UNSTAGED:\n" + _git("diff", "--no-color"))
             # Staged vs HEAD (captures changes added but not committed).
             meta.append("STAGED:\n" + _git("diff", "--cached", "--no-color"))
+            # Include semantic Git state while excluding raw repository internals.
+            meta.extend(_semantic_git_state(output_dir, bare_repositories))
             h = hashlib.sha256()
             h.update("\n".join(meta).encode("utf-8"))
             # File contents: every on-disk file (tracked + untracked), excluding
@@ -131,11 +279,15 @@ def _generator_output_hash(output_dir: str) -> str:
                 # its config contains platform-specific keys (e.g. macOS
                 # precomposeunicode) that vary across git versions/filesystems
                 # and must not affect the worker-visible task hash.
-                if rel == ".origin.git" or rel.startswith(".origin.git/"):
+                rel_posix = rel.replace(os.sep, "/")
+                if any(rel_posix == _normalized_relpath(bare, output_dir)
+                       or rel_posix.startswith(
+                           _normalized_relpath(bare, output_dir) + "/")
+                       for bare in bare_repositories):
                     continue
                 full = os.path.join(output_dir, rel)
                 fh = _sha256_of(open(full, "rb").read())
-                h.update((rel + ":" + fh + "\n").encode("utf-8"))
+                h.update((rel_posix + ":" + fh + "\n").encode("utf-8"))
             return h.hexdigest()
         except subprocess.CalledProcessError:
             pass
