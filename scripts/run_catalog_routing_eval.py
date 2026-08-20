@@ -221,11 +221,14 @@ def extract_decision(text, catalog_names=None):
                          "rationale": obj.get("rationale")}}
 
 
-def run_kilo(prompt, model, workdir, kilo_bin=KILO_BIN, catalog_names=None):
+def run_kilo(prompt, model, workdir, kilo_bin=KILO_BIN, catalog_names=None,
+             session_id=None):
     """Run one model call. Returns structured metadata distinguishing a failed
     invocation from a valid null-selection decision."""
     cmd = [kilo_bin, "run", "--model", model, "--variant", "high",
            "--format", "json", "--pure", prompt]
+    if session_id:
+        cmd += ["--session", session_id, "--continue"]
     try:
         proc = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True,
                               timeout=600)
@@ -256,10 +259,329 @@ def matches(selected, expected, fallbacks):
     return selected is None or selected in fallbacks
 
 
+NULL_LABEL = "null"
+
+
+def build_aggregate(cases, skills):
+    """Intended-vs-selected confusion matrix + per-skill precision/recall.
+
+    Counting rule (recorded in the evidence as ``aggregate.rule``):
+    every SUCCESSFUL model decision is one observation ``(intended, selected)``;
+    failed model invocations are NOT observations (they are recorded separately
+    per case/rep and never inflate or deflate the matrix).
+
+      * plain case (non-turn): intended = ``expected_skill``, selected =
+        ``decision.selected_skill`` (a null selection is recorded as the
+        literal string ``"null"``);
+      * workflow-transition / harness-native case: each TURN's successful
+        decision is one observation; intended = ``expected_route`` (explicit
+        null route means "no specialized skill expected" and is recorded as
+        ``"null"``), selected = the turn's ``selected_skill``.
+
+    ``confusion_matrix`` maps ``intended -> {selected: count}`` for every
+    intended class that occurred. ``per_skill`` reports tp/fp/fn/precision/
+    recall per skill in the candidate set: a ``"null"`` selection is never a
+    true or false positive for a real skill — it is a false negative for the
+    intended skill. Precision/recall are ``null`` when the denominator is zero
+    (undefined), never fabricated as 0.
+    """
+    obs = []
+    for case in cases:
+        turns = case.get("turns")
+        is_workflow = case.get("case_type") in (
+            "workflow-transition", "harness-native")
+        if turns and is_workflow:
+            for rep in case.get("repetitions", []):
+                for t in rep.get("turns", []):
+                    if t.get("status") != "success":
+                        continue
+                    intended = t.get("expected_route")
+                    if intended is None:
+                        intended = NULL_LABEL
+                    selected = t.get("selected_skill")
+                    if selected is None:
+                        selected = NULL_LABEL
+                    obs.append((intended, selected))
+        else:
+            for rep in case.get("repetitions", []):
+                if rep.get("status") != "success":
+                    continue
+                intended = case.get("expected_skill")
+                if intended is None:
+                    intended = NULL_LABEL
+                decision = rep.get("decision") or {}
+                selected = decision.get("selected_skill")
+                if selected is None:
+                    selected = NULL_LABEL
+                obs.append((intended, selected))
+
+    matrix = {}
+    for intended, selected in obs:
+        row = matrix.setdefault(intended, {})
+        row[selected] = row.get(selected, 0) + 1
+
+    per_skill = {}
+    for skill in skills:
+        tp = sum(1 for i, s in obs if i == skill and s == skill)
+        fp = sum(1 for i, s in obs if i != skill and s == skill)
+        fn = sum(1 for i, s in obs if i == skill and s != skill)
+        precision = (tp / (tp + fp)) if (tp + fp) else None
+        recall = (tp / (tp + fn)) if (tp + fn) else None
+        per_skill[skill] = {
+            "tp": tp, "fp": fp, "fn": fn,
+            "precision": precision, "recall": recall,
+        }
+    return {
+        "rule": ("one observation per successful model decision; "
+                 "workflow-transition/harness-native turns each contribute one "
+                 "observation; explicit null selections are the literal "
+                 "'null' class; precision/recall are null (not 0) when the "
+                 "denominator is zero"),
+        "observations": len(obs),
+        "confusion_matrix": matrix,
+        "per_skill": per_skill,
+    }
+
+
+def build_confusion_prompt(catalog_text, user_request, candidates):
+    """Neutral router prompt over a catalog restricted to the confusion set.
+
+    The candidate skill names are NOT listed anywhere in the prompt: the model
+    must map the request to a catalog entry by description alone, which is
+    exactly what catalog discriminability measures. This form is used for the
+    repository-level confusion-set cases.
+    """
+    return (
+        "You are a neutral skill router. You will receive (1) a catalog of "
+        "available skills and (2) a user request. Choose the single best skill "
+        "for the request. If no skill clearly fits, return selected_skill=null "
+        "and action=\"clarify\".\n\n"
+        "Respond with ONLY a single JSON object and no other text, of the form:\n"
+        "{\"selected_skill\": \"<skill name or null>\", "
+        "\"action\": \"apply\"|\"clarify\", \"rationale\": \"<one sentence>\"}\n\n"
+        f"=== CATALOG ===\n{catalog_text}\n\n"
+        f"=== USER REQUEST ===\n{user_request}\n"
+    )
+
+
+def run_case_set(case_set_path, args, kilo_bin):
+    """Run a catalog-discriminability pass over a whole case set.
+
+    The runner determines the source from the file itself:
+
+      * a file with a ``confusion_set`` key is development benchmark data
+        (``evaluations/confusion-sets/<name>.json``) and is recorded as
+        ``evidence_type: "confusion-set"``;
+      * a file with a ``holdout`` key is holdout data
+        (``evaluations/holdout/<name>.json``), recorded as
+        ``evidence_type: "holdout"``, and must not be written into the
+        development benchmark outputs (it only goes to ``--out``).
+
+    Each case is presented to a fresh model call with a catalog restricted to
+    the case set's skills, and the intended-vs-selected route is recorded so
+    confusion patterns (e.g. intended security-review, selected code-review)
+    can be aggregated. No case prompt contains the expected skill's name.
+    """
+    d = json.load(open(case_set_path))
+    if "confusion_set" in d:
+        source_type = "confusion-set"
+        name = d.get("confusion_set")
+    elif "holdout" in d:
+        source_type = "holdout"
+        name = d.get("holdout")
+    else:
+        print(f"unrecognized case-set file (no 'confusion_set' or 'holdout' "
+              f"key): {case_set_path}", file=sys.stderr)
+        sys.exit(2)
+    case_set_rel = os.path.normpath(os.path.relpath(
+        os.path.abspath(case_set_path), ROOT))
+    canonical_source = json.dumps(
+        d, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    case_set_hash = "sha256:" + hashlib.sha256(canonical_source).hexdigest()
+    skills = d.get("skills") or []
+    catalog_rows = [row for row in build_catalog(None) if row[0] in skills]
+    catalog_text = render_catalog(catalog_rows)
+    catalog_names = {row[0] for row in catalog_rows}
+    catalog_hash = hashlib.sha256(catalog_text.encode()).hexdigest()
+
+    results = {
+        "evidence_type": source_type,
+        "confusion_set": name if source_type == "confusion-set" else None,
+        "holdout": name if source_type == "holdout" else None,
+        "cluster": d.get("cluster"),
+        "skills": skills,
+        "case_set_path": case_set_rel,
+        "case_set_hash": case_set_hash,
+        "model": args.model,
+        "kilo_version": _host_kilo_version(kilo_bin),
+        "repetitions": args.reps,
+        "catalog_hash": catalog_hash,
+        "cases": [],
+    }
+    for case in d.get("cases", []):
+        cid = case.get("id")
+        case_type = case.get("case_type")
+        turns = case.get("turns")
+        if turns and case_type in ("workflow-transition", "harness-native"):
+            reps = []
+            for i in range(args.reps):
+                workdir = tempfile.mkdtemp(prefix="kilo-routing-")
+                try:
+                    turn_results = []
+                    session_id = None
+                    for turn_i, turn in enumerate(turns, 1):
+                        turn_prompt = build_confusion_prompt(
+                            catalog_text, turn.get("user", ""), skills
+                        )
+                        meta = run_kilo(
+                            turn_prompt, args.model, workdir, kilo_bin,
+                            catalog_names, session_id=session_id,
+                        )
+                        if meta["status"] == "success" and meta["session_id"]:
+                            session_id = meta["session_id"]
+                        dec = meta.get("decision") or {}
+                        sel = dec.get("selected_skill")
+                        act = dec.get("action")
+                        # expected_route is REQUIRED by the schema: a skill name
+                        # or explicit null ("no specialized skill expected").
+                        # A missing key is graded as a failed/malformed turn,
+                        # never as a null route.
+                        if "expected_route" in turn:
+                            expected = turn["expected_route"]
+                            route_declared = True
+                        else:
+                            expected = None
+                            route_declared = False
+                        ok = False
+                        if meta["status"] == "success":
+                            if not route_declared:
+                                ok = False
+                            else:
+                                ok = matches(sel, expected, [])
+                        turn_results.append({
+                            "turn": turn_i,
+                            "session_id": session_id,
+                            "user": turn.get("user"),
+                            "expected_route": expected,
+                            "expected_route_declared": route_declared,
+                            "selected_skill": sel,
+                            "action": act,
+                            "pass": ok,
+                            "status": meta["status"],
+                            "error": meta.get("error"),
+                            "prompt_hash": hashlib.sha256(
+                                turn_prompt.encode()).hexdigest(),
+                            "output_hash": hashlib.sha256(
+                                (meta.get("stdout") or "").encode()).hexdigest(),
+                        })
+                    reps.append({
+                        "rep": i + 1,
+                        "session_id": session_id,
+                        "turns": turn_results,
+                        "passed": sum(1 for t in turn_results if t["pass"]),
+                        "total": len(turns),
+                    })
+                finally:
+                    shutil.rmtree(workdir, ignore_errors=True)
+            results["cases"].append({
+                "id": cid,
+                "case_type": case_type,
+                "expected_skill": case.get("expected_skill"),
+                "turns": turns,
+                "repetitions": reps,
+                "passed": sum(1 for r in reps
+                              if r["passed"] == len(turns)),
+                "total": args.reps,
+            })
+        else:
+            prompt = build_confusion_prompt(catalog_text, case.get("prompt", ""),
+                                            skills)
+            reps = []
+            for i in range(args.reps):
+                workdir = tempfile.mkdtemp(prefix="kilo-routing-")
+                try:
+                    meta = run_kilo(prompt, args.model, workdir, kilo_bin,
+                                    catalog_names)
+                finally:
+                    shutil.rmtree(workdir, ignore_errors=True)
+                dec = meta["decision"]
+                sel = dec.get("selected_skill") if dec else None
+                act = dec.get("action") if dec else None
+                ok = False
+                if meta["status"] == "success":
+                    ok = matches(sel, case.get("expected_skill"), [])
+                reps.append({
+                    "rep": i + 1,
+                    "status": meta["status"],
+                    "error": meta.get("error"),
+                    "returncode": meta["returncode"],
+                    "session_id": meta["session_id"],
+                    "stderr": meta["stderr"],
+                    "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest(),
+                    "output_hash": hashlib.sha256(
+                        (meta["stdout"] or "").encode()).hexdigest(),
+                    "decision": {"selected_skill": sel, "action": act,
+                                 "rationale": dec.get("rationale") if dec else None},
+                    "match": ok,
+                })
+            results["cases"].append({
+                "id": cid,
+                "case_type": case_type,
+                "expected_skill": case.get("expected_skill"),
+                "turns": turns,
+                "repetitions": reps,
+                "passed": sum(1 for r in reps if r["match"]),
+                "total": args.reps,
+                "confusions": [r["decision"]["selected_skill"]
+                               for r in reps if r["status"] == "success"
+                               and r["decision"]["selected_skill"]
+                               and r["decision"]["selected_skill"]
+                               != case.get("expected_skill")],
+            })
+    results["aggregate"] = build_aggregate(results["cases"], skills)
+    if args.out:
+        os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+        json.dump(results, open(args.out, "w"), indent=2)
+        print(f"wrote evidence: {args.out}")
+    for case in results["cases"]:
+        if case.get("turns"):
+            total_turns = len(case["turns"])
+            fully_passed = sum(1 for r in case["repetitions"]
+                               if r["passed"] == total_turns)
+            print(f"case {case['id']} [{case.get('case_type')}]: "
+                  f"workflow-transition {fully_passed}/{case['total']} reps "
+                  f"fully passed")
+            for r in case["repetitions"]:
+                for t in r.get("turns", []):
+                    status = "PASS" if t["pass"] else "FAIL"
+                    print(f"  rep{r['rep']} turn{t['turn']}: {status} "
+                          f"expected={t['expected_route']!r} "
+                          f"selected={t['selected_skill']!r}")
+        else:
+            print(f"case {case['id']} [{case.get('case_type')}]: "
+                  f"expected={case['expected_skill']!r} "
+                  f"passed {case['passed']}/{case['total']} "
+                  f"confusions={case['confusions']}")
+    agg = results["aggregate"]
+    print(f"aggregate: {agg['observations']} observations "
+          f"({source_type})")
+    for skill, stats in agg["per_skill"].items():
+        print(f"  {skill}: tp={stats['tp']} fp={stats['fp']} fn={stats['fn']} "
+              f"precision={stats['precision']} recall={stats['recall']}")
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--skill", required=True)
-    ap.add_argument("--case-id", type=int, required=True)
+    ap.add_argument("--skill")
+    ap.add_argument("--case-id", type=int)
+    ap.add_argument("--confusion-set",
+                    help="path to an evaluations/confusion-sets/<name>.json "
+                         "file; run every case in it (ignores --skill/--case-id)")
+    ap.add_argument("--holdout",
+                    help="path to an evaluations/holdout/<name>.json file; run "
+                         "every case in it as HOLDOUT evidence (ignores "
+                         "--skill/--case-id). Holdout results are written only "
+                         "to --out and never update development benchmark data.")
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--allow-paid-model", action="store_true",
                     help="allow a non-free model (cost-safety opt-in)")
@@ -274,6 +596,21 @@ def main():
     kilo_bin = _kilo_path()
     model_listed = _verify_host_kilo(args.model)
     kilo_version = _host_kilo_version(kilo_bin)
+
+    if args.confusion_set and args.holdout:
+        print("pass either --confusion-set or --holdout, not both",
+              file=sys.stderr)
+        sys.exit(2)
+    if args.confusion_set:
+        run_case_set(args.confusion_set, args, kilo_bin)
+        return
+    if args.holdout:
+        run_case_set(args.holdout, args, kilo_bin)
+        return
+
+    if not args.skill or args.case_id is None:
+        ap.error("--skill and --case-id are required unless --confusion-set or "
+                 "--holdout is used")
 
     evals_path = args.evals_json.format(skill=args.skill)
     if not os.path.exists(evals_path):

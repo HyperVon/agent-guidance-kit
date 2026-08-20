@@ -24,21 +24,54 @@ description: >-
 - **Side effects:** write only to an explicitly chosen evaluation workspace;
    never place generated outputs or private inputs in the shared library by default.
 
-## Evaluation layers (three concerns)
+## Evaluation tiers and three concerns
 
-Keep these separate; a finding about one is never evidence about another:
+A run is classified by its isolation tier. Keep all of these separate; a finding
+about one is never evidence about another.
 
-1. **Routing quality** — does the right skill get selected/loaded for a natural
-   request? Two portable forms exist: **Layer A catalog-routing** (a fresh model
-   call over a generated neutral catalog that returns a structured
-   `{"selected_skill": ...}`) and **Layer C harness-routing** (the real harness's
-   routing/discovery, which must expose the selected skill as evidence).
+### Evaluation tiers
+
+- **Tier 1 — fast developer mode.** Sanitized environment (isolated HOME,
+  deterministic git identity, stripped credentials), isolated workspace copy,
+  separate fresh model sessions. Fast enough to iterate prompts and check
+  routing discrimination without Docker. Mark `protocol_status: limited` (not
+  OS-contained) unless an OS sandbox is available.
+- **Tier 2 — strict isolated.** Fresh Docker containers from `Dockerfile.eval`
+  (`kilo-eval:local`), each with its own OS-contained root. This is the only tier
+  that can reach `protocol_status: valid` for execution efficacy.
+- **Tier 3 — harness-native integration.** Run in the actual supported harness
+  (e.g. Kilo/Codex) to prove real skill discovery and workflow transitions.
+  Blocked where the harness cannot expose the selected skill as evidence; mark
+  `not_run` instead of pretending catalog classification proves harness routing.
+
+### Three concerns
+
+1. **Catalog discriminability (Layer A)** — given only the skill catalog
+   descriptions and a user request, are the descriptions distinct enough for a
+   model to select the intended owner? This is a **portable model-as-classifier
+   proxy** (`scripts/run_catalog_routing_eval.py`): a fresh model call over a
+   generated neutral catalog returns `{"selected_skill": ...}`. It is **not**
+   equivalent to actual harness routing — see Tier 3 for that. Confusion sets
+   and their confusion matrix (intended-vs-selected) are the evidence Layer A
+   produces. Catalog accuracy never substitutes for a captured harness-selection
+   log at Tier 3.
 2. **Execution efficacy (Layer B)** — once a skill is legitimately active, does its
-   guidance beat the harness default? Run as **two fresh Docker containers**
-   (`Dockerfile.eval` → `kilo-eval:local`): guided mounts *guidance only*
-   (`SKILL.md` + `references/`) at `/work/guidance/<name>`; baseline mounts **no**
-   guidance. Free models are reached through anonymous Kilo Gateway access
-   (`kilo/tencent/hy3:free`); no API key or auth is mounted.
+   guidance beat the harness default? This is a POST-ACTIVATION experiment: it
+   does NOT test whether the router decides to activate the guidance (that is
+   routing). Run as **fresh, independent conditions**
+   (`target`, `baseline`, optional `placebo`), each from its own copy of one
+   pristine seed: the `target` condition ACTIVATES the target guidance through
+   a deterministic, evaluator-controlled runtime mechanism — the skill's
+   `SKILL.md` (+ `references/`) is placed at the Kilo project-level discovery
+   location `.kilo/skills/<name>/` in the worker workspace and loaded via
+   `kilo run --command "<name>:skill"`, which injects the guidance body into
+   context at session start. The runner verifies command resolution and
+   exports the completed session inside the container to prove the full body
+   entered the user context; `baseline` gets **no** discovery tree and **no**
+   `--command`; `placebo` activates **irrelevant** guidance through the EXACT
+   SAME mechanism. The worker-visible prompt is the natural task only —
+   byte-identical across conditions. Free models are reached through anonymous
+   Kilo Gateway access (`kilo/tencent/hy3:free`); no API key or auth is mounted.
    Verify the worker runtime version per run: record `kilo --version` (or the
    image's pinned CLI) from each worker container and require identical versions
    across all conditions of a comparison. A worker that installs, upgrades, or
@@ -62,18 +95,33 @@ assertion merely because one condition happened to mention something useful.
 If a run exposes a missing or invalid criterion, document the reason, amend the
 case, and rerun every condition under the same revised case before scoring it.
 
-Start with at least three realistic prompts:
+Classify each case by its design intent via `case_type` (default `smoke` for
+legacy packs):
+
+- **smoke** — obvious sanity checks (keep them cheap; do not claim they prove
+  robust routing).
+- **discriminator**, **hard-negative**, **misleading-keyword**,
+- **multi-intent**, **ambiguous-natural**, **counterfactual**,
+- **workflow-transition**, **harness-native**.
+
+The discriminator-family cases (everything except `smoke`) are the expensive,
+high-evidence cases. Current obvious cases can remain as low-cost smoke
+coverage — but they must not be the primary evidence of robust routing. Confusion
+sets (see `evaluations/confusion-sets/`) host the hardest shared cross-skill
+  cases, including counterfactual pairs and workflow-transition turns.
+
+Within a five-case pack, keep the classic three `kind` values for structure:
 
 1. **matching** — clearly belongs to the skill;
 2. **neighboring** — belongs to a nearby skill or ordinary workflow;
 3. **ambiguous** — requires clarification or a stated routing tie-breaker.
 
-Each case needs a stable `id`, `kind`, `prompt`, and observable
-`expected_output`. Add objective `assertions` for properties that can be
-verified from the output. Use realistic paths and constraints, but do not add
+Each case needs a stable `id`, `kind`, `prompt`, and (for execution cases)
+observable `expected_output`. Add objective `assertions` for properties that can
+be verified from the output. Use realistic paths and constraints, but do not add
 credentials, personal data, or live external targets.
 
-After the first comparison, remove assertions that pass both configurations
+After the first comparison, remove assertions that pass both conditions
 without distinguishing useful behavior. When routing descriptions materially
 change, expand the routing set with varied should-trigger and should-not-trigger
 prompts rather than overfitting the three initial cases.
@@ -127,20 +175,32 @@ more assertions by loading unnecessary guidance is not automatically better.
    See [isolation-protocol.md](references/isolation-protocol.md) for the
    filesystem/sandbox containment procedure, boundary-probe command, and
    isolation-failure troubleshooting.
-3. Run each case with two genuinely independent evaluation workers: a fresh
-   `WITH-SKILL` subagent/session that actually loads the target skill, and a
-   different fresh `BASELINE` subagent/session that is initialized without the
-   target skill. Keep prompts, inputs, tools, network access, model settings,
-   and output locations equivalent. Give both workers the natural task prompt,
-   not an evaluation wrapper: do not tell them they are workers, name the case,
-   mention `WITH-SKILL`/`BASELINE`, disclose that a comparison is happening, or
-   reveal the expected behavior. Use neutral worker-visible directory and file
-   names; do not encode the skill name, condition, case ID, or evaluation
-   purpose in a path, filename, or wrapper text. A baseline is **not** an
-   instruction to the same agent to ignore, forget, or pretend not to have seen
-   the skill. Reusing
-   a transcript, context, memory, hidden skill projection, or worker for both
-   conditions is contamination and makes the comparison invalid.
+3. Run each case with genuinely independent evaluation workers — one per
+   condition (`target`, `baseline`, optional `placebo`) — each a fresh
+   subagent/session. The `target` condition ACTIVATES the target guidance
+   through the evaluator-controlled mechanism (skill discovery tree at
+   `.kilo/skills/<name>/` + `kilo run --command "<name>:skill"`); `baseline` is
+   initialized without any target guidance; `placebo` activates irrelevant
+   guidance through the exact same mechanism. Keep prompts, inputs, tools,
+   network access, model settings,
+   and output locations equivalent. Give every worker the **same natural task
+   prompt** — byte-identical across conditions — not an evaluation wrapper: do
+   not tell them they are workers, name the case, mention `target`/`baseline`/
+   `placebo`, disclose that a comparison is happening, or reveal the expected
+   behavior. Use neutral worker-visible directory and file names; do not encode
+   the skill name, condition, case ID, or evaluation purpose in a path, filename,
+   or wrapper text (the `.kilo/skills/<name>/` discovery path is the activation
+   location, not a worker-visible condition label, and the baseline contains no
+   such tree). A baseline is **not** an instruction to the same agent to
+   ignore, forget, or pretend not to have seen the skill. Reusing a transcript,
+   context, memory, hidden skill projection, or worker for both conditions is
+   contamination and makes the comparison invalid.
+   The execution runner fails closed before Docker/Kilo worker launch when a
+   target or placebo `SKILL.md` contains Kilo command-template placeholders
+   such as `$ARGUMENTS` or positional `$0`, `$1`, and so on. Because `:skill`
+   command expansion can substitute runtime arguments into the body, such a
+   source cannot be treated as unchanged guidance. The runner never rewrites
+   the canonical skill file.
    Treat harness-level system context as worker-visible too: the baseline must
    not receive the target skill's name, path, description, catalog entry,
    injection label, or skill-list metadata through a system prompt, startup
@@ -148,23 +208,23 @@ more assertions by loading unnecessary guidance is not automatically better.
    exposes that identity, even without the skill text, mark the condition
    contaminated and do not score it.
    When the harness uses discovered `AGENTS.md` guidance, make the condition
-   boundary explicit with two variants that use only neutral names. The guided
-   variant may say to read `skills/task-quality/SKILL.md`; the baseline
-   variant must contain no reference to that file or to missing guidance at all.
-   Do not tell the baseline to check whether a guidance file exists: that leaks
-   the condition. The guided workspace contains the target skill copied to that
-   neutral path; the baseline contains no `.agents` guidance tree. Keep the
-   common preflight (`pwd` and local-file inventory) in both variants.
+   boundary explicit with two variants that use only neutral names. The
+   `target` variant may say to read the activation discovery file; the baseline
+   variant must
+   contain no reference to that file or to missing guidance at all. Do not tell
+   the baseline to check whether a guidance file exists: that leaks the
+   condition. The `target` workspace contains the target guidance copied to the
+   discovery location; the `baseline` contains no guidance tree. Keep the common
+   preflight (`pwd` and local-file inventory) in both variants.
 4. Verify the condition boundary rather than trusting the worker's claim:
    record worker/session identifiers, the loaded-guidance manifest or equivalent
-   harness evidence, the target-skill revision for `WITH-SKILL`, and an explicit
-   target-skill-absent check for `BASELINE` in the ignored run evidence. The
-   baseline must not receive the target skill, its references, generated
-   projection, prior result, or a prompt explaining how to simulate its absence.
-   If the harness cannot create and verify these independent contexts, including
-   the absence of target-skill identity in baseline-visible system metadata, do not
-   record a valid skill comparison; leave the matrix untested and report the
-   limitation.
+   harness evidence, the target-skill revision for the `target` condition, and an
+   explicit target-skill-absent check for `baseline`. The baseline must not
+   receive the target skill, its references, generated projection, prior result,
+   or a prompt explaining how to simulate its absence. If the harness cannot
+   create and verify these independent contexts, including the absence of
+   target-skill identity in baseline-visible system metadata, do not record a
+   valid skill comparison; leave the matrix untested and report the limitation.
 5. Give each worker only the actual case prompt, declared fixtures, and the
    guidance available in its condition. Do **not** reveal `expected_output`,
    assertions, scoring rubrics, the other condition's output, suspected gaps,
@@ -221,6 +281,14 @@ Store case definitions at `evals/evals.json` inside the skill. The case schema,
 result-directory layout, validation-matrix format, and reporting examples are in
 [evaluation-artifacts.md](references/evaluation-artifacts.md).
 
+Shared cross-skill cases live at the repository level, not inside a single skill:
+- `evaluations/confusion-sets/<name>.json` — confusion-set cases grouped by
+  cluster, with counterfactual pairs and workflow-transition turns. The
+  validator enforces that no case prompt names its expected skill.
+- `evaluations/holdout/<name>.json` — holdout cases stored outside skill
+  directories so ordinary editing does not consume them. Results must distinguish
+  development-case performance from holdout performance.
+
 Do not claim a skill is verified when cases were only designed, not executed and
 graded. Results must distinguish `protocol_status` from `measurement_status`: a
 valid isolated run may still be `inconclusive` when the cases or assertions do not
@@ -230,8 +298,12 @@ committed case set, that matrix links resolve, and that the summary is fresh.
 
 ## Report and stop condition
 
-Report the cases, baseline, execution status, assertion evidence, human-review
-notes, context or token trade-off, and the keep/revise/merge/defer/reject
-decision. Stop when the baseline comparison is complete or when missing
-fixtures, unavailable harness behavior, or inaccessible timing data prevents
-a fair comparison; state the gap instead of filling it with assumptions.
+Report the cases, baseline, execution status, measurement discrimination status,
+assertion evidence, human-review notes, context or token trade-off, and the
+keep/revise/merge/defer/reject decision. A result can be `protocol_status:
+valid` yet `measurement_status: non_discriminating` — if the target, baseline,
+and placebo all pass equally, do **not** declare a skill effective; report that
+the benchmark did not discriminate. Stop when the baseline comparison is
+complete or when missing fixtures, unavailable harness behavior, or inaccessible
+timing data prevents a fair comparison; state the gap instead of filling it with
+assumptions.
