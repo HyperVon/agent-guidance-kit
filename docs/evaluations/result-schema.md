@@ -37,9 +37,6 @@ parses and checks. The block is JSON.
     "target_absent_in_baseline": "boundary probe confirmed no .kilo/skills tree in baseline",
     "baseline_guidance_absent": "boundary probe confirmed no discovery tree in baseline",
     "contamination": "none",
-    "natural_task_identical_across_conditions": true,
-    "natural_task_hash": "sha256:…",
-    "routing_mechanism": null,
     "conditions": ["target", "baseline", "placebo"],
     "activation_mechanism": "kilo-command-skill",
     "runtime_treatment_paths": [".kilo/skills"],
@@ -53,32 +50,91 @@ parses and checks. The block is JSON.
       {"tool": "skill", "skill_name": "code-review", "timestamp": "…", "session_id": "…"}
     ]
   },
-  "runs": {
-    "target":   { "session_id": "t1", "container_id": "ct1" },
-    "baseline": { "session_id": "b1", "container_id": "cb1" },
-    "placebo":  { "session_id": "p1", "container_id": "cp1" }
-  },
   "cases": [
     {
       "case_id": 1,
+      "natural_task_hash": "sha256:prompt-hash-case-1",
+      "fixture_hash": "sha256:fixture-hash-case-1",
+      "raw_evidence_hash": "sha256:evidence-file-hash-case-1",
+      "repetitions": [
+        {
+          "rep": 1,
+          "repetition_id": "550e8400-e29b-41d4-a716-446655440001",
+          "runs": {
+            "target":   { "session_id": "t1", "container_id": "ct1" },
+            "baseline": { "session_id": "b1", "container_id": "cb1" },
+            "placebo":  { "session_id": "p1", "container_id": "cp1" }
+          }
+        },
+        {
+          "rep": 2,
+          "repetition_id": "550e8400-e29b-41d4-a716-446655440002",
+          "runs": {
+            "target":   { "session_id": "t2", "container_id": "ct2" },
+            "baseline": { "session_id": "b2", "container_id": "cb2" },
+            "placebo":  { "session_id": "p2", "container_id": "cp2" }
+          }
+        },
+        {
+          "rep": 3,
+          "repetition_id": "550e8400-e29b-41d4-a716-446655440003",
+          "runs": {
+            "target":   { "session_id": "t3", "container_id": "ct3" },
+            "baseline": { "session_id": "b3", "container_id": "cb3" },
+            "placebo":  { "session_id": "p3", "container_id": "cp3" }
+          }
+        }
+      ],
       "outcome": {
-        "category": "skill_only_pass",
-        "measurement_status": "discriminating",
+        "category": "placebo_only_pass",
+        "measurement_status": "non_discriminating",
         "protocol_status": "valid"
       },
-      "verdict": { "target_pass": true, "baseline_pass": false, "placebo_pass": false },
+      "verdict": { "target_pass": false, "baseline_pass": false, "placebo_pass": true },
       "assertions": [
         {
           "assertion": "<frozen assertion text, verbatim from evals.json>",
           "target":   { "pass": true,  "evidence": "quoted span / diff line / exit code" },
           "baseline": { "pass": false, "evidence": "quoted span / diff line / exit code" },
-          "placebo":  { "pass": false, "evidence": "quoted span / diff line / exit code" }
+          "placebo":  { "pass": true,  "evidence": "quoted span / diff line / exit code" }
         }
       ]
     }
   ]
 }
 ```
+
+**Key provenance rules for execution results:**
+
+- **Per-case `natural_task_hash` is required.** Each `cases[].natural_task_hash` must equal
+  `sha256(current_case["prompt"].encode("utf-8"))` using exactly the runner's hashing
+  convention. The validator loads the authoritative `evals.json`, finds `case_id`, recomputes
+  the source prompt hash, and requires an exact match. A single top-level
+  `protocol.natural_task_hash` cannot represent three different prompts. For multi-case
+  result files, the top-level `protocol.natural_task_hash` must be absent; for single-case
+  files it may be present but then must match the sole case's hash. If a top-level
+  `natural_task_hash` is retained for backward compatibility, it must be a clearly named
+  aggregate (e.g., `case_task_hashes`) or removed — do not keep an ambiguous single hash
+  that pretends to represent several different tasks. The validator fails closed on mismatch.
+- **Per-case `fixture_hash` and optional `raw_evidence_hash`:** Each case records its
+  `fixture_hash` (the frozen fixture hash from `evals.json`) and, when available,
+  `raw_evidence_hash` (SHA-256 of the canonical raw evidence file that produced the case
+  summary, e.g., `.eval-evidence/exec-<skill>-case<id>.json`). The raw file remains
+  ignored/local, but someone with the raw evidence can verify it matches the committed
+  summary's source. Calculate the hash from a stable canonical file, not a mutable temp.
+- **Per-case/per-repetition execution identity:** Single `protocol.runs` / top-level `runs`
+  cannot provenance-identify 27 condition executions. Each `cases[].repetitions[]` entry
+  must contain `rep`, `repetition_id` (stable UUID or hash unique per repetition), and
+  `runs` with `target`/`baseline`/`placebo` each having `session_id` and `container_id`.
+  Sanitized IDs are okay if the project intentionally shortens them, but they must remain
+  uniquely traceable to the local ignored evidence. The validator checks:
+  - repetition count matches the declared repeat count;
+  - each repetition contains all required conditions;
+  - `repetition_id` values are unique across repetitions;
+  - `session_id` values are unique across all independent condition executions;
+  - `container_id` values are unique across all independent condition executions;
+  - duplicate session/container/repetition IDs fail;
+  - the `Repeats = 3` claim is mechanically supported by this structure.
 
 ## Routing result
 
@@ -170,10 +226,22 @@ Each repetition MUST prove:
   the treatment difference is visible without invalidating task equality.
   The condition workers therefore begin from byte-identical task state and can
   never share a mutable fixture.
+- **Repetition identity.** Each repetition carries a stable `repetition_id`
+  (UUID or hash, unique per repetition) and `rep` index. All condition data
+  for a repetition must reside in one repetition object; the validator requires
+  that the three conditions for a repetition came from the SAME runner repetition
+  / pristine seed generation. Condition-level splicing (e.g., taking `target`
+  from old rep 1, `placebo` from replacement run) is rejected — a failed
+  condition invalidates the entire repetition, and the replacement must be a
+  complete fresh `target`/`baseline`/`placebo` triplet. Duplicate `repetition_id`,
+  `session_id`, or `container_id` values across supposedly independent
+  executions fail.
 - **Distinct execution.** `conditions.target.container_id` ≠
   `conditions.baseline.container_id` (and ≠ `conditions.placebo.container_id`
   when a placebo is present), and likewise for `session_id`. This is verified
-  per-repetition via `distinct_containers` / `distinct_sessions`.
+  per-repetition via `distinct_containers` / `distinct_sessions`, and the
+  committed result's per-repetition `runs` are checked for cross-repetition
+  uniqueness.
 - **Controlled post-activation (not routing).** Layer B does NOT test whether
   Kilo's router chooses to activate the guidance. The evaluator ACTIVATES the
   target and placebo guidance through the same deterministic mechanism:
@@ -206,7 +274,9 @@ Each repetition MUST prove:
 - **Failure is not evidence.** If the Docker/Kilo invocation returned non-zero, the
   container never started, the model output was empty/unparseable, or no session id
   was produced, the condition's `run_status="failed"` and the validator
-  **rejects** the file. `returncode` must be `0` for all conditions.
+  **rejects** the file. `returncode` must be `0` for all conditions. A
+  repetition with any failed condition is invalid and must be discarded in full;
+  the replacement must be a complete fresh triplet.
 - **Task-state mutation recorded.** `conditions.<name>.ending_task_hash`
   proves what each worker changed relative to `starting_task_hash`.
   Optional filesystem snapshots
@@ -230,6 +300,8 @@ evidence is a hard error, never silently skipped.
   (Layer C, routing). `prompt-injection-approximation` is historical/`invalid`.
 - `case_revision` — commit/content hash of the `evals.json` used.
 - `fixture_revision` — commit/content hash of the fixture (`designed_only` if none).
+  For multi-case execution results, `fixture_revision` at the top level is a
+  summary; each `cases[].fixture_hash` must match the frozen hash for that case.
 - `target_skill_revision` — commit hash of the `SKILL.md` under test.
 
 ## Runtime block
@@ -259,8 +331,16 @@ Tier 1 fast-developer mode with `protocol_status: limited`.
 - `contamination` — `none` or a description.
 - `natural_task_identical_across_conditions` — `true` only when the runner
   verified the worker-visible prompt hash is identical across all conditions.
+  Deprecated for multi-case results: use per-case `natural_task_hash` instead;
+  top-level `natural_task_hash` must be absent for multi-case files (or be a
+  clearly named aggregate). The validator fails if a multi-case file has an
+  ambiguous single prompt hash at the top level.
 - `natural_task_hash` — SHA-256 of the exact current source eval-case prompt;
   the validator rejects hashes from a stale or otherwise different prompt.
+  **Per-case `cases[].natural_task_hash` is required for execution results** and
+  must equal `sha256(prompt.encode("utf-8"))` for that case's current prompt.
+  For single-case results a top-level `protocol.natural_task_hash` may be used;
+  for multi-case results the top-level must be absent.
 - `routing_mechanism` — **required for routing runs**: how the selected skill
   was captured (harness manifest, startup log, named tool-call). Absent/unknown
   ⇒ the routing claim is invalid, never a routing conclusion.
@@ -269,7 +349,7 @@ Tier 1 fast-developer mode with `protocol_status: limited`.
 ## Per-case grades
 
 - `outcome.category` — `skill_only_pass`, `baseline_only_pass`, `both_pass`,
-  `both_fail`, `non_discriminating`, `invalid`, `not_run`.
+  `both_fail`, `placebo_only_pass`, `non_discriminating`, `invalid`, `not_run`.
 - `outcome.measurement_status` — `discriminating`, `non_discriminating`,
   `inconclusive`.
 - `outcome.protocol_status` — as above.
@@ -279,13 +359,18 @@ Tier 1 fast-developer mode with `protocol_status: limited`.
   - `baseline_only_pass` ⇔ target fails, baseline passes
   - `both_pass` ⇔ target and baseline both pass
   - `both_fail` ⇔ target, baseline, and placebo all fail
+  - `placebo_only_pass` ⇔ target fails, baseline fails, placebo passes
   - `non_discriminating` ⇔ all conditions pass equally (no skill advantage)
 - **Execution mode** — every frozen assertion from `evals.json` must appear in
   the graded `assertions` list (no assertion silently disappears). Each assertion
   grades `target` and `baseline` (and `placebo` when present) with a `pass`
   boolean; **every passing condition must carry concrete `evidence`** (quoted
   span / diff line / exit code) — plausible prose or self-assertion is not
-  evidence.
+  evidence. Each case must have `natural_task_hash`, `fixture_hash`, and
+  `repetitions` with per-repetition `repetition_id` and `runs` as described above;
+  the validator checks that `repetitions` count matches the declared repeat count,
+  that each repetition has all required conditions, and that session/container/repetition
+  IDs are unique.
 - **Routing mode** — no execution `assertions` are graded. Instead each case's
   `runs.target.selected_skill` / `runs.baseline.selected_skill` are checked
   against the case `routing` expectation (`target_present.expected_selected_skill`
@@ -302,7 +387,7 @@ A result MUST NOT be treated as validated when:
 - target guidance is unverified (execution);
 - target absence is unverified (execution);
 - the routing selection identity is unavailable (routing);
-- `natural_task_identical_across_conditions` is not `true` (execution);
+- `natural_task_identical_across_conditions` is not `true` (execution, single-case only; multi-case uses per-case `natural_task_hash`);
 - conditions share a container or session id (execution).
 
 Concretely: when `protocol.status` is `invalid` or `contaminated`, no case may

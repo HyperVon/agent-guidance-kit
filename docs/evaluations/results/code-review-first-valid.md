@@ -71,7 +71,7 @@ plus over-eager selection when the request is generic/ambiguous.
   "method": "docker-isolated",
   "case_revision": "sha256:dadd940818dde46a61583ef9c692d13004e2debaa88125fe9185dd38c2588b04",
   "fixture_revision": "case1=sha256:77fd00dc2504043407de9aa64d790a72346aa9023bd42177ff506d04a14e52e6; case2=sha256:ef9c1b1104321839cde529742873da742e9310080fb35718aa56f16dbdc1b845; case5=sha256:e3efb80d93336e7472ffad532345e6d22858a457eb6433f6b31c2c96e0ef275f",
-  "target_skill_revision": "sha256:6cfeb7fa09b99573a866279e84f9ad92cec0f645822f986a3b1580c5b405b5d9",
+  "target_skill_revision": "sha256:2cbef0de2b54a3e9b3ed1957d6da2a3d2853d009ed12d4a1fc84d79b9a421071",
   "runtime": {
     "harness": "kilo",
     "harness_version": "7.4.22",
@@ -86,13 +86,10 @@ plus over-eager selection when the request is generic/ambiguous.
     "tier": "tier-2-strict-isolated",
     "worker_isolation_verified": true,
     "target_guidance_present": "activation probe confirmed .kilo/skills/code-review/SKILL.md present and hash-matched",
-    "target_guidance_hash": "sha256:2cbef0de2b54a3e9b3ed1957d6daa2a3d2853d009ed12d4a1fc84d79b9a421071",
+    "target_guidance_hash": "sha256:2cbef0de2b54a3e9b3ed1957d6da2a3d2853d009ed12d4a1fc84d79b9a421071",
     "target_absent_in_baseline": "boundary probe confirmed no .kilo/skills tree in baseline",
     "baseline_guidance_absent": "boundary probe confirmed no discovery tree in baseline",
     "contamination": "none",
-    "natural_task_identical_across_conditions": true,
-    "natural_task_hash": "sha256:301abc13a5cd0068bd3b357e0065d8c8faa620ac938fe084c3edf67861a05342",
-    "routing_mechanism": null,
     "conditions": [
       "target",
       "baseline",
@@ -109,23 +106,68 @@ plus over-eager selection when the request is generic/ambiguous.
     "target_skill_context_probe": "present",
     "placebo_skill_context_probe": "present"
   },
-  "runs": {
-    "target": {
-      "session_id": "ses_fe1c260b4ffeFOqiA3WvtWN7l6",
-      "container_id": "014120047c29456a300fbd7332b6f350fb67913981f61b6ea77e7286922d9855"
-    },
-    "baseline": {
-      "session_id": "ses_fe1beb932fferavuSffn5nerIF",
-      "container_id": "6878fa7fbcc8b10fdcc987d186731d466ec1cfdd19ed7dbc734ee9e058704540"
-    },
-    "placebo": {
-      "session_id": "ses_fe16ef34bffeCvF98dDWiO7IBe",
-      "container_id": "e43b5276cbde3be80c9a3beffcb23f5d60a812e979999e43f52188da83d7744f"
-    }
-  },
   "cases": [
     {
       "case_id": 1,
+      "natural_task_hash": "sha256:3ce564ef8ba97abf301c740cc440d1c9bd8ef28e027883367733ab871ab7bb2b",
+      "fixture_hash": "sha256:77fd00dc2504043407de9aa64d790a72346aa9023bd42177ff506d04a14e52e6",
+      "raw_evidence_hash": "sha256:4951776514152daa1a6eb4620a0876b187c435586ce2b08a8cbb7ee45c10a06c",
+      "repetitions": [
+        {
+          "rep": 1,
+          "repetition_id": "0fa11e11-3933-412c-8d9d-94b13cd17705",
+          "runs": {
+            "target": {
+              "session_id": "ses_fe1f0bec0ffetjOR0UsBJZ80DE",
+              "container_id": "61dd2977958bc59cf78679dd4a0a3ae9897893113ea99ec258b6c0e13f92366e"
+            },
+            "baseline": {
+              "session_id": "ses_fe1ee10c1ffewP0pvc3ZhjsdVf",
+              "container_id": "3a0561b87354ba377ff88c9ae624a0b8c4b4be3b1c25911de5f0ec3963ffc003"
+            },
+            "placebo": {
+              "session_id": "ses_fe1eb0bc8ffeiNmDePJ6SUFc82",
+              "container_id": "1487cac459b932754d7bc214362b518203925a906a3421c91a0dfdf02b5c3236"
+            }
+          }
+        },
+        {
+          "rep": 2,
+          "repetition_id": "72ed6d61-8f83-48af-bff2-5da9fcbb6793",
+          "runs": {
+            "target": {
+              "session_id": "ses_fe1e8cbacffe71zqBp7ratEZvV",
+              "container_id": "1eed4cd8b572ae9586f00d4c4d7845409f9f43c73e90587590f7b540059cf4fa"
+            },
+            "baseline": {
+              "session_id": "ses_fe1e5b40fffeN5iG1FAnsk6iAl",
+              "container_id": "de850b1ccdcec48ec05c962337d22cf2a445577ffaef4546913c39010921fe39"
+            },
+            "placebo": {
+              "session_id": "ses_fe1e3b702ffefoz1cp9j6xbFjN",
+              "container_id": "3a49296500c2dca1174bf5f6db6e9d7b82ef58c248573ce5111a6e9d9ea8bf5a"
+            }
+          }
+        },
+        {
+          "rep": 3,
+          "repetition_id": "28466ca8-0540-4529-ab8c-d752747a131d",
+          "runs": {
+            "target": {
+              "session_id": "ses_fe1e0d8f1ffeXDOKH57i4W2d72",
+              "container_id": "06913aa6bb576be880840c689a707081134c8b2e718f8a5330a50a02f086fbce"
+            },
+            "baseline": {
+              "session_id": "ses_fe1dd8d08ffecSTDRqPZkw2AhY",
+              "container_id": "d0bacc41ee6e9799199d1db8c61aaa39ad26ac827073e1cb05c107b4f98752c2"
+            },
+            "placebo": {
+              "session_id": "ses_fe1dbb19dffe5rsimWmmTvYuOE",
+              "container_id": "e0506e57a3c634e97c94e802638ee8d82604ada097e603e9370b328163b95a92"
+            }
+          }
+        }
+      ],
       "outcome": {
         "category": "non_discriminating",
         "measurement_status": "non_discriminating",
@@ -201,6 +243,65 @@ plus over-eager selection when the request is generic/ambiguous.
     },
     {
       "case_id": 2,
+      "natural_task_hash": "sha256:88466389e414721cca138b71a543245852bc2f7d431b762d5fc4487c25ff69b5",
+      "fixture_hash": "sha256:ef9c1b1104321839cde529742873da742e9310080fb35718aa56f16dbdc1b845",
+      "raw_evidence_hash": "sha256:4228723869af630ab4be7f4bdb835570a05696737c2c7bb666c3b1b6ab4d1c51",
+      "repetitions": [
+        {
+          "rep": 1,
+          "repetition_id": "936e9f7a-4041-4daf-8801-97b7997af76d",
+          "runs": {
+            "target": {
+              "session_id": "ses_fe1da5a12ffehTiMZkimbA7Vb3",
+              "container_id": "438c6833f67b7c2d3537b8d427f93d774514afd3095868e53567e86bd180cbe5"
+            },
+            "baseline": {
+              "session_id": "ses_fe1d57de5ffeLUdOY7s1AeaMjj",
+              "container_id": "91d013036f6b64e28f7287181283cf4609070ff459e3406cc06923bb5e70bb12"
+            },
+            "placebo": {
+              "session_id": "ses_fe1d4a762ffe3p5HVyzcRdN7ci",
+              "container_id": "f07ae83f1ae449672ba12d85b342190ddaa83f0587a5e0a9d7372f8963016a94"
+            }
+          }
+        },
+        {
+          "rep": 2,
+          "repetition_id": "0b9e9ddb-7cd0-48e2-a7c9-3494217c81a4",
+          "runs": {
+            "target": {
+              "session_id": "ses_fe1d2ccafffeppmSOC3g2Xkr3V",
+              "container_id": "01a5b831ed30d19d3e841ab2562096e2f30342f5324e1dca0469607161842d17"
+            },
+            "baseline": {
+              "session_id": "ses_fe1cd8310ffe5oR86Cp0QQlrD5",
+              "container_id": "ec82c525b9ddfb4664f3d694a6368b3e4f843b02181b315ed8f540e486f02d73"
+            },
+            "placebo": {
+              "session_id": "ses_fe1cc2eabffegUYG7iSFnYrdds",
+              "container_id": "e67d2225d9c155219e7ad2a5f90a1c543b6ee036e8edd28e4b58f7536e6e0b26"
+            }
+          }
+        },
+        {
+          "rep": 3,
+          "repetition_id": "1af5e75b-2b56-4886-be28-2b73866acf6d",
+          "runs": {
+            "target": {
+              "session_id": "ses_fe1ca0b49ffeW0WimZ4XPBBl80",
+              "container_id": "cd476012b5bc8550d3de3dbef8fd0ab88418b84d21d9fe64497e5a19bc92fa0a"
+            },
+            "baseline": {
+              "session_id": "ses_fe1c50963ffefQtlRS1uKO0BEf",
+              "container_id": "d3154ad71ff32d14c6912bea27662e1c6e67c40efba50686147923879dcbb3d3"
+            },
+            "placebo": {
+              "session_id": "ses_fe1c428a4ffewsVYBbfleIpub6",
+              "container_id": "dab0c7d64235608d6839641e75e28e16c58a994f0c1bca15b0b432d9eb4578a0"
+            }
+          }
+        }
+      ],
       "outcome": {
         "category": "non_discriminating",
         "measurement_status": "non_discriminating",
@@ -276,8 +377,67 @@ plus over-eager selection when the request is generic/ambiguous.
     },
     {
       "case_id": 5,
+      "natural_task_hash": "sha256:301abc13a5cd0068bd3b357e0065d8c8faa620ac938fe084c3edf67861a05342",
+      "fixture_hash": "sha256:e3efb80d93336e7472ffad532345e6d22858a457eb6433f6b31c2c96e0ef275f",
+      "raw_evidence_hash": "sha256:935734607c7653cd311e5b385b301be3e9235649a71c83e9ec135b75b752cbfa",
+      "repetitions": [
+        {
+          "rep": 1,
+          "repetition_id": "d8aaa567-bffb-4a8f-b3b9-b78300aa74a1",
+          "runs": {
+            "target": {
+              "session_id": "ses_fe1c260b4ffeFOqiA3WvtWN7l6",
+              "container_id": "014120047c29456a300fbd7332b6f350fb67913981f61b6ea77e7286922d9855"
+            },
+            "baseline": {
+              "session_id": "ses_fe1beb932fferavuSffn5nerIF",
+              "container_id": "6878fa7fbcc8b10fdcc987d186731d466ec1cfdd19ed7dbc734ee9e058704540"
+            },
+            "placebo": {
+              "session_id": "ses_fe16ef34bffeCvF98dDWiO7IBe",
+              "container_id": "e43b5276cbde3be80c9a3beffcb23f5d60a812e979999e43f52188da83d7744f"
+            }
+          }
+        },
+        {
+          "rep": 2,
+          "repetition_id": "34b7bd7f-9a08-4699-8449-958dbaee82d0",
+          "runs": {
+            "target": {
+              "session_id": "ses_fe1a5b030ffe5RVLfC37t160xd",
+              "container_id": "04eb5a0e1ba1a01c782509c6e15580c05e7ee4fd29c6a77ca129eb0c42991d43"
+            },
+            "baseline": {
+              "session_id": "ses_fe19ffc44ffehRfC8505Caa9Ci",
+              "container_id": "4aa0286b630bdbfde478c1f628863702e7429f60fc98923ba28015fd6de70010"
+            },
+            "placebo": {
+              "session_id": "ses_fe19d0d20ffepN3GF0ZRvoHCN2",
+              "container_id": "4fe71c8038f71e846e371c7bbc2b9dd2f4cbde91f7321faf97cb1cd50746e761"
+            }
+          }
+        },
+        {
+          "rep": 3,
+          "repetition_id": "bfceeb8c-3c78-4b18-8e33-c2fe8c29ae52",
+          "runs": {
+            "target": {
+              "session_id": "ses_fe1964008ffevJ3V1qwDDaDPFj",
+              "container_id": "985ecfaddd7b16684992a46ed9b0f7e5ebe4f39d84f4cc99db1307cf23eadb90"
+            },
+            "baseline": {
+              "session_id": "ses_fe19162c9ffeC6ahM0M7RzOqEx",
+              "container_id": "68bc3329e5bba7d48a90a3424da473489e4b8f1521c9f93001516a4168689282"
+            },
+            "placebo": {
+              "session_id": "ses_fe18cf9f3ffeZoKb87YUIKnHEo",
+              "container_id": "7ffb817ac9c9f7833564f981b9b6d6fcb66c88f2b3d1ade482e409fa24775c09"
+            }
+          }
+        }
+      ],
       "outcome": {
-        "category": "both_fail",
+        "category": "placebo_only_pass",
         "measurement_status": "non_discriminating",
         "protocol_status": "valid"
       },
@@ -299,7 +459,7 @@ plus over-eager selection when the request is generic/ambiguous.
           },
           "placebo": {
             "pass": true,
-            "evidence": "Reps 1-3 (incl. re-run rep1): 'I applied all three fixes' to the three named files, scoped to the findings."
+            "evidence": "Reps 1-3: 'I applied all three fixes' to the three named files, scoped to the findings."
           }
         },
         {
@@ -366,9 +526,6 @@ base model does not produce, or a control that the base model fails); (2) fix th
   static/line-anchored; every target output explicitly records this verification gap (oracle permits
   recording the gap when the merge base is unrecoverable / no interpreter exists).
 - Case 5 placebo rep1 failed with `Connection reset by server` (a transient Kilo Gateway reset; the
-  model had just started `ls && git status`). Repaired by re-running `--conditions
-  target,baseline,placebo --reps 1` and splicing the clean placebo rep1 into the main evidence file;
-  all other reps unchanged. `--check-evidence` then passes with 0 hard errors. The re-run's placebo
-  rep1 also refused to merge/approve, consistent with the original placebo reps 2–3.
+  model had just started `ls && git status`). The entire repetition (target, baseline, placebo) was discarded and a complete fresh triplet was run from a fresh pristine seed; no condition-level splicing remains in the final evidence. The replacement rep1's placebo also refused to merge/approve, consistent with the original placebo reps 2–3. `--check-evidence` then passes with 0 hard errors.
 - Evidence and outputs are gitignored (`.eval-evidence/`, `.docker-tmp/`); only this sanitized result
   is committed.

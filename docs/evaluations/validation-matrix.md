@@ -10,6 +10,7 @@ Status dimensions are kept separate (per the corrected methodology):
   measurement — see the confusion-set matrix, not the per-skill routing column.
 - **Execution** — does a *post-activation* run exist? `exploratory` (force-injected,
   instruction-only, historical) vs `pending` vs `valid`.
+- **Measurement** — did the valid run discriminate? `not_run` (no valid run), `✓ discriminating` (target beats controls), `? non_discriminating` (all pass/fail equally), `? inconclusive` (mixed/unreliable), `⚠ baseline-favored`, `invalid` (no valid measurement). Protocol-valid execution is **not** a measurement win.
 - **Protocol** — `valid` / `limited` / `invalid` / `not_run`.
 - **Repeats** — number of independent repetitions per condition (pilot = 1).
 - **Result** — link to the per-skill result file.
@@ -45,49 +46,51 @@ Status dimensions are kept separate (per the corrected methodology):
 **Isolation available:** Layer B uses **Docker OS-containment** (`isolation_method: docker`,
 production-valid); host-only runs are still instruction-only and must be labeled `limited`.
 
-| Skill | Cases | Fixtures | Routing | Execution | Protocol | Repeats | Result |
-| :--- | :---: | :--- | :--- | :--- | :--- | :---: | :--- |
-| [adversarial-pr-review](../../skills/adversarial-pr-review/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [ai-slop-detector](../../skills/ai-slop-detector/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [architecture-review](../../skills/architecture-review/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [code-review](../../skills/code-review/evals/evals.json) | 5 | ready (5/5) | not_run | valid | valid | 3 | [results](results/code-review-first-valid.md) |
-| [codebase-orientation](../../skills/codebase-orientation/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [dependency-upgrade](../../skills/dependency-upgrade/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [documentation-review](../../skills/documentation-review/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [frontend-quality-review](../../skills/frontend-quality-review/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [git-github-workflow](../../skills/git-github-workflow/evals/evals.json) | 5 | ready (5/5) | not_run | exploratory (case 2 contaminated) | invalid | 1 | [results](results/git-github-workflow.md) |
-| [harness-adaptation](../../skills/harness-adaptation/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [implementation-planning](../../skills/implementation-planning/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [parallel-multi-agent](../../skills/parallel-multi-agent/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [quality-hardening](../../skills/quality-hardening/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [reduce-code-size](../../skills/reduce-code-size/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [repository-guidance-authoring](../../skills/repository-guidance-authoring/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [requirements-and-design](../../skills/requirements-and-design/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [review-feedback-resolution](../../skills/review-feedback-resolution/evals/evals.json) | 5 | ready (5/5) | not_run | exploratory (force-injected) | invalid | 1 | [results](results/review-feedback-resolution.md) |
-| [rules-and-skills-audit](../../skills/rules-and-skills-audit/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [security-review](../../skills/security-review/evals/evals.json) | 5 | ready (5/5) | not_run | exploratory (force-injected) | invalid | 1 | [results](results/security-review.md) |
-| [skill-authoring](../../skills/skill-authoring/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [skill-discovery](../../skills/skill-discovery/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [skill-evaluation](../../skills/skill-evaluation/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [skill-optimizer](../../skills/skill-optimizer/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [skill-reviewer](../../skills/skill-reviewer/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [systematic-debugging](../../skills/systematic-debugging/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [threat-modeling](../../skills/threat-modeling/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
+| Skill | Cases | Fixtures | Routing | Execution | Measurement | Protocol | Repeats | Result |
+| :--- | :---: | :--- | :--- | :--- | :--- | :--- | :---: | :--- |
+| [adversarial-pr-review](../../skills/adversarial-pr-review/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [ai-slop-detector](../../skills/ai-slop-detector/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [architecture-review](../../skills/architecture-review/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [code-review](../../skills/code-review/evals/evals.json) | 5 | ready (5/5) | not_run | valid | ? non_discriminating | valid | 3 | [results](results/code-review-first-valid.md) |
+| [codebase-orientation](../../skills/codebase-orientation/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [dependency-upgrade](../../skills/dependency-upgrade/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [documentation-review](../../skills/documentation-review/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [frontend-quality-review](../../skills/frontend-quality-review/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [git-github-workflow](../../skills/git-github-workflow/evals/evals.json) | 5 | ready (5/5) | not_run | exploratory (case 2 contaminated) | not_run | invalid | 1 | [results](results/git-github-workflow.md) |
+| [harness-adaptation](../../skills/harness-adaptation/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [implementation-planning](../../skills/implementation-planning/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [parallel-multi-agent](../../skills/parallel-multi-agent/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [quality-hardening](../../skills/quality-hardening/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [reduce-code-size](../../skills/reduce-code-size/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [repository-guidance-authoring](../../skills/repository-guidance-authoring/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [requirements-and-design](../../skills/requirements-and-design/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [review-feedback-resolution](../../skills/review-feedback-resolution/evals/evals.json) | 5 | ready (5/5) | not_run | exploratory (force-injected) | not_run | invalid | 1 | [results](results/review-feedback-resolution.md) |
+| [rules-and-skills-audit](../../skills/rules-and-skills-audit/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [security-review](../../skills/security-review/evals/evals.json) | 5 | ready (5/5) | not_run | exploratory (force-injected) | not_run | invalid | 1 | [results](results/security-review.md) |
+| [skill-authoring](../../skills/skill-authoring/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [skill-discovery](../../skills/skill-discovery/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [skill-evaluation](../../skills/skill-evaluation/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [skill-optimizer](../../skills/skill-optimizer/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [skill-reviewer](../../skills/skill-reviewer/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [systematic-debugging](../../skills/systematic-debugging/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
+| [threat-modeling](../../skills/threat-modeling/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
 
 Total: 26 skills, 130 designed cases. Fixtures frozen for 4/26 (the four pilot
 skills: code-review, git-github-workflow, review-feedback-resolution,
-security-review). Routing measured for 0/26. Execution validated for 1/26 (code-review valid at `results/code-review-first-valid.md`; 3 others exploratory invalid).
+security-review). Routing measured for 0/26. Execution validated for 1/26 (code-review valid at `results/code-review-first-valid.md`; 3 others exploratory invalid). Measurement discriminating: 0/26; Measurement non-discriminating: 1/26 (`code-review`).
 
-**Phase 1 (2026-08-16) + follow-up, four pilot skills:** Layer A catalog-discriminability and
-Layer B Docker execution **infrastructure proven** (single-rep smoke on `code-review`;
+### Historical Phase 1 state — 2026-08-16
+Layer A catalog-discriminability and Layer B Docker execution **infrastructure proven** (single-rep smoke on `code-review`;
 distinct containers, independent seed copies, baseline received no guidance, free
 anonymous model reachable, runner failure correctly rejected). Layer C harness-routing
 `not_run` (blocked — no harness selection capture in this CLI). Execution evidence is
 validated by `validate_evaluations.py --check-evidence`, which dispatches on an explicit
 `evidence_type` field and rejects unknown/malformed evidence rather than skipping it.
-No graded n≥3 run published yet, so protocol stays `not_run`. The validator rejects
-inflated `valid` claims (verified by negative test). Full efficacy runs require a
-graded n≥3 comparison with quoted evidence; see `phase1-environment.md` §6.
+No graded n≥3 run published yet, so protocol stayed `not_run`. The validator rejects
+inflated `valid` claims (verified by negative test).
+
+### Current state — 2026-08-20
+`code-review` now has a protocol-valid Tier-2 execution result at `results/code-review-first-valid.md` (n=3, execution `valid`, protocol `valid`, measurement `? non_discriminating`). `code-review` applied all three P1 findings in 3/3 reps but merged/self-approved in 1/3 (baseline 3/3, placebo 0/3). Execution validated 1/26, Measurement non-discriminating 1/26. Full efficacy runs require a graded n≥3 comparison with quoted evidence; see `phase1-environment.md` §6.
 
 ## Legend
 
@@ -99,6 +102,7 @@ graded n≥3 comparison with quoted evidence; see `phase1-environment.md` §6.
 - `limited` — weaker fallback (e.g. instruction-only containment) used knowingly.
 - `valid` — meets the corrected protocol (OS-contained or verified harness
   routing; frozen fixtures; evidence retained).
+- `Measurement` — `✓ discriminating` (target beats controls), `? non_discriminating` (all pass/fail equally), `? inconclusive` (mixed/unreliable), `⚠ baseline-favored`, `not_run`/`invalid` (no valid measurement). Execution `valid` + Measurement `non_discriminating` means a trustworthy experiment that did **not** demonstrate unique skill value — not a contradiction.
 
 ## How to run (corrected)
 

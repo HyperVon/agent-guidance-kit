@@ -69,7 +69,8 @@ ALLOWED_FIXTURE_STATUS = {"ready", "designed_only"}
 ALLOWED_FIXTURE_TYPES = {"committed", "generator"}
 KIND_COUNTS = {"matching": 2, "neighboring": 1, "ambiguous": 1, "edge": 1}
 ALLOWED_OUTCOME = {"skill_only_pass", "baseline_only_pass", "both_pass",
-                   "both_fail", "non_discriminating", "invalid", "not_run"}
+                   "both_fail", "placebo_only_pass", "non_discriminating",
+                   "invalid", "not_run"}
 ALLOWED_MEASUREMENT = {"discriminating", "non_discriminating", "inconclusive"}
 ALLOWED_PROTOCOL = {"valid", "limited", "contaminated", "invalid", "not_run"}
 # Assertion types: hard behavioral invariants vs quality criteria vs
@@ -521,23 +522,56 @@ def check_one_result(base, res, skill_names, case_index):
         # Docker execution: the target and baseline workers must run in distinct
         # fresh containers, not a shared process.
         runs = res.get("runs") or {}
-        g_cid = (runs.get("target") or {}).get("container_id")
-        b_cid = (runs.get("baseline") or {}).get("container_id")
-        if not g_cid or not b_cid:
-            err(f"{base}: execution result must record distinct target/baseline container_ids")
-        elif g_cid == b_cid:
-            err(f"{base}: target and baseline share a container_id (contamination)")
+        # Top-level container IDs: for multi-case with per-case reps, top-level is optional
+        has_per_case_reps_early = False
+        if res.get("evaluation_mode") == "execution":
+            for cs in res.get("cases") or []:
+                if isinstance(cs.get("repetitions"), list) and cs.get("repetitions"):
+                    has_per_case_reps_early = True
+                    break
+        if not has_per_case_reps_early:
+            g_cid = (runs.get("target") or {}).get("container_id")
+            b_cid = (runs.get("baseline") or {}).get("container_id")
+            if not g_cid or not b_cid:
+                err(f"{base}: execution result must record distinct target/baseline container_ids")
+            elif g_cid == b_cid:
+                err(f"{base}: target and baseline share a container_id (contamination)")
     if mode in ROUTING_MODES:
         if not pr.get("routing_mechanism"):
             err(f"{base}: routing result missing routing_mechanism (selected skill unverified)")
-    # Worker / run identity
+    # Worker / run identity: for single-case backward compat a top-level
+    # runs block is allowed, but for multi-case results the per-case/per-repetition
+    # runs are authoritative. If per-case repetitions are present, top-level is optional.
     runs = res.get("runs") or {}
-    g = runs.get("target") or {}
-    b = runs.get("baseline") or {}
-    if not g.get("session_id") or not b.get("session_id"):
-        err(f"{base}: result must record distinct target/baseline session_ids")
-    elif g["session_id"] == b["session_id"]:
-        err(f"{base}: target and baseline share a session_id (contamination)")
+    # Detect if this is a multi-case result with per-case repetitions
+    has_per_case_reps = False
+    if res.get("evaluation_mode") == "execution":
+        for cs in res.get("cases") or []:
+            if isinstance(cs.get("repetitions"), list) and cs.get("repetitions"):
+                has_per_case_reps = True
+                break
+    if has_per_case_reps:
+        # Per-case repetitions are authoritative; top-level is optional alias
+        # If top-level is present, it must still be distinct if used, but we don't
+        # require it and we don't treat it as an independent execution for uniqueness
+        if runs.get("target") and runs.get("baseline"):
+            g = runs.get("target") or {}
+            b = runs.get("baseline") or {}
+            if g.get("session_id") and b.get("session_id") and g["session_id"] == b["session_id"]:
+                err(f"{base}: top-level target and baseline share a session_id (contamination)")
+    else:
+        g = runs.get("target") or {}
+        b = runs.get("baseline") or {}
+        if not g.get("session_id") or not b.get("session_id"):
+            err(f"{base}: result must record distinct target/baseline session_ids")
+        elif g["session_id"] == b["session_id"]:
+            err(f"{base}: target and baseline share a session_id (contamination)")
+    # Multi-case execution results must use per-case natural_task_hash; a single
+    # top-level protocol.natural_task_hash cannot represent several different prompts.
+    if mode in EXEC_MODES and status == "valid":
+        cases = res.get("cases") or []
+        if len(cases) > 1 and pr.get("natural_task_hash"):
+            err(f"{base}: multi-case execution result has ambiguous top-level protocol.natural_task_hash; use per-case cases[].natural_task_hash instead (top-level must be absent for multi-case)")
     # Protocol-validity gates: invalid/contaminated cannot produce success.
     if status in ("invalid", "contaminated"):
         for cs in res.get("cases", []):
@@ -586,14 +620,10 @@ def check_result_case(base, cs, skill, mode, case_index):
         else:
             expect = "both_pass"
     elif not gp and not bp:
-        # both_fail requires placebo to fail (or not be run); if placebo passes
-        # while target/baseline fail, the outcome is undefined in the schema.
         if pp is False or pp is None:
             expect = "both_fail"
         else:
-            # pp is True but target/baseline both fail: not a defined category.
-            # Reject as inconsistent — placebo should not outperform both.
-            expect = "both_fail"  # still flag as inconsistent below
+            expect = "placebo_only_pass"
     if expect and cat != expect:
         err(f"{base} case {cid}: outcome.category '{cat}' inconsistent with verdict (expected {expect})")
 
@@ -663,6 +693,99 @@ def check_routing_result_case(base, cs, skill, case_index, cid, gp, bp):
 
 def check_exec_result_case(base, cs, skill, case_index, cid):
     """Execution results grade frozen assertions with evidence on both conditions."""
+    # Per-case provenance: natural_task_hash, fixture_hash, repetitions with identities
+    # are required for valid execution results. This keeps multi-case files honest and
+    # makes spliced repetitions detectable.
+    import hashlib
+    from eval_hashing import HASH_PREFIX
+    # Validate per-case natural_task_hash against authoritative prompt (when case is known)
+    if skill in case_index and cid in case_index[skill]:
+        case = case_index[skill][cid]
+        prompt = case.get("prompt", "")
+        expected_hex = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+        expected_prefixed = HASH_PREFIX + expected_hex
+        actual = cs.get("natural_task_hash")
+        if not isinstance(actual, str) or not actual.strip():
+            err(f"{base} case {cid}: missing cases[].natural_task_hash (per-case prompt hash required)")
+        elif actual not in (expected_hex, expected_prefixed):
+            err(f"{base} case {cid}: natural_task_hash does not match current source prompt (expected {expected_prefixed[:16]}.., got {actual[:16] if isinstance(actual,str) else actual!r})")
+        # Fixture hash per case (optional but if present must match)
+        expected_fixture = None
+        fx = case.get("fixture") or {}
+        if fx.get("type") == "generator":
+            expected_fixture = fx.get("output_hash") or fx.get("content_hash")
+        else:
+            expected_fixture = fx.get("content_hash")
+        if "fixture_hash" in cs:
+            fh = cs.get("fixture_hash")
+            if expected_fixture and fh != expected_fixture:
+                err(f"{base} case {cid}: fixture_hash does not match frozen fixture hash")
+    else:
+        # Even when case not in index (e.g., test harness), still require per-case hash for valid execution
+        # to ensure provenance is present; we cannot validate correctness without authoritative prompt,
+        # but we can require presence
+        if not isinstance(cs.get("natural_task_hash"), str) or not cs.get("natural_task_hash").strip():
+            # Only require for valid execution results; historical invalid may lack it
+            # Check if this is a valid execution case (protocol valid)
+            # We need to know status, but cs doesn't have it; we check outer. For now, require for all execution cases
+            # to make tests pass, we will require it
+            err(f"{base} case {cid}: missing cases[].natural_task_hash (per-case prompt hash required)")
+    # Repetitions provenance: each valid execution case must have 3 complete
+    # repetitions with unique repetition_id and per-rep runs (required for all execution cases)
+    reps = cs.get("repetitions")
+    if reps is None:
+        err(f"{base} case {cid}: missing cases[].repetitions (per-case/per-repetition execution identity required)")
+    elif not isinstance(reps, list) or not reps:
+        err(f"{base} case {cid}: cases[].repetitions must be a non-empty list")
+    else:
+        # Expect 3 repetitions for a valid n=3 claim; allow historical invalid to skip
+        # but valid must have 3.
+        if len(reps) != 3:
+            err(f"{base} case {cid}: cases[].repetitions must contain 3 complete repetitions (found {len(reps)})")
+        # Check each repetition structure and uniqueness
+        seen_rep_ids = set()
+        seen_sids = set()
+        seen_cids = set()
+        for r in reps:
+            if not isinstance(r, dict):
+                err(f"{base} case {cid}: repetition is not an object")
+                continue
+            rid = r.get("repetition_id")
+            if not isinstance(rid, str) or not rid.strip():
+                err(f"{base} case {cid} rep{r.get('rep')}: missing repetition_id (stable per-repetition identity required)")
+            elif rid in seen_rep_ids:
+                err(f"{base} case {cid} rep{r.get('rep')}: duplicate repetition_id {rid!r}")
+            else:
+                seen_rep_ids.add(rid)
+            rep_idx = r.get("rep")
+            if not isinstance(rep_idx, int):
+                err(f"{base} case {cid}: repetition missing integer rep index")
+            runs = r.get("runs") or {}
+            if not isinstance(runs, dict):
+                err(f"{base} case {cid} rep{rep_idx}: runs must be an object")
+                continue
+            # Each rep must contain all required conditions
+            for cond in ("target", "baseline", "placebo"):
+                if cond not in runs:
+                    if cond in ("target", "baseline"):
+                        err(f"{base} case {cid} rep{rep_idx}: missing runs.{cond}")
+                    continue
+                cr = runs.get(cond) or {}
+                sid = cr.get("session_id")
+                cid_ = cr.get("container_id")
+                if not isinstance(sid, str) or not sid.strip():
+                    err(f"{base} case {cid} rep{rep_idx} {cond}: missing session_id")
+                elif sid in seen_sids:
+                    err(f"{base} case {cid} rep{rep_idx} {cond}: duplicate session_id {sid!r} (spliced or shared execution)")
+                else:
+                    seen_sids.add(sid)
+                if not isinstance(cid_, str) or not cid_.strip():
+                    err(f"{base} case {cid} rep{rep_idx} {cond}: missing container_id")
+                elif cid_ in seen_cids:
+                    err(f"{base} case {cid} rep{rep_idx} {cond}: duplicate container_id {cid_!r} (spliced or shared execution)")
+                else:
+                    seen_cids.add(cid_)
+        # Cross-rep duplicate detection already done via seen sets
     assertions = cs.get("assertions") or []
     if not isinstance(assertions, list) or not assertions:
         err(f"{base} case {cid}: execution result must grade at least one assertion")
@@ -828,6 +951,44 @@ def validate_execution_evidence(evidence):
         return errs
     for extra in set(conds) - {"target", "baseline", "placebo"}:
         errs.append(f"unknown condition {extra!r} in evidence")
+    # Repetition identity and integrity: each repetition is an atomic experimental unit
+    seen_rep_ids = set()
+    seen_cids_global = set()
+    seen_sids_global = set()
+    for r in reps:
+        rid = r.get("repetition_id")
+        if not isinstance(rid, str) or not rid.strip():
+            errs.append(f"rep{r.get('rep')}: missing repetition_id (stable per-repetition identity required)")
+        elif rid in seen_rep_ids:
+            errs.append(f"rep{r.get('rep')}: duplicate repetition_id {rid!r} (repetition identity must be unique)")
+        else:
+            seen_rep_ids.add(rid)
+        # Cross-repetition splicing detection via container/session IDs
+        cmap = r.get("conditions") or {}
+        for name in conds:
+            cmeta = cmap.get(name) or {}
+            # Per-condition repetition_id must match the parent rep's ID (proves the three conditions were generated together)
+            crid = cmeta.get("repetition_id")
+            if not isinstance(crid, str) or not crid.strip():
+                errs.append(f"rep{r.get('rep')} {name}: missing repetition_id (per-condition repetition identity required)")
+            elif crid != rid:
+                errs.append(f"rep{r.get('rep')} {name}: repetition_id {crid!r} does not match parent rep {rid!r} (spliced condition)")
+            cid = cmeta.get("container_id")
+            sid = cmeta.get("session_id")
+            if isinstance(cid, str) and cid:
+                if cid in seen_cids_global:
+                    errs.append(f"rep{r.get('rep')} {name}: duplicate container_id {cid!r} across repetitions (spliced or shared execution)")
+                else:
+                    seen_cids_global.add(cid)
+            if isinstance(sid, str) and sid:
+                if sid in seen_sids_global:
+                    errs.append(f"rep{r.get('rep')} {name}: duplicate session_id {sid!r} across repetitions (spliced or shared execution)")
+                else:
+                    seen_sids_global.add(sid)
+        # A failed condition invalidates the entire repetition
+        has_failed = any((cmap.get(n) or {}).get("run_status") != "success" for n in conds if n in cmap)
+        if has_failed:
+            errs.append(f"rep{r.get('rep')}: has failed condition(s); entire repetition must be discarded and replaced with a complete fresh target/baseline/placebo triplet (do not splice)")
     seed = evidence.get("canonical_task_seed_hash")
     expected = evidence.get("expected_fixture_hash")
     # The executed task must be the EXACT frozen fixture, not merely a consistent
@@ -1495,12 +1656,25 @@ def check_matrix_sync(skill_names):
         cells = [c.strip() for c in line.split("|")]
         if len(cells) < 8:
             continue
-        # cells: ['', skill, cases, fixtures, routing, execution, protocol, repeats, result]
-        skill_cell = cells[1]
-        routing_cell = cells[4].lower()
-        execution_cell = cells[5].lower()
-        proto_cell = cells[6].lower()
-        result_cell = cells[8] if len(cells) > 8 else (cells[7] if len(cells) > 7 else "")
+        # Support both old 8-col and new 9-col (with Measurement) formats.
+        # New: ['', skill, cases, fixtures, routing, execution, measurement, protocol, repeats, result]
+        # Old: ['', skill, cases, fixtures, routing, execution, protocol, repeats, result]
+        has_measurement = len(cells) >= 11
+        if has_measurement:
+            # 9-col format
+            skill_cell = cells[1]
+            routing_cell = cells[4].lower()
+            execution_cell = cells[5].lower()
+            measurement_cell = cells[6].lower()
+            proto_cell = cells[7].lower()
+            result_cell = cells[9] if len(cells) > 9 else (cells[8] if len(cells) > 8 else "")
+        else:
+            skill_cell = cells[1]
+            routing_cell = cells[4].lower()
+            execution_cell = cells[5].lower()
+            measurement_cell = ""
+            proto_cell = cells[6].lower()
+            result_cell = cells[8] if len(cells) > 8 else (cells[7] if len(cells) > 7 else "")
         m = re.search(r"\((results/[^)]+)\)", result_cell)
         if not m:
             continue
@@ -1514,8 +1688,8 @@ def check_matrix_sync(skill_names):
         if is_invalid:
             # A matrix cell must not claim `valid` for an invalid result.
             for label, cell in (("routing", routing_cell), ("execution", execution_cell),
-                                ("protocol", proto_cell)):
-                if cell == "valid":
+                                ("measurement", measurement_cell), ("protocol", proto_cell)):
+                if cell == "valid" or "discriminating" in cell:
                     err(f"matrix row '{skill_cell}': {label} 'valid' but linked result is invalid")
         # A routing cell may only be 'valid' when a routing result carries
         # captured selected-skill evidence.
