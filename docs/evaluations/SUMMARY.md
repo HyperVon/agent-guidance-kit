@@ -3,7 +3,7 @@
 > **Status: case sets designed; methodology corrected; evaluation *infrastructure*
 > is proven end-to-end on the code-review pilot, with frozen fixtures available for
 > four pilot skills (Docker execution layer + portable
-> catalog-routing layer). No *full published efficacy* run (n≥3, graded assertions,
+> catalog-discriminability layer). No *full published efficacy* run (n≥3, graded assertions,
 > committed result file) exists yet, and harness-integrated routing (Layer C) is
 > still blocked where the harness cannot expose the selected skill.**
 
@@ -13,7 +13,7 @@ This repository has evaluation case sets for every one of the 26 skills at
 
 ## Methodology correction (this change)
 
-An earlier methodology force-injected the target `SKILL.md` into the WITH-SKILL
+An earlier methodology force-injected the target `SKILL.md` into the `target`
 worker for **every** case — including routing/neighboring cases. That can
 measure post-activation behavior but **cannot establish routing quality**, and
 it contradicted `skills/skill-evaluation/SKILL.md` (condition labels in prompts,
@@ -36,13 +36,25 @@ The methodology has been corrected and is documented in:
 
 ## What exists now
 
-- **26 case sets**, 130 cases: 2 matching, 1 neighboring, 1 ambiguous, 1 edge.
-- Each case now carries `evaluation_modes` (routing/execution) with a split
-  oracle: `routing` (graded from harness-selection evidence) and `execution`
+- **26 case sets**, 130 per-skill cases: 2 matching, 1 neighboring, 1 ambiguous,
+  1 edge per skill. Each case carries `evaluation_modes` (routing/execution) with a
+  split oracle: `routing` (graded from harness-selection evidence) and `execution`
   (`expected_output` + `assertions`). Routing cases declare `routing_context`
   (which replaces the old `requires_catalog`); the catalog is **generated**, not
-  committed inside the task fixture. A `fixture` block records status
-  (`ready` once a frozen fixture exists, else `designed_only`).
+  committed inside the task fixture. A `fixture` block records status (`ready`
+  once a frozen fixture exists, else `designed_only`).
+- **4 confusion-set families** in `evaluations/confusion-sets/` with 59 shared
+  cross-skill discriminator cases (hard-negative, misleading-keyword,
+  counterfactual pairs, multi-intent, ambiguous-natural, workflow-transition).
+  Each confusion set lists its candidate `skills`; every case prompt avoids naming
+  the expected skill. These are the difficult cases that measure catalog
+  discriminability (Layer A).
+- **1 holdout set** in `evaluations/holdout/` with 4 generalization cases stored
+  outside skill directories so ordinary editing does not consume them. Holdout
+  results are reported separately from development-case performance.
+- Each per-skill case carries a `case_type` classifying its design intent (default
+  `smoke` for legacy packs); the discriminator-family cases live in the confusion
+  sets.
 - **Frozen fixtures exist for 4/26 skills** (the four pilot skills: code-review,
   git-github-workflow, review-feedback-resolution, security-review) — 20
   committed/generator fixtures under `skills/<skill>/evals/files/case-N/` with
@@ -64,8 +76,8 @@ The methodology has been corrected and is documented in:
   invalid` / `decision: exploratory` and have not been replaced by graded,
   committed runs with quoted evidence.
 - **No harness-integrated routing (Layer C) evaluation exists.** All routing to
-  date is Layer A catalog-routing (portable model-as-classifier). Where the harness
-  cannot expose the selected skill as evidence, Layer C is `not_run`.
+  date   is Layer A catalog-discriminability (portable model-as-classifier proxy). Where the harness
+  cannot expose the selected skill as evidence, Layer C (harness-routing) is `not_run`.
 - **Fixtures frozen for only 4/26 skills** (the pilots). The other 22 remain
   `designed_only`; their cases are not executable until fixtures are frozen.
 - **No repetitions / placebo yet** for a published efficacy claim. Each smoke was a
@@ -101,13 +113,18 @@ The corrected pipeline was exercised against the four pilot skills
   This confirms the pipeline blocks the weakening the rules forbid.
 - **Repeats:** 0 at the time. **Protocol status:** `not_run` for host runs.
 
+> The next two dated sections are historical records. Their paths and command
+> descriptions reflect the runner and commit being reported at that time; the
+> current protocol is documented in **Current integrity follow-up (2026-08-20)**
+> below.
+
 ## Infrastructure proven (2026-08-16, follow-up)
 
 The corrected pipeline was taken past "schema green" to a working three-layer
 runner, proven on the `code-review` pilot (fixtures already frozen for all 4
 pilots):
 
-- **Layer A — catalog-routing (portable, harness-independent).** `scripts/run_catalog_routing_eval.py`
+- **Layer A — catalog-discriminability (portable, harness-independent). `scripts/run_catalog_routing_eval.py`
   issues a fresh model call per repetition over a generated neutral catalog and
   captures a structured `{"selected_skill": ...}` decision. Smoke on case 1:
   target-present selected `code-review` 3/3; target-absent returned `null`/clarify
@@ -115,32 +132,32 @@ pilots):
 - **Layer B — Docker execution-efficacy.** `Dockerfile.eval` builds `kilo-eval:local`
   (Node 22, `@kilocode/cli`, deterministic eval git identity, **no** host
   `~/.gitconfig`/`~/.ssh`/tokens, **no** mounted Kilo auth). `scripts/run_execution_eval.py`
-  runs two **fresh containers** per repetition: guided mounts *guidance only*
-  (`SKILL.md` + `references/`, never the `evals/` fixture snapshot) at
-   `/work/guidance/code-review`; baseline mounts **nothing**. Smoke on case 5
+   runs fresh containers: the `target` condition mounts *guidance only*
+   (`SKILL.md` + `references/`, never the `evals/` fixture snapshot) at
+   /work/guidance/task; baseline mounts **nothing**. Smoke on case 5
    (n=1, infrastructure only): two **distinct fresh containers** confirmed; both
    started from the identical frozen seed (starting fixture hashes matched the
-   frozen `output_hash`); guided and baseline outputs captured. This is an
+   frozen `output_hash`); target and baseline outputs captured. This is an
    **infrastructure smoke, not an efficacy claim** (n≥3 + an irrelevant-guidance
    placebo are still required before any efficacy conclusion).
- - **Boundary probe green.** `scripts/docker_isolation_preflight.py` passes all 23
-   checks (isolated home, deterministic git identity, no ssh/token/host-config host
-   path leak, no Kilo auth mount, **target-skill guidance absent in baseline AND present,
-   readable, hash-matched, with references in the guided mount** at the real
-   `/work/guidance/<name>/SKILL.md` path).
+  - **Boundary probe green.** `scripts/docker_isolation_preflight.py` passes all 23
+    checks (isolated home, deterministic git identity, no ssh/token/host-config host
+    path leak, no Kilo auth mount, **target-skill guidance absent in baseline AND present,
+    readable, hash-matched, with references in the target mount** at the real
+   `/work/guidance/task/SKILL.md` path).
  - **Model access is anonymous + free + pinned (cost gate, not a methodology rule).** The
    model `kilo/tencent/hy3:free` is reached through Kilo Gateway with no API key mounted;
    absence of `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` does **not** mean no provider. The model
-   is **pinned** (not auto-routed) so guided and baseline workers share identical
+   is **pinned** (not auto-routed) so target and baseline conditions share identical
    inference; `--auto` is only permission auto-approval. The free-model restriction is a
    **cost-safety gate** (`require_free_model` refuses a non-`:free` model unless
-   `--allow-paid-model`); a paid model is methodologically valid if both workers use the
+   `--allow-paid-model`); a paid model is methodologically valid if all conditions use the
    identical resolved model. The free-model catalog changes over time — update
    `DEFAULT_MODEL` in the runners when it is retired. The **Kilo CLI version is pinned** in
    `Dockerfile.eval` (`ARG KILO_CLI_VERSION`) and recorded in the evidence.
  - **Runner hardening (shared-fixture / contamination fixes).** Each repetition now uses
    **two independent copies of one pristine seed** (`/work/task` per condition) so the
-   guided worker can never mutate the baseline's state; both starting hashes are recorded
+   target worker can never mutate the baseline's state; both starting hashes are recorded
    and must match. Generator source (`setup.sh` / answer key) is run in a sanitized
    environment and **stripped** from the worker seed. A failed Docker/Kilo run is recorded
    `run_status="failed"` and the validator **rejects** the evidence. `--check-evidence`
@@ -164,7 +181,7 @@ the corrected fixture/guidance hash semantics. Exact results:
 - **`docker build -f Dockerfile.eval -t kilo-eval:local .`** — succeeded
   (`Successfully tagged kilo-eval:local`).
 - **`docker_isolation_preflight.py --image kilo-eval:local --target-skill
-  code-review`** — **23/23 checks passed**. The guided mount now additionally
+   code-review`** — **23/23 checks passed**. The target mount now additionally
   proves `references_present_if_required` (a required `references/` directory
   that is missing now FAILS the probe; previously this check could not fail).
 - **Catalog-routing smoke** (`run_catalog_routing_eval.py --skill code-review
@@ -175,7 +192,7 @@ the corrected fixture/guidance hash semantics. Exact results:
   not present in the catalog actually supplied to the model (e.g. a target
   selected under a target-absent catalog) is rejected.
 - **Execution smoke** (`run_execution_eval.py --skill code-review --case-id 5
-  --reps 1`): two **distinct fresh containers**; guided and baseline both
+   --reps 1`): two **distinct fresh containers**; target and baseline both
   started from the identical **frozen** seed — `canonical_seed_hash`
   (`sha256:694cc87e…`) equals the frozen fixture `output_hash`/`content_hash`.
   `guidance_bundle_hash` was recorded and is now required by the validator.
@@ -215,6 +232,31 @@ a skill that was actually in the catalog supplied for that condition. The
 frozen-hash anchor plus the guidance-bundle hash mean a malformed, stale,
 partially-mounted, or differently-materialized evaluation cannot masquerade as
 trustworthy evidence.
+
+## Current integrity follow-up (2026-08-20)
+
+This section records only checks performed against the current working head; it
+does not rewrite the historical smoke reports above and does not claim a model
+execution result.
+
+- The deterministic validator passed with 26 skills, 0 hard errors, and 0
+  warnings. `test_validate_evaluations.py` passed with **173 tests** and 4
+  subtests; `ruff check scripts/`, Python compilation, the README catalog-index
+  check, `git diff --check`, and `hash_fixtures.py` (`Updated 0 evals.json
+  files`) also passed.
+- The current runner uses `/work/task`, places target/placebo guidance under
+  `.kilo/skills/<name>/`, activates both through `--command <name>:skill`, and
+  gives baseline no treatment tree or command. The validator now anchors each
+  `natural_task_hash` to the current source case prompt and requires the exact
+  canonical runtime-treatment path list.
+- The host Kilo CLI reports version `7.4.22`; the local pinned binary contains
+  the `$ARGUMENTS` and positional placeholder forms that the runner now rejects
+  before worker launch. No canonical skill file is rewritten.
+- A current target/baseline/placebo Docker smoke was **not run**: Docker and
+  the isolation preflight stopped before worker launch because the Colima
+  Docker socket was unavailable (`~/.colima/default/docker.sock`).
+  Therefore this follow-up contains no new target, baseline, placebo, or
+  efficacy result claim.
 
 ## Case-set audit
 

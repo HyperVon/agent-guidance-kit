@@ -1,0 +1,138 @@
+{
+  "confusion_set": "design-change-family",
+  "cluster": "design-change",
+  "skills": [
+    "architecture-review",
+    "requirements-and-design",
+    "implementation-planning",
+    "quality-hardening",
+    "reduce-code-size",
+    "systematic-debugging"
+  ],
+  "notes": "Difficult shared cases for the design/change cluster plus systematic-debugging (the close neighbor for 'flaky failure' hardening cases). The discriminations: WHAT-to-decide (requirements), whether the current shape is right (architecture-review), HOW-to-execute an approved direction (implementation-planning), test-first hardening (quality-hardening), and behavior-preserving reduction (reduce-code-size).",
+  "cases": [
+    {
+      "id": 1,
+      "case_type": "counterfactual",
+      "counterfactual_pair": "billing-migration-1",
+      "prompt": "Every change to billing touches the same five modules and the team thinks the boundaries may be wrong. Review the current shape and recommend whether we should restructure it.",
+      "expected_skill": "architecture-review",
+      "notes": "Pair A: deciding whether to restructure. Paired case flips to execution planning."
+    },
+    {
+      "id": 2,
+      "case_type": "counterfactual",
+      "counterfactual_pair": "billing-migration-1",
+      "prompt": "We've already decided to split billing behind an internal API. Work out the migration sequence, intermediate states, rollback points, and verification.",
+      "expected_skill": "implementation-planning",
+      "notes": "Pair B: planning HOW after the decision. The word 'migration' must not route to architecture-review."
+    },
+    {
+      "id": 3,
+      "case_type": "hard-negative",
+      "prompt": "Our customers keep asking to download their invoices as PDF, but we're not sure whether to build it in-app, email it, or use a third-party service. Help us figure out what to build.",
+      "expected_skill": "requirements-and-design",
+      "notes": "No design exists yet; the job is requirements/approach selection, not architecture review of an existing system and not an execution plan."
+    },
+    {
+      "id": 4,
+      "case_type": "misleading-keyword",
+      "prompt": "The design for our new billing webhook system is settled and was approved last week. The decision and design doc live in docs/design/billing-webhooks.md. Give me an execution-ready implementation plan an engineer can carry out without re-deriving the design.",
+      "expected_skill": "implementation-planning",
+      "notes": "Design vocabulary everywhere; the deliverable is the execution plan from an approved design."
+    },
+    {
+      "id": 5,
+      "case_type": "hard-negative",
+      "prompt": "Our payment retry logic has an occasional flaky failure under concurrency. Add a regression test that reproduces the race, then make the minimal fix and confirm the gate is green.",
+      "expected_skill": "quality-hardening",
+      "notes": "Debugging vocabulary (flaky failure) but the dominant job is test-first hardening with a confirmed-red regression test, not root-cause diagnosis alone."
+    },
+    {
+      "id": 6,
+      "case_type": "hard-negative",
+      "prompt": "The module utils/data_transform.py is about 900 lines and I suspect a lot of it is dead or duplicated logic. Measure the size first, then do a behavior-preserving reduction.",
+      "expected_skill": "reduce-code-size",
+      "notes": "Review vocabulary (dead/duplicated logic) but the deliverable is a measured, behavior-preserving shrink, not a findings report."
+    },
+    {
+      "id": 7,
+      "case_type": "multi-intent",
+      "prompt": "I have a loose idea for a feature that lets users export all their data. I'm not sure what the behavior should be or which approach is best yet, but once we figure that out I want a build plan.",
+      "expected_skill": "requirements-and-design",
+      "notes": "Two intents in one message; the oracle reflects the currently dominant one (requirements first). A router that jumps to planning is wrong."
+    },
+    {
+      "id": 8,
+      "case_type": "ambiguous-natural",
+      "prompt": "This part of the system has become painful to change. What should we do?",
+      "expected_skill": null,
+      "notes": "Real partial evidence: could be architecture (changeability), could be implementation (the pain is a known defect), could be requirements (the direction is undecided). Clarification or a documented tie-breaker is required; no single owner is defensible without it."
+    },
+    {
+      "id": 9,
+      "case_type": "counterfactual",
+      "counterfactual_pair": "checkout-flakiness-1",
+      "prompt": "The checkout service is flaky and users complain it sometimes double-charges. Find the root cause before we change anything.",
+      "expected_skill": "systematic-debugging",
+      "notes": "Pair A: diagnose first. The paired case flips to hardening after the cause is known."
+    },
+    {
+      "id": 10,
+      "case_type": "counterfactual",
+      "counterfactual_pair": "checkout-flakiness-1",
+      "prompt": "We found the root cause of the double-charge: the retry and the webhook handler race. Harden it: add the failing regression test, make the minimal fix, and confirm the gate is green.",
+      "expected_skill": "quality-hardening",
+      "notes": "Pair B: the cause is established; the job is test-first hardening, not diagnosis."
+    },
+    {
+      "id": 11,
+      "case_type": "misleading-keyword",
+      "prompt": "The architecture is already decided. I need the exact implementation sequence, the intermediate states, and the verification plan for each phase.",
+      "expected_skill": "implementation-planning",
+      "notes": "'Architecture' appears but the decision is made; the deliverable is the execution plan."
+    },
+    {
+      "id": 12,
+      "case_type": "workflow-transition",
+      "prompt": "Can you look at this subsystem and tell me whether the design is the reason every change touches the same five modules?",
+      "turns": [
+        {
+          "user": "Can you look at this subsystem and tell me whether the design is the reason every change touches the same five modules?",
+          "expected_route": "architecture-review"
+        },
+        {
+          "user": "Option B sounds right. Now work out the sequence for making that change.",
+          "expected_route": "implementation-planning"
+        },
+        {
+          "user": "Okay, implement the first approved phase.",
+          "expected_route": null
+        }
+      ],
+      "expected_skill": "architecture-review",
+      "notes": "Workflow ownership must move from review to planning; the agent must not stay in the review skill. The final turn is ordinary implementation: no skill in the set owns generic implementation (implementation-planning explicitly stops before editing code), so expected_route null means 'no specialized skill expected'."
+    },
+    {
+      "id": 13,
+      "case_type": "hard-negative",
+      "prompt": "The reports/generator.py file is a 2500-line god file. Split it into cohesive modules along ownership boundaries without changing behavior.",
+      "expected_skill": "reduce-code-size",
+      "notes": "Architecture vocabulary (ownership boundaries) but the deliverable is a behavior-preserving split of one file."
+    },
+    {
+      "id": 14,
+      "case_type": "multi-intent",
+      "prompt": "We approved the auth token-refresh design last quarter, but since then we upgraded the framework and moved session storage to Redis. Produce the execution-ready plan from that approved design.",
+      "expected_skill": "implementation-planning",
+      "notes": "Drift-check + planning in one message; the plan from the approved design is the dominant job."
+    },
+    {
+      "id": 15,
+      "case_type": "hard-negative",
+      "prompt": "We shipped the export endpoint with zero tests for empty input, malformed JSON, duplicate deliveries, and idempotency. Run a QA pass: add regression coverage for those gaps and fix anything broken.",
+      "expected_skill": "quality-hardening",
+      "notes": "Not a code review (no findings report requested) and not planning; the deliverable is test-first coverage plus minimal fixes."
+    }
+  ]
+}
