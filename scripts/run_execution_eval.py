@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Execution-efficacy evaluation runner (Docker-isolated layer B).
+"""Optional Docker/Kilo execution-efficacy adapter (layer B).
+
+The protocol and validator are harness-neutral. Use
+``scripts/run_harness_eval.py`` with a JSON adapter for new smoke and
+qualification runs; this module preserves the repository's strict historical
+Docker/Kilo confirmation path.
 
 POST-ACTIVATION MODEL
 ---------------------
@@ -149,6 +154,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from eval_hashing import (hash_workspace, hash_task_workspace,
                            materialize_fixture_seed, HASH_PREFIX)
+from evaluation_protocols import PROTOCOL_NAMES, validate_declaration
 
 IMAGE = "kilo-eval:local"
 # The evaluation runs on a pinned, anonymous FREE model by default. This is a
@@ -781,21 +787,25 @@ def finalize_condition(name, meta, task_before, task_after,
     return cond
 
 
-def run_repetition(rep_index, conditions, natural_task, seed_dir,
-                   target_skill, target_dir,
-                   placebo_skill, placebo_dir,
-                   model, image, run_fn):
-    """Run one full repetition: seed copies -> treatment placement -> workers ->
-    evidence. ``run_fn`` is the container boundary (mockable); it must have the
-    ``run_container`` signature.
+def run_condition_repetition(rep_index, conditions, natural_task, seed_dir,
+                             activation_specs, model, image, run_fn):
+    """Run one atomic comparison for arbitrary guided conditions.
 
-    Returns ``(rep, canonical_task_seed_hash, workspace_paths)`` where
-    ``workspace_paths`` maps condition name to the FULL workspace path (used
-    for cleanup; the evidence itself records only sanitized basenames).
-    Workspace lifecycle (creation and cleanup) is owned by the caller.
+    ``activation_specs`` maps each condition to either ``None`` (no guidance)
+    or ``{"skill_name": ..., "source_dir": ...}``.  Keeping this primitive
+    condition-neutral lets the normal target/baseline runner and the
+    candidate/reference regression runner share seed setup, activation, hashes,
+    snapshots, and container execution.
     """
-    validate_activation_sources(target_dir, target_skill, conditions,
-                                placebo_dir, placebo_skill)
+    for name in conditions:
+        spec = activation_specs.get(name)
+        if not spec:
+            continue
+        tokens = kilo_command_placeholders(spec["source_dir"])
+        if tokens:
+            raise ValueError(
+                f"refusing :skill activation for {name!r}: source skill "
+                f"contains Kilo command placeholder(s) {', '.join(tokens)}")
     canonical = HASH_PREFIX + hash_task_workspace(seed_dir,
                                                   RUNTIME_TREATMENT_PATHS)
     repetition_id = str(uuid.uuid4())
@@ -811,37 +821,22 @@ def run_repetition(rep_index, conditions, natural_task, seed_dir,
 
     cond_fx = {name: _copy_seed(seed_dir) for name in conditions}
 
-    # Layer B controlled post-activation: place the target/placebo skills at
-    # Kilo's project-level discovery location ``.kilo/skills/<name>/`` inside
-    # each worker's workspace, and record the frozen discovery-tree hash. The
-    # baseline receives no evaluator-owned ``.kilo/skills`` tree and therefore
-    # cannot discover (or activate) any skill. Activation itself happens
-    # deterministically via
-    # ``kilo run --command <name>:skill`` (see run_container), never via the
-    # model's routing choice.
+    # Place each guided condition at Kilo's project-level discovery location
+    # and activate it deterministically through ``--command <name>:skill``.
     activation = {}
     for name in conditions:
-        if name == "target":
-            tree = materialize_kilo_skill(target_dir, target_skill, cond_fx[name])
+        spec = activation_specs.get(name)
+        if spec:
+            tree = materialize_kilo_skill(spec["source_dir"],
+                                          spec["skill_name"], cond_fx[name])
             content_hash = skill_tree_hash(tree)
             if content_hash is None:
-                raise ValueError("target skill tree missing after materialization")
+                raise ValueError(f"{name} skill tree missing after materialization")
             activation[name] = {
-                "skill_name": target_skill,
-                "skill_command": skill_command_name(target_skill),
-                "skill_kilo_path": os.path.join(".kilo", "skills", target_skill),
-                "skill_content_hash": content_hash,
-            }
-        elif name == "placebo" and placebo_dir:
-            tree = materialize_kilo_skill(placebo_dir, placebo_skill,
-                                          cond_fx[name])
-            content_hash = skill_tree_hash(tree)
-            if content_hash is None:
-                raise ValueError("placebo skill tree missing after materialization")
-            activation[name] = {
-                "skill_name": placebo_skill,
-                "skill_command": skill_command_name(placebo_skill),
-                "skill_kilo_path": os.path.join(".kilo", "skills", placebo_skill),
+                "skill_name": spec["skill_name"],
+                "skill_command": skill_command_name(spec["skill_name"]),
+                "skill_kilo_path": os.path.join(".kilo", "skills",
+                                                 spec["skill_name"]),
                 "skill_content_hash": content_hash,
             }
 
@@ -920,6 +915,26 @@ def run_repetition(rep_index, conditions, natural_task, seed_dir,
     return rep, canonical, cond_fx
 
 
+def run_repetition(rep_index, conditions, natural_task, seed_dir,
+                   target_skill, target_dir,
+                   placebo_skill, placebo_dir,
+                   model, image, run_fn):
+    """Backward-compatible target/baseline(/placebo) comparison wrapper."""
+    activation_specs = {
+        "target": {"skill_name": target_skill, "source_dir": target_dir},
+        "baseline": None,
+    }
+    if "placebo" in conditions:
+        validate_activation_sources(target_dir, target_skill, conditions,
+                                    placebo_dir, placebo_skill)
+        activation_specs["placebo"] = {
+            "skill_name": placebo_skill, "source_dir": placebo_dir,
+        }
+    return run_condition_repetition(
+        rep_index, conditions, natural_task, seed_dir, activation_specs,
+        model, image, run_fn)
+
+
 def _skill_md_hex(workspace, skill_name):
     """sha256 hex of the SKILL.md the worker will actually have at discovery."""
     p = os.path.join(workspace, ".kilo", "skills", skill_name, "SKILL.md")
@@ -933,6 +948,9 @@ def main():
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--image", default=IMAGE)
     ap.add_argument("--reps", type=int, default=1)
+    ap.add_argument("--protocol", choices=sorted(PROTOCOL_NAMES),
+                    help="progressive protocol; defaults to smoke for target-only, "
+                    "qualification for target/baseline, confirmation when placebo is present")
     ap.add_argument("--allow-paid-model", action="store_true",
                     help="allow a non-free model (cost-safety opt-in)")
     ap.add_argument("--conditions", type=_conditions_arg,
@@ -943,6 +961,17 @@ def main():
     ap.add_argument("--out")
     args = ap.parse_args()
     require_free_model(args.model, args.allow_paid_model)
+
+    protocol = args.protocol
+    if protocol is None:
+        protocol = ("smoke" if args.conditions == ["target"] else
+                    "confirmation" if "placebo" in args.conditions else
+                    "qualification")
+    protocol_errors = validate_declaration(protocol, args.conditions, args.reps)
+    if protocol_errors:
+        for message in protocol_errors:
+            print(message, file=sys.stderr)
+        sys.exit(2)
 
     if "placebo" in args.conditions and not args.placebo_skill:
         print("--placebo-skill <skill> is required when 'placebo' is in "
@@ -1018,6 +1047,7 @@ def main():
         "node_version": runtime.get("node_version"),
         "model_listed": runtime.get("model_listed"),
         "activation_mechanism": ACTIVATION_MECHANISM,
+        "protocol": protocol,
         "runtime_treatment_paths": list(RUNTIME_TREATMENT_PATHS),
         "target_skill_kilo_path": os.path.join(".kilo", "skills", args.skill),
         "target_skill_content_hash": target_tree_hash,

@@ -23,8 +23,11 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import build_routing_catalog as brc
 import docker_isolation_preflight as dip
 import eval_hashing as eh
+import evaluation_harness as eha
+import evaluation_protocols as ep
 import run_catalog_routing_eval as rc
 import run_execution_eval as ree
+import run_skill_regression_eval as rsre
 import validate_evaluations as ve
 
 
@@ -142,6 +145,7 @@ class ResultFailureTests(unittest.TestCase):
     def _result(self, mode="execution", **over):
         method = "docker-isolated" if mode in ("execution",) else "harness-routing"
         res = {
+            "result_schema_version": 2,
             "skill": "code-review",
             "evaluation_mode": mode,
             "method": method,
@@ -826,6 +830,341 @@ class ResultFailureTests(unittest.TestCase):
         }]
         ve.check_one_result("r.md", res, {"code-review"}, {})
         self.assertTrue(any("must contain 3 complete repetitions" in e for e in ve.errors), ve.errors)
+
+    def test_protocol_requirements_are_mode_specific(self):
+        self.assertEqual(ep.validate_declaration("smoke", ["target"], 1), [])
+        self.assertTrue(ep.validate_declaration("qualification", ["target"], 1))
+        self.assertTrue(ep.validate_declaration(
+            "confirmation", ["target", "baseline", "placebo"], 1))
+        self.assertEqual(
+            ep.validate_declaration("regression", ["candidate", "reference"], 1),
+            [],
+        )
+
+    def test_qualification_ignores_skill_contract_assertions_for_baseline_score(self):
+        """A target-only heading contract cannot manufacture marginal value."""
+        prompt = "Review this pull request and identify correctness problems."
+        case_index = {"code-review": {1: {
+            "prompt": prompt,
+            "fixture": {"content_hash": "sha256:fixture"},
+            "evaluation_modes": ["execution"],
+            "execution": {"assertions": [
+                {"text": "uses the skill-only report headings",
+                 "type": "presentation", "scope": "skill-contract"},
+                {"text": "identifies the real correctness defect",
+                 "type": "behavioral", "scope": "shared-outcome"},
+            ]},
+        }}}
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"] = {
+            "name": "qualification", "status": "valid",
+            "worker_isolation_verified": True,
+            "target_guidance_present": "activated",
+            "target_guidance_hash": "sha256:target",
+            "target_absent_in_baseline": "absent",
+            "baseline_guidance_absent": "absent",
+            "contamination": "none",
+            "conditions": ["target", "baseline"], "repeats": 1,
+        }
+        res["cases"] = [{
+            "case_id": 1,
+            "natural_task_hash": "sha256:" + hashlib.sha256(prompt.encode()).hexdigest(),
+            "fixture_hash": "sha256:fixture",
+            "repetitions": [{"rep": 1, "repetition_id": "q1", "runs": {
+                "target": {"session_id": "qt", "container_id": "qct"},
+                "baseline": {"session_id": "qb", "container_id": "qcb"},
+            }}],
+            "outcome": {"category": "both_pass",
+                        "measurement_status": "non_discriminating",
+                        "protocol_status": "valid"},
+            "verdict": {"target_pass": True, "baseline_pass": True},
+            "early_stop": {"stopped": True,
+                            "reason": "same shared outcome at n=1",
+                            "next_protocol": "none"},
+            "contract_adherence": "pass",
+            "assertions": [
+                {"assertion": "uses the skill-only report headings",
+                 "scope": "skill-contract",
+                 "target": {"pass": True, "evidence": "headings present"},
+                 "baseline": {"pass": False, "evidence": "correct review without headings"}},
+                {"assertion": "identifies the real correctness defect",
+                 "scope": "shared-outcome",
+                 "target": {"pass": True, "evidence": "defect at app.py:10"},
+                 "baseline": {"pass": True, "evidence": "defect at app.py:10"}},
+            ],
+        }]
+        ve.check_one_result("r.md", res, {"code-review"}, case_index)
+        self.assertEqual(ve.errors, [], ve.errors)
+
+        # A dishonest result that lets the contract-only failure make the
+        # baseline lose must be rejected by the validator.
+        res["cases"][0]["outcome"] = {
+            "category": "skill_only_pass", "measurement_status": "discriminating",
+            "protocol_status": "valid",
+        }
+        res["cases"][0]["verdict"]["baseline_pass"] = False
+        reset()
+        ve.check_one_result("r.md", res, {"code-review"}, case_index)
+        self.assertTrue(any("shared-outcome assertions" in e for e in ve.errors), ve.errors)
+
+    def test_regression_conditions_and_status_are_validated(self):
+        prompt = "Compare the current implementation with the previous revision."
+        case_index = {"code-review": {1: {
+            "prompt": prompt,
+            "fixture": {"content_hash": "sha256:fixture"},
+            "evaluation_modes": ["execution"],
+            "execution": {"assertions": ["preserves the behavior"]},
+        }}}
+        res = self._result(mode="regression")
+        res.update({"method": "docker-isolated",
+                    "candidate_skill_revision": "sha256:candidate",
+                    "reference_skill_revision": "sha256:reference"})
+        res.pop("target_skill_revision", None)
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"] = {
+            "name": "regression", "status": "valid",
+            "worker_isolation_verified": True,
+            "candidate_guidance_present": "activated",
+            "reference_guidance_present": "activated",
+            "candidate_guidance_hash": "sha256:candidate-tree",
+            "reference_guidance_hash": "sha256:reference-tree",
+            "conditions": ["candidate", "reference"], "repeats": 1,
+            "contamination": "none",
+        }
+        res["cases"] = [{
+            "case_id": 1,
+            "natural_task_hash": "sha256:" + hashlib.sha256(prompt.encode()).hexdigest(),
+            "fixture_hash": "sha256:fixture",
+            "repetitions": [{"rep": 1, "repetition_id": "r1", "runs": {
+                "candidate": {"session_id": "rc", "container_id": "rcc"},
+                "reference": {"session_id": "rr", "container_id": "rrc"},
+            }}],
+            "outcome": {"category": "both_pass",
+                        "measurement_status": "non_discriminating",
+                        "protocol_status": "valid",
+                        "regression_status": "equivalent"},
+            "verdict": {"candidate_pass": True, "reference_pass": True},
+            "assertions": [{"assertion": "preserves the behavior",
+                            "candidate": {"pass": True, "evidence": "test passed"},
+                            "reference": {"pass": True, "evidence": "test passed"}}],
+        }]
+        ve.check_one_result("r.md", res, {"code-review"}, case_index)
+        self.assertEqual(ve.errors, [], ve.errors)
+
+        # The same result shape may use neutral worker IDs without a container
+        # or provider-specific field.
+        res["method"] = "harness-adapter"
+        for name, worker in (("candidate", "wc"), ("reference", "wr")):
+            run = res["cases"][0]["repetitions"][0]["runs"][name]
+            run["worker_id"] = worker
+            run.pop("container_id", None)
+        reset()
+        ve.check_one_result("r.md", res, {"code-review"}, case_index)
+        self.assertEqual(ve.errors, [], ve.errors)
+
+    def test_qualification_n1_non_discriminating_requires_honest_early_stop(self):
+        self.assertEqual(
+            ep.early_stop_recommendation(True, True),
+            {"stopped": True,
+             "reason": "target and baseline both passed shared-outcome criteria at n=1",
+             "next_protocol": "none"},
+        )
+        self.assertEqual(ep.early_stop_recommendation(False, True)["stopped"], True)
+
+
+class HarnessAdapterTests(unittest.TestCase):
+    def tearDown(self):
+        reset()
+
+    def test_command_adapter_normalizes_neutral_response(self):
+        response = {
+            "run_status": "success",
+            "returncode": 0,
+            "worker_id": "worker-1",
+            "session_id": "session-1",
+            "output": "completed",
+            "guidance_probe": "present",
+            "guidance_context_probe": "present",
+            "activation_mechanism": "adapter-defined",
+        }
+        completed = subprocess.CompletedProcess(
+            ["adapter"], 0, json.dumps(response), "")
+        with unittest.mock.patch.object(eha.subprocess, "run",
+                                        return_value=completed):
+            adapter = eha.CommandHarnessAdapter("adapter", name="test")
+            actual = adapter.run({"condition": "candidate"})
+        self.assertEqual(actual["worker_id"], "worker-1")
+        self.assertEqual(actual["guidance_context_probe"], "present")
+        self.assertEqual(actual["adapter_metadata"]["protocol"],
+                         eha.ADAPTER_PROTOCOL)
+
+    def test_neutral_runner_materializes_guidance_without_harness_path(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            seed = os.path.join(tmp, "seed")
+            os.makedirs(seed)
+            open(os.path.join(seed, "task.txt"), "w").write("task\n")
+            skill = os.path.join(tmp, "skill")
+            os.makedirs(skill)
+            open(os.path.join(skill, "SKILL.md"), "w").write("# guidance\n")
+
+            class FakeAdapter:
+                def run(self, request):
+                    guided = request["guidance"] is not None
+                    return {
+                        "run_status": "success",
+                        "returncode": 0,
+                        "worker_id": "worker-" + request["condition"],
+                        "session_id": "session-" + request["condition"],
+                        "output": "done",
+                        "guidance_probe": "present" if guided else "absent",
+                        "guidance_context_probe": "present" if guided else "none",
+                        "activation_mechanism": "fake-adapter" if guided else "none",
+                    }
+
+            repetition, _, workspaces = eha.run_condition_repetition(
+                0, ["target", "baseline"], "do task", seed,
+                {"target": {"skill_name": "sample", "source_dir": skill},
+                 "baseline": None},
+                "test-model", FakeAdapter(), protocol="qualification", case_id=1)
+            self.assertTrue(repetition["starting_task_hashes_match"])
+            self.assertEqual(
+                repetition["conditions"]["target"]["guidance_path"],
+                eha.RUNTIME_TREATMENT_PATHS[0])
+            self.assertIsNone(repetition["conditions"]["baseline"]["guidance_path"])
+            self.assertNotEqual(
+                repetition["conditions"]["target"]["starting_full_hash"],
+                repetition["conditions"]["baseline"]["starting_full_hash"])
+            for workspace in workspaces.values():
+                self.assertFalse(os.path.exists(
+                    os.path.join(workspace, ".kilo")))
+                shutil.rmtree(workspace, ignore_errors=True)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_regression_materializes_git_revision_with_repository_shape(self):
+        root, resolved = rsre.materialize_skill_revision("HEAD", "code-review")
+        try:
+            self.assertRegex(resolved, r"^[0-9a-f]{40}$")
+            self.assertTrue(os.path.isfile(os.path.join(
+                root, "skills", "code-review", "SKILL.md")))
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_regression_builder_and_neutral_validator_round_trip_without_model(self):
+        candidate_root = reference_root = None
+        try:
+            candidate_root, candidate_revision = rsre.materialize_skill_revision(
+                "HEAD", "code-review")
+            reference_root, reference_revision = rsre.materialize_skill_revision(
+                "HEAD", "code-review")
+
+            class FakeAdapter:
+                name = "test"
+
+                def run(self, request):
+                    guidance = request["guidance"]
+                    return {
+                        "run_status": "success",
+                        "returncode": 0,
+                        "worker_id": "worker-" + request["condition"],
+                        "session_id": "session-" + request["condition"],
+                        "output": "completed",
+                        "guidance_probe": "present",
+                        "guidance_context_probe": "present",
+                        "activation_mechanism": "fake-adapter",
+                        "guidance_path": guidance["guidance_path"],
+                        "guidance_content_hash": guidance["guidance_content_hash"],
+                    }
+
+            args = argparse.Namespace(skill="code-review", case_id=5,
+                                      model=None, reps=1)
+            evidence = rsre.build_evidence(
+                args, candidate_root, reference_root,
+                candidate_revision, reference_revision, FakeAdapter())
+            self.assertEqual(ve.validate_generic_regression_evidence(evidence), [])
+        finally:
+            if candidate_root:
+                shutil.rmtree(candidate_root, ignore_errors=True)
+            if reference_root:
+                shutil.rmtree(reference_root, ignore_errors=True)
+
+    def test_neutral_regression_evidence_does_not_require_kilo_fields(self):
+        skill = "code-review"
+        evals_path = os.path.join(ROOT, "skills", skill, "evals", "evals.json")
+        source = json.load(open(evals_path, encoding="utf-8"))
+        case = next(item for item in source["evals"] if item["id"] == 5)
+        fixture = case["fixture"]
+        expected_fixture = (fixture.get("output_hash") or
+                            fixture.get("content_hash"))
+        evals_rel = os.path.relpath(evals_path, ROOT)
+        skill_rel = os.path.dirname(os.path.dirname(evals_rel))
+        fixture_rel = os.path.normpath(os.path.join(skill_rel, fixture["path"]))
+        source_hash = "sha256:" + hashlib.sha256(
+            open(evals_path, "rb").read()).hexdigest()
+        prompt_hash = hashlib.sha256(case["prompt"].encode()).hexdigest()
+        candidate_hash = "sha256:" + "1" * 64
+        reference_hash = "sha256:" + "2" * 64
+        repetition_id = "rep-neutral"
+
+        def condition(name, worker, session, content_hash):
+            return {
+                "repetition_id": repetition_id,
+                "worker_id": worker,
+                "session_id": session,
+                "run_status": "success",
+                "returncode": 0,
+                "starting_task_hash": expected_fixture,
+                "ending_task_hash": expected_fixture,
+                "starting_full_hash": "sha256:full-" + name,
+                "ending_full_hash": "sha256:end-" + name,
+                "output": "completed",
+                "guidance_probe": "present",
+                "guidance_context_probe": "present",
+                "activation_mechanism": "adapter-defined",
+                "guidance_path": eha.RUNTIME_TREATMENT_PATHS[0],
+                "guidance_content_hash": content_hash,
+            }
+
+        evidence = {
+            "evidence_type": "regression",
+            "protocol": "regression",
+            "harness": {"name": "test", "adapter_protocol": eha.ADAPTER_PROTOCOL},
+            "skill": skill,
+            "case_id": 5,
+            "conditions": ["candidate", "reference"],
+            "candidate_revision": "1" * 40,
+            "reference_revision": "2" * 40,
+            "candidate_skill_source_path": "skills/code-review",
+            "reference_skill_source_path": "skills/code-review",
+            "candidate_skill_content_hash": candidate_hash,
+            "reference_skill_content_hash": reference_hash,
+            "candidate_guidance_path": eha.RUNTIME_TREATMENT_PATHS[0],
+            "reference_guidance_path": eha.RUNTIME_TREATMENT_PATHS[0],
+            "fixture_source_path": evals_rel,
+            "fixture_path": fixture_rel,
+            "fixture_source_hash": source_hash,
+            "expected_fixture_hash": expected_fixture,
+            "canonical_task_seed_hash": expected_fixture,
+            "runtime_treatment_paths": list(eha.RUNTIME_TREATMENT_PATHS),
+            "repetitions": [{
+                "rep": 1,
+                "repetition_id": repetition_id,
+                "natural_task_hash": prompt_hash,
+                "natural_task_identical_across_conditions": True,
+                "condition_workspace_ids": {"candidate": "w1", "reference": "w2"},
+                "conditions": {
+                    "candidate": condition("candidate", "w1", "s1", candidate_hash),
+                    "reference": condition("reference", "w2", "s2", reference_hash),
+                },
+            }],
+        }
+        self.assertEqual(ve.validate_generic_regression_evidence(evidence), [])
+        evidence["repetitions"][0]["conditions"]["candidate"][
+            "guidance_context_probe"] = "absent"
+        self.assertTrue(any("context probe" in error
+                            for error in ve.validate_generic_regression_evidence(evidence)))
 
 
 class EvidenceValidationTests(unittest.TestCase):

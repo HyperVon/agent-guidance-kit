@@ -15,6 +15,14 @@ Status dimensions are kept separate (per the corrected methodology):
 - **Repeats** — number of independent repetitions per condition (pilot = 1).
 - **Result** — link to the per-skill result file.
 
+New development runs are harness-neutral and declare one of the explicit
+protocols: `smoke` (target only, n=1), `qualification` (target/baseline, n=1),
+`regression` (candidate/reference, n=1), or `confirmation`
+(target/baseline/placebo, n≥3). A harness adapter may use Docker, a local
+sandbox, a VM, or an agent CLI; the matrix records the adapter name only when a
+run exists. The historical Kilo/Docker row below is an optional strict adapter
+record, not the default harness for the repository.
+
 > **Important:** The four skills below with result links contain only
 > `protocol_status: invalid` / `decision: exploratory` historical pilots. They do
 > **not** constitute validated evidence. No routing result exists for any skill
@@ -42,9 +50,9 @@ Status dimensions are kept separate (per the corrected methodology):
 >
 > **Update 2026-08-20:** `code-review` now has a protocol-valid Tier-2 execution run (Docker, n=3) at `results/code-review-first-valid.md` — execution `valid`, protocol `valid`, measurement non-discriminating on the frozen design (see result for routing catalog analysis and placebo gap).
 
-**Target harness:** Kilo/CLI  |  **Model:** kilo/tencent/hy3:free (anonymous, free)  |  **Reasoning effort:** high
-**Isolation available:** Layer B uses **Docker OS-containment** (`isolation_method: docker`,
-production-valid); host-only runs are still instruction-only and must be labeled `limited`.
+**Default harness:** none — use an explicitly recorded adapter.  **Historical
+strict adapter:** Kilo/CLI through Docker (`isolation_method: docker`); host-only
+runs are still instruction-only and must be labeled `limited`.
 
 | Skill | Cases | Fixtures | Routing | Execution | Measurement | Protocol | Repeats | Result |
 | :--- | :---: | :--- | :--- | :--- | :--- | :--- | :---: | :--- |

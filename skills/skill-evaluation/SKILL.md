@@ -24,6 +24,64 @@ description: >-
 - **Side effects:** write only to an explicitly chosen evaluation workspace;
    never place generated outputs or private inputs in the shared library by default.
 
+## Product priority and evaluation questions
+
+The product is the portable skill library. Evaluation exists to improve the
+skills, and should use the cheapest protocol capable of answering the current
+development question. Do not turn routine Markdown guidance edits into a
+large benchmark campaign.
+
+Keep these questions separate in both the case design and the result:
+
+1. **Contract adherence:** does the target follow its own skill specification?
+   Skill-specific workflow, terminology, presentation, and handoff rules may
+   be scored here. A no-skill condition is not a failed contract participant.
+2. **Marginal value:** does the skill improve the user's shared task outcome
+   over the same model without that skill? Score only common-denominator
+   assertions grounded in the natural request, shared artifacts, objective
+   correctness, observable outcome, universal safety, or shared project policy.
+3. **Regression:** did a candidate skill revision improve, preserve, or regress
+   behavior compared with the previous known-good revision? Both conditions
+   contain versions of the same skill, so contract assertions can be included.
+
+### Baseline fairness rule
+
+**A baseline condition may not lose credit for failing to follow guidance,
+formatting, terminology, workflow, or reporting requirements available only to
+the target skill.** Mark those assertions with `scope: "skill-contract"` and
+evaluate them separately. Use `scope: "shared-outcome"` (or
+`"universal-safety"`) for marginal-value scoring. The validator rejects a
+qualification result whose target-vs-baseline verdict can only be explained by
+target-only contract assertions.
+
+Plain-string assertions remain a legacy shorthand for `shared-outcome`; new
+typed assertions should declare both `type` and `scope`.
+
+## Progressive protocols and cost boundary
+
+New results declare `protocol.name` from the shared definitions in
+`scripts/evaluation_protocols.py`:
+
+| Protocol | Conditions | Minimum | Use |
+| --- | --- | ---: | --- |
+| `smoke` | target, optionally controls | 1 | cheap mechanics/developer check; no efficacy claim |
+| `qualification` | target + baseline | 1 | fair common-denominator marginal-value screen |
+| `regression` | candidate + reference | 1 | normal workflow for routine skill revisions |
+| `confirmation` | target + baseline + placebo | 3 | selective strict isolated evidence for important claims |
+
+The normal progression is static validation, smoke, revision regression,
+target-vs-baseline qualification, and only then optional placebo/confirmation.
+If a n=1 qualification is non-discriminating, record the early stop and do not
+automatically launch more runs. If the target clearly fails, stop. Escalation
+is an explicit human choice for an interesting, high-risk, conflicting, or
+publication-bound result; the runner never performs it secretly.
+
+Do not run all skills through a strict adapter, placebo, and n=3 confirmation for an
+ordinary development change. A single smoke is not evidence of efficacy; n=3
+helps expose instability but is not strong statistical confidence. Do not use
+percentages or confidence language that the small number of LLM trials cannot
+support.
+
 ## Evaluation tiers and three concerns
 
 A run is classified by its isolation tier. Keep all of these separate; a finding
@@ -36,11 +94,14 @@ about one is never evidence about another.
   separate fresh model sessions. Fast enough to iterate prompts and check
   routing discrimination without Docker. Mark `protocol_status: limited` (not
   OS-contained) unless an OS sandbox is available.
-- **Tier 2 — strict isolated.** Fresh Docker containers from `Dockerfile.eval`
-  (`kilo-eval:local`), each with its own OS-contained root. This is the only tier
-  that can reach `protocol_status: valid` for execution efficacy.
+- **Tier 2 — strict isolated.** Fresh workers launched through a harness adapter
+  with a verified OS-level boundary. Docker is one optional implementation;
+  another container runtime, sandbox, VM, or equivalent boundary may be used.
+  This is the only tier that can reach `protocol_status: valid` for execution
+  efficacy.
 - **Tier 3 — harness-native integration.** Run in the actual supported harness
-  (e.g. Kilo/Codex) to prove real skill discovery and workflow transitions.
+  (for example, an installed agent CLI) to prove real skill discovery and
+  workflow transitions.
   Blocked where the harness cannot expose the selected skill as evidence; mark
   `not_run` instead of pretending catalog classification proves harness routing.
 
@@ -60,23 +121,16 @@ about one is never evidence about another.
    does NOT test whether the router decides to activate the guidance (that is
    routing). Run as **fresh, independent conditions**
    (`target`, `baseline`, optional `placebo`), each from its own copy of one
-   pristine seed: the `target` condition ACTIVATES the target guidance through
-   a deterministic, evaluator-controlled runtime mechanism — the skill's
-   `SKILL.md` (+ `references/`) is placed at the Kilo project-level discovery
-   location `.kilo/skills/<name>/` in the worker workspace and loaded via
-   `kilo run --command "<name>:skill"`, which injects the guidance body into
-   context at session start. The runner verifies command resolution and
-   exports the completed session inside the container to prove the full body
-   entered the user context; `baseline` gets **no** discovery tree and **no**
-   `--command`; `placebo` activates **irrelevant** guidance through the EXACT
-   SAME mechanism. The worker-visible prompt is the natural task only —
-   byte-identical across conditions. Free models are reached through anonymous
-   Kilo Gateway access (`kilo/tencent/hy3:free`); no API key or auth is mounted.
-   Verify the worker runtime version per run: record `kilo --version` (or the
-   image's pinned CLI) from each worker container and require identical versions
-   across all conditions of a comparison. A worker that installs, upgrades, or
-   otherwise runs a different CLI version than the pinned image invalidates that
-   condition; do not score it.
+   pristine seed. The evaluator-controlled harness adapter receives a neutral
+   guidance bundle, activates it through the harness's normal mechanism, and
+   returns a worker/session identity plus explicit guidance and context probes.
+   `baseline` gets no target guidance; `placebo` activates irrelevant guidance
+   through the same adapter mechanism. The worker-visible prompt is the natural
+   task only — byte-identical across conditions. Provider, model, image, CLI,
+   and version details are optional adapter metadata; the protocol does not
+   require a specific harness. See
+   [`harness-adapter.md`](../../docs/evaluations/harness-adapter.md) and
+   `scripts/run_harness_eval.py` for the generic execution entrypoint.
 3. **Protocol validity** — were the conditions genuinely independent and leak-free?
    Without this, any comparison is uninterpretable.
 
@@ -178,10 +232,9 @@ more assertions by loading unnecessary guidance is not automatically better.
 3. Run each case with genuinely independent evaluation workers — one per
    condition (`target`, `baseline`, optional `placebo`) — each a fresh
    subagent/session. The `target` condition ACTIVATES the target guidance
-   through the evaluator-controlled mechanism (skill discovery tree at
-   `.kilo/skills/<name>/` + `kilo run --command "<name>:skill"`); `baseline` is
-   initialized without any target guidance; `placebo` activates irrelevant
-   guidance through the exact same mechanism. Keep prompts, inputs, tools,
+   through the evaluator-controlled harness adapter; `baseline` is initialized
+   without any target guidance; `placebo` activates irrelevant guidance through
+   the exact same adapter mechanism. Keep prompts, inputs, tools,
    network access, model settings,
    and output locations equivalent. Give every worker the **same natural task
    prompt** — byte-identical across conditions — not an evaluation wrapper: do
@@ -189,18 +242,16 @@ more assertions by loading unnecessary guidance is not automatically better.
    `placebo`, disclose that a comparison is happening, or reveal the expected
    behavior. Use neutral worker-visible directory and file names; do not encode
    the skill name, condition, case ID, or evaluation purpose in a path, filename,
-   or wrapper text (the `.kilo/skills/<name>/` discovery path is the activation
-   location, not a worker-visible condition label, and the baseline contains no
-   such tree). A baseline is **not** an instruction to the same agent to
+   or wrapper text (the adapter's native activation path is an implementation
+   detail, not a worker-visible condition label, and the baseline contains no
+   target guidance). A baseline is **not** an instruction to the same agent to
    ignore, forget, or pretend not to have seen the skill. Reusing a transcript,
    context, memory, hidden skill projection, or worker for both conditions is
    contamination and makes the comparison invalid.
-   The execution runner fails closed before Docker/Kilo worker launch when a
-   target or placebo `SKILL.md` contains Kilo command-template placeholders
-   such as `$ARGUMENTS` or positional `$0`, `$1`, and so on. Because `:skill`
-   command expansion can substitute runtime arguments into the body, such a
-   source cannot be treated as unchanged guidance. The runner never rewrites
-   the canonical skill file.
+   The adapter must fail closed if its activation mechanism would rewrite or
+   interpolate the canonical guidance body before context. The evaluator never
+   rewrites the canonical skill file; any adapter-specific placeholder or
+   command-template restriction belongs in that optional adapter's contract.
    Treat harness-level system context as worker-visible too: the baseline must
    not receive the target skill's name, path, description, catalog entry,
    injection label, or skill-list metadata through a system prompt, startup

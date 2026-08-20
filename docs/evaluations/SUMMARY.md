@@ -11,6 +11,22 @@ This repository has evaluation case sets for every one of the 26 skills at
 `skills/<name>/evals/evals.json` (130 cases total), following the schema in
 `skills/skill-evaluation/references/evaluation-artifacts.md`.
 
+## Current development protocol
+
+The normal loop is harness-neutral: static validation, a cheap smoke when
+needed, candidate-vs-reference regression at n=1 for routine edits, and a
+target-vs-baseline qualification at n=1 when marginal value is the question.
+Strict target/baseline/placebo n≥3 confirmation remains available only by
+explicit choice. The JSON adapter boundary is documented in
+`docs/evaluations/harness-adapter.md`; Docker/Kilo fields in the historical
+sections below describe one optional legacy adapter, not a repository-wide
+requirement.
+
+Baseline fairness is enforced by assertion scope. `shared-outcome` and
+`universal-safety` assertions form the qualification denominator;
+`skill-contract` assertions are reported separately and cannot lower the
+no-skill baseline's marginal-value score.
+
 ## Methodology correction (this change)
 
 An earlier methodology force-injected the target `SKILL.md` into the `target`

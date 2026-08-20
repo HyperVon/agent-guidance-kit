@@ -27,3 +27,6 @@ dist/
 # Docker-mounted temp dirs (materialized fixtures/guidance) — must live under the
 # repo so Docker Desktop on macOS can bind-mount them; never committed.
 .docker-tmp/
+
+# Harness-neutral adapter workspaces (disposable, never committed).
+.evaluation-tmp/

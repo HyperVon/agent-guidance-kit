@@ -36,8 +36,11 @@ validator (see `scripts/validate_evaluations.py`) checks this shape:
       "execution": {
         "expected_output": "Observable success criteria; not a worker-visible grading rubric",
         "assertions": [
-          "a plain-string behavioral assertion (legacy)",
-          { "text": "typed assertion text", "type": "behavioral" }
+          "a plain-string shared-outcome assertion (legacy)",
+          { "text": "Finds the reachable defect", "type": "behavioral",
+            "scope": "shared-outcome" },
+          { "text": "Uses the skill-defined prescribed handoff", "type": "presentation",
+            "scope": "skill-contract" }
         ],
         "placeholder_guidance": null
       },
@@ -71,6 +74,9 @@ validator (see `scripts/validate_evaluations.py`) checks this shape:
     `routing_context` block and `routing` oracle distinguish the experiment type.
   - `"execution"` — post-activation efficacy; graded from worker output against
     frozen assertions via the target/baseline/placebo condition comparison.
+  - `"regression"` is a result protocol over an execution case, not a required
+    case-mode value. It compares `candidate` and `reference` revisions using
+    the same frozen task and assertions.
 - `prompt` — non-empty; a natural user request (do not recite the skill's
   workflow; do not leak the expected answer or the intended defect).
 - `routing` / `routing_context` — present iff `"routing"` is in the modes.
@@ -92,9 +98,10 @@ validator (see `scripts/validate_evaluations.py`) checks this shape:
 
 ### Assertion types
 
-Assertions are either plain strings (legacy, treated as `behavioral`) or objects
-`{ "text": "...", "type": "<type>" }`. Typed assertions must carry an explicit
-`type`:
+Assertions are either plain strings (legacy, treated as `behavioral` and
+`shared-outcome`) or objects `{ "text": "...", "type": "<type>", "scope":
+`"<scope>" }`. Typed assertions must carry an explicit `type`; new assertions
+should carry an explicit `scope`:
 
 - `"behavioral"` — a hard correctness invariant (must never be false, and must be
   verifiable from worker output). Soft preferences must not be typed behavioral.
@@ -102,6 +109,23 @@ Assertions are either plain strings (legacy, treated as `behavioral`) or objects
   gate.
 - `"presentation"` — a formatting / style preference. Never graded as a hard
   pass/fail correctness gate.
+
+Assertion scopes are the fairness boundary:
+
+- `"shared-outcome"` — independently justified by the natural task, shared
+  artifacts, objective correctness, observable outcome, or generally applicable
+  engineering constraints. This is the marginal-value denominator.
+- `"skill-contract"` — behavior defined only by the target skill, such as its
+  prescribed report headings, terminology, workflow order, or handoff ritual.
+  Score it for contract adherence and revision comparisons; never subtract it
+  from a no-skill baseline in a qualification result.
+- `"universal-safety"` — a requirement that applies to every condition, such as
+  not exposing secrets, claiming tests that were not run, or exceeding explicit
+  authority. It may contribute to qualification alongside shared outcomes.
+
+An omitted scope is interpreted as `shared-outcome` for backward compatibility.
+The validator rejects unknown scopes and checks the scope recorded in a result
+against the frozen case assertion.
 
 A case that uses typed assertions must classify every one. The validator rejects
 an assertion object with a missing or invalid `type`.
@@ -186,10 +210,12 @@ own eval pack), because the paired case must not be visible in the same context.
 
 ## Runner evidence files (layer B, local)
 
-For `evaluation_mode: "execution"` the raw runner evidence
-(`scripts/run_execution_eval.py`) is written to
+For `evaluation_mode: "execution"` the raw runner evidence is written to
 `.eval-evidence/exec-<skill>-case<id>.json` (gitignored) with top-level
 `"evidence_type": "execution"` and **one repetition per independent seed copy**.
+The core schema is harness-neutral. A runner may use the JSON adapter contract
+in [`harness-adapter.md`](../../../docs/evaluations/harness-adapter.md) or
+another explicitly documented adapter.
 The validator's `--check-evidence` gate dispatches on `evidence_type` and rejects
 unknown/malformed files as hard errors.
 
@@ -199,28 +225,29 @@ Each execution repetition MUST prove:
   independent copy per condition. All `starting_task_hash` values must equal
   `canonical_task_seed_hash` / `expected_fixture_hash`. TASK-state hashes
   exclude the evaluator runtime treatment paths (recorded in
-  `runtime_treatment_paths`, e.g. `.kilo/skills`) so the target/placebo discovery
-  trees cannot invalidate seed equality; full-filesystem hashes are recorded
-  separately (`starting_full_hash` / `ending_full_hash`).
-- **Distinct execution.** Distinct container IDs and session IDs per condition.
+  `runtime_treatment_paths`, e.g. the neutral adapter's
+  `.evaluation-runtime/guidance` (or the optional legacy adapter's
+  `.kilo/skills`) so target/placebo treatment trees cannot invalidate seed
+  equality; full-filesystem hashes are recorded separately
+  (`starting_full_hash` / `ending_full_hash`).
+- **Distinct execution.** Distinct worker IDs and session IDs per condition.
+  A container ID is optional adapter metadata, not a core requirement.
 - **Controlled post-activation.** Layer B does NOT test whether the router
-  activates the guidance. The evaluator activates the target/placebo guidance
-  through `kilo run --command <skill>:skill` over the discovery tree
-  `conditions.<name>.skill_kilo_path`; `conditions.<name>.activation_mechanism`
-  is `"kilo-command-skill"` (target/placebo) or `"none"` (baseline).
-- **Activation boundary (probed inside the container).**
-  `conditions.<name>.skill_probe` is `"present"` only if an in-container probe
-  found `.kilo/skills/<name>/SKILL.md` present AND content-hash-matched
-  (target/placebo); `"absent"` only if the baseline has no `.kilo/skills` tree.
-  Target and placebo also require `skill_context_probe: "present"`: the runner
-  exports the completed Kilo session inside the container and checks that the
-  full guidance body (after frontmatter) appears in the serialized user-context
-  message.
-  When the model also issues a native `skill` tool call, the real `tool_use`
-  events are recorded as `activation_events`; a normal file `read` is not
-  activation.
-- **Failed runs are rejected.** A non-zero return code, missing container, or
-  empty output is `run_status="failed"` and invalidates the evidence file.
+  activates the guidance. The evaluator activates target/placebo guidance
+  through the same harness adapter mechanism and records
+  `activation_mechanism`, `guidance_path`, and `guidance_content_hash`. The
+  adapter must use an identical activation procedure for the compared
+  conditions; provider- or CLI-specific fields are optional metadata.
+- **Activation boundary (adapter-probed).**
+  `conditions.<name>.guidance_probe` is `"present"` only when the adapter
+  verified that the intended guidance was available and content-hash-matched;
+  a guided condition also requires `guidance_context_probe: "present"` to prove
+  that the guidance entered worker context. Mere file presence is never
+  activation. Harness-native event logs may be retained under adapter metadata
+  but are not part of the core schema.
+- **Failed runs are rejected.** A non-zero return code, missing worker/session
+  identity, or empty output is `run_status="failed"` and invalidates the
+  evidence file.
 - **Identical natural task.** `natural_task_hash` is identical across all
   conditions; `natural_task_identical_across_conditions` must be `true`. The
   worker-visible prompt never names the skill, condition, or evaluation.
@@ -243,6 +270,21 @@ to its canonical `case_set_path` and `case_set_hash`, including the source skill
 list and case metadata. It is a proxy only — it does not replace an actual
 harness-selection log at Layer C.
 
+## Regression evidence (layer B, local)
+
+`scripts/run_skill_regression_eval.py` is a thin workflow over the neutral
+harness adapter. It materializes `candidate` and `reference` skill revisions
+from Git, creates independent copies of one frozen fixture, and records
+`evidence_type: "regression"` with `protocol: "regression"`. Both conditions
+must use the same natural task, model/runtime settings, activation procedure,
+and adapter contract. Neither condition is a no-skill baseline.
+
+The required per-condition fields are `worker_id`, `session_id`,
+`guidance_probe`, `guidance_context_probe`, `guidance_path`, and
+`guidance_content_hash`. A `container_id`, provider name, image, CLI version,
+or other harness-specific field may be added as adapter metadata but is not
+required by the regression protocol.
+
 ## Recording a run
 
 When a run is executed, record the result so the evaluation record stays current.
@@ -254,13 +296,15 @@ manually for routine cases.
 1. Determine `harness`, `model`, and `reasoning_effort` from runtime metadata when
    available. **If you cannot definitively determine the harness, model, or effort
    level, ask the user explicitly** and do not guess. Effort can dramatically change
-   results, so always record the actual `reasoning_effort`.
+   results, so always record the actual `reasoning_effort` (or the adapter-defined
+   value when the harness does not expose one).
 2. Write a result file under a results directory of the project's choosing (for
    example `docs/evaluations/results/`) following the schema in
    [`docs/evaluations/result-schema.md`](../../../docs/evaluations/result-schema.md)
-   — include the confirmed `harness`, `model`, `reasoning_effort`,
-   `target_pass`/`baseline_pass`/`better`, and `decision`. Keep raw outputs in an
-   ignored workspace; only sanitized summaries are committed.
+   — include the confirmed adapter/runtime metadata and the protocol-specific
+   verdicts (`target`/`baseline` or `candidate`/`reference`) plus the decision.
+   Keep raw outputs in an ignored workspace; only sanitized summaries are
+   committed.
 3. Update the validation matrix (`docs/evaluations/validation-matrix.md`) to link
    the results and record the `reasoning_effort`. Use `✓` when a discriminating
    run shows `target_pass` and not `baseline_pass`; `?` when the measurement is

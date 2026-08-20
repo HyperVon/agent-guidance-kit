@@ -9,7 +9,107 @@ A result file MUST contain, in addition to any prose, a fenced
 `result-json` block that the validator (`scripts/validate_evaluations.py`)
 parses and checks. The block is JSON.
 
-## Execution result (Layer B, Docker-isolated)
+## Protocol declarations
+
+New results declare the protocol that answers the evaluation question. The
+validator takes condition and repetition requirements from this declaration;
+it does not assume one universal target/baseline/placebo experiment.
+
+| Protocol | Required conditions | Minimum repetitions | Question |
+| --- | --- | ---: | --- |
+| `smoke` | `target` | 1 | Does the orchestration and activation path work? |
+| `qualification` | `target`, `baseline` | 1 | Does the skill add fair common-denominator value? |
+| `regression` | `candidate`, `reference` | 1 | Did a skill revision improve, preserve, or regress behavior? |
+| `confirmation` | `target`, `baseline`, `placebo` | 3 | Does strict repeated isolated evidence support an important efficacy claim? |
+
+## Harness-neutral comparison result
+
+The core result schema does not require a particular agent CLI, model
+provider, container runtime, or discovery directory. Use `method:
+"harness-adapter"` and record the adapter name/version in optional runtime or
+adapter metadata. See [the adapter contract](harness-adapter.md) for the
+request/response boundary.
+
+The following is a compact regression result shape. A qualification result uses
+`target`/`baseline` conditions; a smoke may use only `target`.
+
+```result-json
+{
+  "result_schema_version": 2,
+  "skill": "code-review",
+  "evaluation_mode": "regression",
+  "method": "harness-adapter",
+  "case_revision": "sha256:…",
+  "fixture_revision": "sha256:…",
+  "candidate_skill_revision": "git:…",
+  "reference_skill_revision": "git:…",
+  "runtime": {
+    "harness": "adapter-name",
+    "harness_version": "adapter-defined",
+    "model": "provider/model-or-runtime-id",
+    "reasoning_effort": "adapter-defined",
+    "tool_policy": "adapter-defined",
+    "network_policy": "adapter-defined",
+    "isolation_method": "sandbox"
+  },
+  "protocol": {
+    "name": "regression",
+    "status": "limited",
+    "tier": "tier-1-fast-dev",
+    "worker_isolation_verified": true,
+    "conditions": ["candidate", "reference"],
+    "repeats": 1
+  },
+  "cases": [
+    {
+      "case_id": 5,
+      "natural_task_hash": "sha256:…",
+      "fixture_hash": "sha256:…",
+      "repetitions": [
+        {
+          "rep": 1,
+          "repetition_id": "…",
+          "runs": {
+            "candidate": {"worker_id": "w1", "session_id": "s1"},
+            "reference": {"worker_id": "w2", "session_id": "s2"}
+          }
+        }
+      ],
+      "outcome": {
+        "category": "both_pass",
+        "regression_status": "equivalent",
+        "measurement_status": "inconclusive",
+        "protocol_status": "limited"
+      },
+      "verdict": {"candidate_pass": true, "reference_pass": true},
+      "assertions": [
+        {
+          "assertion": "Finds the reachable defect",
+          "type": "behavioral",
+          "scope": "shared-outcome",
+          "candidate": {"pass": true, "evidence": "…"},
+          "reference": {"pass": true, "evidence": "…"}
+        },
+        {
+          "assertion": "Uses the prescribed review-point section",
+          "type": "presentation",
+          "scope": "skill-contract",
+          "candidate": {"pass": true, "evidence": "…"},
+          "reference": {"pass": false, "evidence": "…"}
+        }
+      ]
+    }
+  ]
+}
+```
+
+`shared-outcome` and `universal-safety` assertions are the marginal-value
+denominator. `skill-contract` assertions are reported for contract adherence
+and version comparison, but they cannot make a no-skill baseline lose credit
+in a qualification result. One observed run may say “improved in the observed
+run” or “regression observed”; it does not establish statistical confidence.
+
+## Optional strict confirmation result (legacy Docker adapter)
 
 ```result-json
 {
@@ -205,7 +305,11 @@ case's `routing` expectation. No execution `assertions` are graded.
     `routing.target_present` / `routing.target_absent` expectation and fails the
     case when the `verdict` booleans disagree with the captured selection.
 
-## Docker execution evidence (Layer B, local)
+## Optional Docker execution evidence (legacy Layer B adapter, local)
+
+The following section documents the repository's retained strict Docker/Kilo
+adapter. It is intentionally optional; the harness-neutral adapter contract
+above is the default for new smoke, qualification, and regression records.
 
 For `evaluation_mode: "execution"` the worker runs in **fresh Docker containers**
 (see `isolation-protocol.md` and `Dockerfile.eval`), so the run can be
@@ -296,13 +400,15 @@ evidence is a hard error, never silently skipped.
 ## Required identity
 
 - `skill` — must match a discovered `evals.json` `skill_name`.
-- `evaluation_mode` — `execution` (Layer B, Docker-isolated) or `routing`
-  (harness selection). Catalog-discriminability (Layer A) evidence is stored as
-  `evidence_type: "catalog-routing"` in the local evidence dir, not in committed
-  result files; it produces confusion-set confusion matrices, not per-case
-  routing verdicts.
-- `method` — `docker-isolated` (execution, Tier 2) or `harness-routing`
-  (Layer C, routing). `prompt-injection-approximation` is historical/`invalid`.
+- `evaluation_mode` — `execution` (Layer B), `regression` (candidate/reference),
+  or `routing` (harness selection). Catalog-discriminability (Layer A)
+  evidence is stored as `evidence_type: "catalog-routing"` in the local
+  evidence dir, not in committed result files; it produces confusion-set
+  confusion matrices, not per-case routing verdicts.
+- `method` — `harness-adapter` (the neutral execution/regression path),
+  `docker-isolated` (the optional strict confirmation adapter), or
+  `harness-routing` (Layer C, routing). `prompt-injection-approximation` is
+  historical/`invalid`.
 - `case_revision` — commit/content hash of the `evals.json` used.
 - `fixture_revision` — commit/content hash of the fixture (`designed_only` if none).
   For multi-case execution results, `fixture_revision` at the top level is a
@@ -312,10 +418,11 @@ evidence is a hard error, never silently skipped.
 ## Runtime block
 
 `harness`, `model`, `reasoning_effort`, `tool_policy`, `network_policy`,
-`isolation_method` are all required. `harness_version` is allowed to be
-`"unknown"` when not discoverable. `isolation_method` should be `docker` (OS-level)
-for a `valid` execution run; `instruction-only (limited)` is only valid for
-Tier 1 fast-developer mode with `protocol_status: limited`.
+`isolation_method` are all required in committed result metadata. Their values
+may be adapter-defined; `harness_version` may be `"unknown"` when not
+discoverable. A `valid` execution/regression run still requires a verified
+OS-level boundary. Adapter-managed local workers should be marked
+`protocol_status: limited` unless the adapter proves that boundary.
 
 ## Protocol block
 
@@ -349,7 +456,8 @@ Tier 1 fast-developer mode with `protocol_status: limited`.
 - `routing_mechanism` — **required for routing runs**: how the selected skill
   was captured (harness manifest, startup log, named tool-call). Absent/unknown
   ⇒ the routing claim is invalid, never a routing conclusion.
-- `conditions` — list of condition names used (`target`/`baseline`/`placebo`).
+- `conditions` — list of condition names used. Protocols currently use
+  `target`/`baseline`/`placebo` or `candidate`/`reference` as defined above.
 - `repeats` — positive integer number of repetitions claimed for each execution
   case. A protocol-valid result must declare this explicitly, and every case's
   `repetitions` list must contain exactly that many entries with `rep` indices
@@ -359,6 +467,13 @@ Tier 1 fast-developer mode with `protocol_status: limited`.
 
 - `outcome.category` — `skill_only_pass`, `baseline_only_pass`, `both_pass`,
   `both_fail`, `placebo_only_pass`, `non_discriminating`, `invalid`, `not_run`.
+- For `evaluation_mode: "regression"`, use `candidate_only_pass`,
+  `reference_only_pass`, `both_pass`, or `both_fail` and add
+  `outcome.regression_status` (`improved`, `equivalent`, `regressed`, or
+  `inconclusive`). `both_fail` normally maps to `inconclusive`, not
+  equivalence, because neither revision satisfied the tested criteria.
+  `verdict.candidate_pass` and `verdict.reference_pass` are the authoritative
+  booleans.
 - `outcome.measurement_status` — `discriminating`, `non_discriminating`,
   `inconclusive`.
 - `outcome.protocol_status` — as above.
