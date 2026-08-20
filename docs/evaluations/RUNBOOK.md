@@ -237,6 +237,16 @@ qualification. Do not add placebo or repetitions automatically. If a stronger
 claim needs the retained Docker/Kilo procedure, run it explicitly as the
 optional adapter below.
 
+For a neutral regression, `scripts/run_skill_regression_eval.py` reads and
+anchors the case declaration from both revisions, but materializes the frozen
+task only from the reference revision. The candidate fixture and any generator
+source are recorded as revision-local provenance and are never executed by the
+regression evaluator. `fixture_revision` therefore names the reference Git
+revision, and the validator resolves both `case_anchors` entries from their
+recorded revisions rather than from the current checkout. A changed historical
+candidate fixture is consequently visible in evidence without changing the
+task supplied to either worker.
+
 ### 4a. Optional strict Docker/Kilo adapter
 
 The following concrete procedure is retained for strict confirmation artifacts;
@@ -258,9 +268,11 @@ of the core protocol.
      worker's cwd); it is a *separate* copy per condition, so no worker can
      mutate another's state.
      - **Generator fixtures are evaluator-only.** The generator (`setup.sh`) is run
-       under a sanitized environment (`eval_hashing.run_generator`) and its source is
-       then **stripped** from the seed the worker sees. The worker must never read
-       the generator source / answer key.
+       under a sanitized environment (`eval_hashing.run_generator`) using a
+       constrained shell-free argv, and its source is then **stripped** from the
+       seed the worker sees. Sanitization is not OS containment, so untrusted
+       generator code belongs behind an externally supplied OS-contained adapter.
+       The worker must never read the generator source / answer key.
      - **Layer B is a POST-ACTIVATION experiment.** It answers "once guidance is
        active, does it improve task execution?" — it does NOT test whether Kilo's
        router chooses to activate the guidance (that is routing: Layer A/C).

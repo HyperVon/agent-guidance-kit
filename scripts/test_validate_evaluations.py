@@ -1220,9 +1220,20 @@ class HarnessAdapterTests(unittest.TestCase):
 
             args = argparse.Namespace(skill="code-review", case_id=5,
                                       model=None, reps=1)
-            evidence = rsre.build_evidence(
-                args, candidate_root, reference_root,
-                candidate_revision, reference_revision, FakeAdapter())
+            with unittest.mock.patch.object(
+                    rsre, "materialize_fixture_seed",
+                    wraps=rsre.materialize_fixture_seed) as materialize:
+                evidence = rsre.build_evidence(
+                    args, candidate_root, reference_root,
+                    candidate_revision, reference_revision, FakeAdapter())
+            self.assertEqual(materialize.call_count, 1)
+            fixture_dir = materialize.call_args.args[0]
+            self.assertEqual(
+                os.path.commonpath((fixture_dir, reference_root)),
+                reference_root)
+            self.assertNotEqual(
+                os.path.commonpath((fixture_dir, candidate_root)),
+                candidate_root)
             self.assertEqual(ve.validate_generic_regression_evidence(evidence), [])
         finally:
             if candidate_root:
@@ -1244,11 +1255,27 @@ class HarnessAdapterTests(unittest.TestCase):
         source_hash = "sha256:" + hashlib.sha256(
             open(evals_path, "rb").read()).hexdigest()
         prompt_hash = hashlib.sha256(case["prompt"].encode()).hexdigest()
+        generator_source_hash = None
+        if fixture.get("type") == "generator":
+            generator_source_hash = "sha256:" + hashlib.sha256(
+                open(os.path.join(ROOT, fixture_rel,
+                                  fixture.get("source", "setup.sh")),
+                     "rb").read()).hexdigest()
         candidate_hash = eha.skill_tree_hash(
             os.path.join(ROOT, "skills", skill))
         reference_hash = candidate_hash
         resolved_revision = rsre.resolve_revision("HEAD")
         repetition_id = "rep-neutral"
+        case_anchor = {
+            "revision": resolved_revision,
+            "source_path": evals_rel,
+            "source_hash": source_hash,
+            "prompt_hash": prompt_hash,
+            "fixture_type": fixture.get("type"),
+            "fixture_path": fixture_rel,
+            "fixture_hash": expected_fixture,
+            "generator_source_hash": generator_source_hash,
+        }
 
         def condition(name, worker, session, content_hash):
             receipt = "receipt-" + name
@@ -1307,6 +1334,11 @@ class HarnessAdapterTests(unittest.TestCase):
             "conditions": ["candidate", "reference"],
             "candidate_revision": resolved_revision,
             "reference_revision": resolved_revision,
+            "fixture_revision": resolved_revision,
+            "case_anchors": {
+                "candidate": dict(case_anchor),
+                "reference": dict(case_anchor),
+            },
             "candidate_skill_source_path": "skills/code-review",
             "reference_skill_source_path": "skills/code-review",
             "candidate_skill_content_hash": candidate_hash,
@@ -1351,6 +1383,42 @@ class HarnessAdapterTests(unittest.TestCase):
             "guidance_context_probe"] = "absent"
         self.assertTrue(any("context probe" in error
                             for error in ve.validate_generic_regression_evidence(evidence)))
+
+    def test_neutral_regression_binds_revision_local_case_anchors(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        evidence["case_anchors"]["candidate"]["source_hash"] = "sha256:" + "c" * 64
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("case_anchors.candidate.source_hash" in error
+                            for error in errors), errors)
+
+        evidence = self._neutral_regression_evidence_fixture()
+        evidence["fixture_revision"] = "not-the-reference-revision"
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("fixture_revision" in error for error in errors), errors)
+
+    def test_neutral_regression_uses_recorded_revision_anchors(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        candidate_anchor = dict(evidence["case_anchors"]["candidate"])
+        reference_anchor = dict(evidence["case_anchors"]["reference"])
+        for anchor, label in ((candidate_anchor, "candidate"),
+                              (reference_anchor, "reference")):
+            anchor["source_path"] = (
+                f"skills/code-review/evals/historical-{label}.json")
+            anchor["source_hash"] = "sha256:" + label[0] * 64
+            anchor["fixture_path"] = (
+                f"skills/code-review/evals/fixtures/historical-{label}")
+        evidence["case_anchors"] = {
+            "candidate": candidate_anchor,
+            "reference": reference_anchor,
+        }
+        evidence["fixture_source_path"] = reference_anchor["source_path"]
+        evidence["fixture_path"] = reference_anchor["fixture_path"]
+        evidence["fixture_source_hash"] = reference_anchor["source_hash"]
+        with unittest.mock.patch.object(
+                ve, "_regression_case_anchor",
+                side_effect=[candidate_anchor, reference_anchor]):
+            self.assertEqual(
+                ve.validate_generic_regression_evidence(evidence), [])
 
     def test_neutral_regression_requires_bound_workspace_receipts(self):
         evidence = self._neutral_regression_evidence_fixture()
@@ -1949,6 +2017,25 @@ class GeneratorTests(unittest.TestCase):
             h = eh.verify_generator_deterministic(tmp)
             self.assertTrue(h)
         finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_generator_invocation_is_shell_free(self):
+        tmp = tempfile.mkdtemp()
+        work = None
+        try:
+            open(os.path.join(tmp, "setup.sh"), "w").write(
+                "#!/usr/bin/env bash\necho static > out.txt\n")
+            with unittest.mock.patch.object(eh.subprocess, "check_call") as check_call:
+                work, _ = eh.run_generator(tmp)
+            check_call.assert_called_once()
+            argv = check_call.call_args.args[0]
+            self.assertEqual(argv, ["bash", "setup.sh"])
+            self.assertFalse(check_call.call_args.kwargs["shell"])
+            with self.assertRaisesRegex(ValueError, "no shell syntax"):
+                eh.run_generator(tmp, "setup.sh", "bash setup.sh && touch pwned")
+        finally:
+            if work:
+                shutil.rmtree(work, ignore_errors=True)
             shutil.rmtree(tmp, ignore_errors=True)
 
     def test_fixture_source_hash_mismatch_fails(self):

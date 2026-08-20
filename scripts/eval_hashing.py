@@ -29,9 +29,15 @@ hashing). ``content_hash`` mirrors ``output_hash`` so the rest of the validator
 can treat generators uniformly. The canonical worker-visible materialization is
 ``materialize_fixture_seed``; ``canonical_hash`` / ``verify_generator_deterministic``
 both defer to it so frozen hashes always describe exactly what workers receive.
+
+``run_generator`` accepts only the constrained ``<interpreter> <source>`` argv
+form and invokes it with ``shell=False``. Its sanitized environment normalizes
+provenance; it is not an OS security boundary. Generator source must therefore
+be trusted or executed by an externally supplied OS-contained adapter.
 """
 import hashlib
 import os
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -72,6 +78,29 @@ def sanitize_env():
 
 def _sha256_of(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def _generator_argv(source: str, invocation: str) -> list[str]:
+    """Return a shell-free argv for the constrained generator contract."""
+
+    if not isinstance(source, str) or not source.strip():
+        raise ValueError("generator source must be a non-empty path")
+    if not isinstance(invocation, str) or not invocation.strip():
+        raise ValueError("generator invocation must be a non-empty command")
+    try:
+        argv = shlex.split(invocation)
+    except ValueError as exc:
+        raise ValueError(f"generator invocation is not valid argv: {exc}") from exc
+    if len(argv) != 2 or argv[1] != source:
+        raise ValueError(
+            "generator invocation must be '<interpreter> <source>' with no shell syntax"
+        )
+    interpreter = os.path.basename(argv[0])
+    if interpreter not in {"bash", "sh", "python", "python3"}:
+        raise ValueError(
+            "generator invocation interpreter must be bash, sh, python, or python3"
+        )
+    return argv
 
 
 def _is_excluded(rel, exclude):
@@ -359,6 +388,10 @@ def run_generator(fixture_dir: str, source: str = "setup.sh",
                   invocation: str = "bash setup.sh"):
     """Run a generator in a sanitized temp dir; return (output_dir, hash).
 
+    ``invocation`` is parsed as a shell-free ``argv`` and must name the supplied
+    ``source`` as its only argument. Environment sanitization does not provide
+    OS-level containment for generator code.
+
     The returned ``output_dir`` is the GENERATED workspace and still contains the
     generator source (e.g. ``setup.sh``). It is the caller's responsibility to
     strip evaluator-only generator source before presenting the task to a worker
@@ -366,6 +399,7 @@ def run_generator(fixture_dir: str, source: str = "setup.sh",
     workspace INCLUDING the generator source; the worker-visible hash is produced
     by ``materialize_fixture_seed`` and excludes it.
     """
+    argv = _generator_argv(source, invocation)
     env, sandbox = sanitize_env()
     work = tempfile.mkdtemp(prefix="eval-gen-")
     try:
@@ -380,7 +414,7 @@ def run_generator(fixture_dir: str, source: str = "setup.sh",
             else:
                 shutil.copy2(src, dst)
         subprocess.check_call(
-            invocation, shell=True, cwd=work, env=env,
+            argv, shell=False, cwd=work, env=env,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         h = _generator_output_hash(work)

@@ -37,6 +37,17 @@ evaluator's expected hash, so distinct worker/session IDs alone cannot prove
 workspace isolation. Guided conditions in a comparison must also report the
 same `activation_mechanism`.
 
+Neutral regression evidence is revision-anchored. Its
+`case_anchors.candidate` and `case_anchors.reference` entries bind each
+revision's `evals/evals.json` hash, prompt hash, fixture declaration, frozen
+fixture hash, and (for generators) generator-source hash. `fixture_revision`
+identifies the reference revision that supplied the shared worker-visible task.
+The candidate declaration is recorded for provenance, but its fixture and
+generator are not materialized or executed; the evaluator uses the reference
+fixture for both conditions. Validation resolves both anchors from their
+recorded Git revisions, so a historical candidate is not reinterpreted using
+the current checkout's evals or fixtures.
+
 For a `valid` execution or regression comparison, `protocol.isolation_attestation`
 is also required. It must use the
 `agent-guidance-kit.isolation-attestation/v1` protocol, report
@@ -441,6 +452,11 @@ evidence is a hard error, never silently skipped.
 - `fixture_revision` — commit/content hash of the fixture (`designed_only` if none).
   For multi-case execution results, `fixture_revision` at the top level is a
   summary; each `cases[].fixture_hash` must match the frozen hash for that case.
+  For harness-neutral regression evidence, it is the resolved reference Git
+  revision named by `case_anchors.reference`, which supplies the shared fixture.
+- `case_anchors` — required for harness-neutral regression evidence; the
+  `candidate` and `reference` entries independently bind each revision's case,
+  prompt, fixture declaration, and generator source (when applicable).
 - `target_skill_revision` — commit hash of the `SKILL.md` under test.
 
 ## Runtime block

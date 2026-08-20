@@ -86,6 +86,59 @@ def _skill_hash_at_revision(revision, skill):
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
+
+def _regression_case_anchor(revision, skill, case_id):
+    """Read one case/fixture anchor from the requested Git revision."""
+
+    if regression_runner is None:
+        raise ValueError("Git regression materializer is unavailable")
+    root, resolved = regression_runner.materialize_skill_revision(
+        revision, skill)
+    try:
+        skill_dir = os.path.join(root, "skills", skill)
+        evals_path = os.path.join(skill_dir, "evals", "evals.json")
+        raw = open(evals_path, "rb").read()
+        source = json.loads(raw.decode("utf-8"))
+        case = next((item for item in source.get("evals", [])
+                     if item.get("id") == case_id), None)
+        if case is None:
+            raise ValueError(f"case {case_id} is not present in {resolved}")
+        if "execution" not in case.get("evaluation_modes", []):
+            raise ValueError(f"case {case_id} is not an execution case in {resolved}")
+        fixture = case.get("fixture") or {}
+        fixture_type = fixture.get("type")
+        expected_fixture_hash = (
+            fixture.get("output_hash") if fixture_type == "generator"
+            else fixture.get("content_hash")
+        )
+        if not expected_fixture_hash:
+            raise ValueError(f"case {case_id} fixture has no frozen hash in {resolved}")
+        fixture_path = resolve_path_within(skill_dir, fixture.get("path"))
+        if fixture_path is None:
+            raise ValueError(f"case {case_id} fixture escapes the skill directory")
+        generator_source_hash = None
+        if fixture_type == "generator":
+            source_path = resolve_path_within(
+                fixture_path, fixture.get("source", "setup.sh"))
+            if source_path is None or not os.path.isfile(source_path):
+                raise ValueError(f"case {case_id} generator source is missing")
+            generator_source_hash = HASH_PREFIX + hashlib.sha256(
+                open(source_path, "rb").read()).hexdigest()
+        return {
+            "revision": resolved,
+            "source_path": f"skills/{skill}/evals/evals.json",
+            "source_hash": HASH_PREFIX + hashlib.sha256(raw).hexdigest(),
+            "prompt_hash": hashlib.sha256(
+                case.get("prompt", "").encode()).hexdigest(),
+            "fixture_type": fixture_type,
+            "fixture_path": os.path.normpath(os.path.join(
+                f"skills/{skill}", fixture.get("path", ""))),
+            "fixture_hash": expected_fixture_hash,
+            "generator_source_hash": generator_source_hash,
+        }
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
 # Case classification: the design intent of a case, independent of its
 # ``kind``. ``smoke`` cases are obvious sanity checks (keep them cheap, do not
 # claim they prove robust routing); ``discriminator``-family cases are the
@@ -2278,7 +2331,11 @@ def validate_generic_regression_evidence(evidence):
     Unlike the historical Docker evidence path, this validator requires only
     worker/session identity and adapter-provided guidance/context probes.  A
     container, image, CLI name, or provider is optional and may be recorded as
-    adapter metadata when available.
+    adapter metadata when available. Case and fixture provenance is resolved
+    from the recorded candidate/reference Git revisions, not from the current
+    checkout. The reference revision supplies the shared worker-visible fixture;
+    candidate fixture declarations are retained as provenance and are never
+    executed by this validator.
     """
 
     errs = []
@@ -2304,44 +2361,6 @@ def validate_generic_regression_evidence(evidence):
     if not isinstance(case_id, int):
         errs.append("regression evidence missing integer case_id")
         return errs
-    evals_path = os.path.join(ROOT, "skills", skill, "evals", "evals.json")
-    if not os.path.isfile(evals_path):
-        errs.append(f"regression evidence skill evals not found: {skill}")
-        return errs
-    try:
-        source = json.load(open(evals_path, encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        errs.append(f"regression source evals unreadable: {exc}")
-        return errs
-    case = next((item for item in source.get("evals", [])
-                 if item.get("id") == case_id), None)
-    if case is None:
-        errs.append("regression evidence case_id is not present in current skill evals")
-        return errs
-    if "execution" not in case.get("evaluation_modes", []):
-        errs.append("regression evidence case is not an execution case")
-    fixture = case.get("fixture") or {}
-    expected_fixture = (fixture.get("output_hash")
-                        if fixture.get("type") == "generator"
-                        else fixture.get("content_hash"))
-    evals_rel = os.path.relpath(evals_path, ROOT)
-    skill_rel = os.path.dirname(os.path.dirname(evals_rel))
-    fixture_rel = os.path.normpath(
-        os.path.join(skill_rel, fixture.get("path", "")))
-    source_hash = HASH_PREFIX + hashlib.sha256(
-        open(evals_path, "rb").read()).hexdigest()
-    if evidence.get("fixture_source_path") != evals_rel:
-        errs.append("regression evidence fixture_source_path does not match current evals path")
-    if evidence.get("fixture_path") != fixture_rel:
-        errs.append("regression evidence fixture_path does not match current fixture path")
-    if evidence.get("fixture_source_hash") != source_hash:
-        errs.append("regression evidence fixture_source_hash does not match current evals.json")
-    if not expected_fixture:
-        errs.append("regression evidence current fixture has no frozen content/output hash")
-    elif not isinstance(evidence.get("expected_fixture_hash"), str) or not evidence.get("expected_fixture_hash").strip():
-        errs.append("regression evidence missing expected_fixture_hash for frozen content/output hash")
-    elif evidence.get("expected_fixture_hash") != expected_fixture:
-        errs.append("regression evidence expected_fixture_hash does not match frozen fixture hash")
     for key in ("candidate_revision", "reference_revision",
                 "candidate_skill_content_hash", "reference_skill_content_hash"):
         if not isinstance(evidence.get(key), str) or not evidence[key].strip():
@@ -2353,6 +2372,56 @@ def validate_generic_regression_evidence(evidence):
     for key in ("candidate_revision", "reference_revision"):
         if not _git_commit_exists(evidence.get(key)):
             errs.append(f"regression evidence {key} must be an existing Git commit SHA")
+    revision_anchors = {}
+    for label, revision_key in (("candidate", "candidate_revision"),
+                                ("reference", "reference_revision")):
+        revision = evidence.get(revision_key)
+        if not _git_commit_exists(revision):
+            continue
+        try:
+            revision_anchors[label] = _regression_case_anchor(
+                revision, skill, case_id)
+        except Exception as exc:  # fail closed with anchored evidence error
+            errs.append(f"regression evidence {label} case anchor could not be read: {exc}")
+    if set(revision_anchors) != {"candidate", "reference"}:
+        return errs
+    case_anchors = evidence.get("case_anchors")
+    if not isinstance(case_anchors, dict):
+        errs.append("regression evidence must include candidate/reference case_anchors")
+        case_anchors = {}
+    anchor_keys = ("revision", "source_path", "source_hash", "prompt_hash",
+                   "fixture_type", "fixture_path", "fixture_hash",
+                   "generator_source_hash")
+    for label in ("candidate", "reference"):
+        expected_anchor = revision_anchors[label]
+        reported_anchor = case_anchors.get(label)
+        if not isinstance(reported_anchor, dict):
+            errs.append(f"regression evidence missing case_anchors.{label}")
+            continue
+        if reported_anchor.get("revision") != expected_anchor["revision"]:
+            errs.append(f"regression evidence case_anchors.{label}.revision is not resolved")
+        for key in anchor_keys[1:]:
+            if reported_anchor.get(key) != expected_anchor.get(key):
+                errs.append(
+                    f"regression evidence case_anchors.{label}.{key} does not match its Git revision"
+                )
+    candidate_anchor = revision_anchors["candidate"]
+    reference_anchor = revision_anchors["reference"]
+    if candidate_anchor["prompt_hash"] != reference_anchor["prompt_hash"]:
+        errs.append("candidate/reference regression prompts differ")
+    if evidence.get("fixture_revision") != reference_anchor["revision"]:
+        errs.append("regression evidence fixture_revision must identify the reference Git revision")
+    if evidence.get("fixture_source_path") != reference_anchor["source_path"]:
+        errs.append("regression evidence fixture_source_path does not match the reference evals path")
+    if evidence.get("fixture_path") != reference_anchor["fixture_path"]:
+        errs.append("regression evidence fixture_path does not match the reference fixture path")
+    if evidence.get("fixture_source_hash") != reference_anchor["source_hash"]:
+        errs.append("regression evidence fixture_source_hash does not match the reference evals.json")
+    expected_fixture = reference_anchor["fixture_hash"]
+    if not isinstance(evidence.get("expected_fixture_hash"), str) or not evidence.get("expected_fixture_hash").strip():
+        errs.append("regression evidence missing expected_fixture_hash for frozen content/output hash")
+    elif evidence.get("expected_fixture_hash") != expected_fixture:
+        errs.append("regression evidence expected_fixture_hash does not match the reference frozen fixture hash")
     revision_hashes = {}
     for revision_key, hash_key in (
             ("candidate_revision", "candidate_skill_content_hash"),
@@ -2375,8 +2444,7 @@ def validate_generic_regression_evidence(evidence):
     repetitions = evidence.get("repetitions") or []
     for error in validate_declaration("regression", conditions, len(repetitions)):
         errs.append(error)
-    expected_task_hash = hashlib.sha256(
-        case.get("prompt", "").encode()).hexdigest()
+    expected_task_hash = reference_anchor["prompt_hash"]
     expected_seed = evidence.get("expected_fixture_hash")
     seed = evidence.get("canonical_task_seed_hash")
     if not seed:
@@ -2401,7 +2469,7 @@ def validate_generic_regression_evidence(evidence):
         else:
             seen_repetitions.add(rid)
         if repetition.get("natural_task_hash") != expected_task_hash:
-            errs.append(f"{tag}: natural_task_hash does not match current case prompt")
+            errs.append(f"{tag}: natural_task_hash does not match the anchored case prompt")
         if repetition.get("natural_task_identical_across_conditions") is not True:
             errs.append(f"{tag}: natural_task_identical_across_conditions must be true")
         cmap = repetition.get("conditions") or {}

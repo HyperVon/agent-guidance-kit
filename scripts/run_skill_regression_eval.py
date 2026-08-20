@@ -6,6 +6,12 @@ evidence.  A caller-supplied harness adapter owns model/session execution and
 skill activation.  Both conditions receive a version of the same skill;
 neither condition is a no-skill baseline.
 
+For regression, the reference revision supplies the shared frozen task. The
+candidate and reference case declarations are both anchored into the evidence,
+but only the reference fixture is materialized; candidate fixture generators
+are never executed by this evaluator. This keeps candidate-controlled code out
+of the evaluator process while preserving revision-local provenance.
+
 Example::
 
     python3 scripts/run_skill_regression_eval.py \
@@ -155,18 +161,67 @@ def _revision_tree_hash(skill_dir: str) -> str:
     return value
 
 
+def _case_anchor(skill: str, case: dict, evals_path: str) -> dict:
+    """Capture revision-local case/fixture provenance without running it."""
+
+    fixture = case.get("fixture") or {}
+    fixture_type = fixture.get("type")
+    expected_fixture_hash = (
+        fixture.get("output_hash") if fixture_type == "generator"
+        else fixture.get("content_hash")
+    )
+    if not expected_fixture_hash:
+        raise ValueError("fixture is missing its frozen content/output hash")
+    fixture_rel = os.path.normpath(os.path.join(
+        f"skills/{skill}", fixture.get("path", "")))
+    generator_source_hash = None
+    if fixture_type == "generator":
+        source_path = resolve_path_within(
+            os.path.join(os.path.dirname(evals_path), ".."),
+            os.path.join(fixture.get("path", ""),
+                         fixture.get("source", "setup.sh")),
+        )
+        if source_path is None or not os.path.isfile(source_path):
+            raise ValueError("generator source path must remain under the skill directory")
+        generator_source_hash = HASH_PREFIX + hashlib.sha256(
+            open(source_path, "rb").read()).hexdigest()
+    return {
+        "source_path": f"skills/{skill}/evals/evals.json",
+        "source_hash": HASH_PREFIX + hashlib.sha256(
+            open(evals_path, "rb").read()).hexdigest(),
+        "prompt_hash": hashlib.sha256(
+            case.get("prompt", "").encode()).hexdigest(),
+        "fixture_type": fixture_type,
+        "fixture_path": fixture_rel,
+        "fixture_hash": expected_fixture_hash,
+        "generator_source_hash": generator_source_hash,
+    }
+
+
 def build_evidence(args, candidate_dir: str, reference_dir: str,
                    candidate_revision: str, reference_revision: str,
                    adapter: evaluation_harness.CommandHarnessAdapter) -> dict:
     candidate_skill_dir = os.path.join(candidate_dir, "skills", args.skill)
     reference_skill_dir = os.path.join(reference_dir, "skills", args.skill)
-    case, evals_path, fixture_dir, source, invocation = _load_case(
+    candidate_case, candidate_evals_path, _, _, _ = _load_case(
         candidate_skill_dir, args.case_id)
+    reference_case, reference_evals_path, fixture_dir, source, invocation = _load_case(
+        reference_skill_dir, args.case_id)
+    candidate_anchor = _case_anchor(
+        args.skill, candidate_case, candidate_evals_path)
+    reference_anchor = _case_anchor(
+        args.skill, reference_case, reference_evals_path)
+    candidate_anchor["revision"] = candidate_revision
+    reference_anchor["revision"] = reference_revision
+    if candidate_anchor["prompt_hash"] != reference_anchor["prompt_hash"]:
+        raise ValueError(
+            "candidate and reference regression prompts must be identical")
+    case = reference_case
     fixture = case["fixture"]
     ftype = fixture["type"]
-    expected_fixture_hash = fixture.get("output_hash") if ftype == "generator" else fixture.get("content_hash")
+    expected_fixture_hash = reference_anchor["fixture_hash"]
     if not expected_fixture_hash:
-        raise ValueError("candidate fixture is missing its frozen content/output hash")
+        raise ValueError("reference fixture is missing its frozen content/output hash")
     protocol_errors = validate_declaration("regression", ["candidate", "reference"], args.reps)
     if protocol_errors:
         raise ValueError("; ".join(protocol_errors))
@@ -188,16 +243,20 @@ def build_evidence(args, candidate_dir: str, reference_dir: str,
         "runtime_treatment_paths": list(evaluation_harness.RUNTIME_TREATMENT_PATHS),
         "candidate_revision": candidate_revision,
         "reference_revision": reference_revision,
+        "fixture_revision": reference_revision,
+        "case_anchors": {
+            "candidate": candidate_anchor,
+            "reference": reference_anchor,
+        },
         "candidate_skill_source_path": f"skills/{args.skill}",
         "reference_skill_source_path": f"skills/{args.skill}",
         "candidate_skill_content_hash": candidate_hash,
         "reference_skill_content_hash": reference_hash,
         "candidate_guidance_path": evaluation_harness.RUNTIME_TREATMENT_PATHS[0],
         "reference_guidance_path": evaluation_harness.RUNTIME_TREATMENT_PATHS[0],
-        "fixture_source_path": f"skills/{args.skill}/evals/evals.json",
-        "fixture_path": os.path.normpath(
-            os.path.join(f"skills/{args.skill}", fixture["path"])),
-        "fixture_source_hash": HASH_PREFIX + hashlib.sha256(open(evals_path, "rb").read()).hexdigest(),
+        "fixture_source_path": reference_anchor["source_path"],
+        "fixture_path": reference_anchor["fixture_path"],
+        "fixture_source_hash": reference_anchor["source_hash"],
         "expected_fixture_hash": expected_fixture_hash,
         "canonical_task_seed_hash": None,
         "conditions": ["candidate", "reference"],
