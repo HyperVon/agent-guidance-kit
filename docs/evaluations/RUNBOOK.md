@@ -225,8 +225,10 @@ smoke, qualification, or explicitly requested confirmation. The evaluator
 creates independent condition workspaces and verifies task hashes; the adapter
 starts the worker, activates guidance through the harness's normal mechanism,
 and returns `worker_id`, `session_id`, `guidance_probe`,
-`guidance_context_probe`, and the workspace receipt read from the requested
-workspace. A local adapter without OS containment is
+`guidance_context_probe`, the workspace receipt read from the requested
+workspace, and a worker-sourced execution attestation bound to the evaluator's
+nonce, request, output, and return code. A local adapter without OS containment
+or without an independently obtained worker attestation is
 `protocol_status: limited`; only an adapter that proves an OS-level boundary
 may claim `valid`.
 

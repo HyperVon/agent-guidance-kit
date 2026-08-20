@@ -38,6 +38,28 @@ def reset():
     ve.warnings.clear()
 
 
+def fake_execution_attestation(request, response):
+    """Build the worker attestation shape used by neutral test adapters."""
+    receipt = response["workspace_receipt"]
+    output = response.get("output", "")
+    return {
+        "protocol": eha.EXECUTION_ATTESTATION_PROTOCOL,
+        "status": "verified",
+        "verification_mode": "independent",
+        "source": "worker",
+        "worker_id": response["worker_id"],
+        "session_id": response["session_id"],
+        "nonce": request["attestation_nonce"],
+        "request_hash": eha.attestation_request_hash(request),
+        "observation_hash": eha.attestation_observation_hash(response),
+        "workspace_receipt_hash": "sha256:" + hashlib.sha256(
+            receipt.encode()).hexdigest(),
+        "output_hash": "sha256:" + hashlib.sha256(
+            output.encode()).hexdigest(),
+        "returncode": response["returncode"],
+    }
+
+
 def fake_path(skill="foo"):
     return os.path.join(ROOT, "skills", skill, "evals", "evals.json")
 
@@ -143,6 +165,19 @@ class ResultFailureTests(unittest.TestCase):
     def tearDown(self):
         reset()
 
+    def _isolation_attestation(self, *case_ids):
+        return {
+            "protocol": ve.ISOLATION_ATTESTATION_PROTOCOL,
+            "status": "verified",
+            "verification_mode": "independent",
+            "boundary": "os-level",
+            "worker_isolation_verified": True,
+            "isolation_method": "docker",
+            "evidence_hashes": {
+                str(case_id): "sha256:" + "e" * 64 for case_id in case_ids
+            },
+        }
+
     def _result(self, mode="execution", **over):
         method = "docker-isolated" if mode in ("execution",) else "harness-routing"
         res = {
@@ -161,12 +196,14 @@ class ResultFailureTests(unittest.TestCase):
 "target_guidance_present": "ev", "target_absent_in_baseline": "ev",
                           "target_guidance_hash": "sha256:g", "baseline_guidance_absent": "ev",
                          "contamination": "none", "routing_mechanism": None,
-                         "conditions": ["target", "baseline"], "repeats": 3},
+                         "conditions": ["target", "baseline"], "repeats": 3,
+                         "isolation_attestation": self._isolation_attestation(1)},
             "runs": {"target": {"session_id": "g1", "container_id": "cg1", "output_hash": "h",
                                 "selected_skill": "code-review"},
                      "baseline": {"session_id": "b1", "container_id": "cb1", "output_hash": "h"}},
             "cases": [{
                 "case_id": 1,
+                "raw_evidence_hash": "sha256:" + "e" * 64,
                 "outcome": {"category": "skill_only_pass",
                             "measurement_status": "discriminating",
                             "protocol_status": "limited"},
@@ -296,6 +333,25 @@ class ResultFailureTests(unittest.TestCase):
         ve.check_one_result("r.md", res, {"code-review"}, {})
         self.assertTrue(any("OS-level isolation" in e for e in ve.errors))
 
+    def test_valid_requires_structured_isolation_attestation(self):
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"]["status"] = "valid"
+        res["protocol"].pop("isolation_attestation")
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("requires isolation_attestation" in e
+                            for e in ve.errors))
+
+    def test_valid_isolation_attestation_must_bind_case_evidence(self):
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"]["status"] = "valid"
+        res["protocol"]["isolation_attestation"]["evidence_hashes"]["1"] = (
+            "sha256:" + "f" * 64)
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("isolation_attestation raw hash does not match"
+                            in e for e in ve.errors))
+
     # --- new Docker execution evidence checks (mode == execution) ---
     def test_execution_shared_container_id_fails(self):
         res = self._result()
@@ -369,6 +425,7 @@ class ResultFailureTests(unittest.TestCase):
             "case_id": 1,
             "natural_task_hash": prompt_hash,
             "fixture_hash": case["fixture"]["content_hash"],
+            "raw_evidence_hash": "sha256:" + "e" * 64,
             "repetitions": [
                 {"rep": 1, "repetition_id": "id1", "runs": {"target": {"session_id": "t1", "container_id": "c1"}, "baseline": {"session_id": "b1", "container_id": "c2"}, "placebo": {"session_id": "p1", "container_id": "c3"}}},
                 {"rep": 2, "repetition_id": "id2", "runs": {"target": {"session_id": "t2", "container_id": "c4"}, "baseline": {"session_id": "b2", "container_id": "c5"}, "placebo": {"session_id": "p2", "container_id": "c6"}}},
@@ -861,6 +918,7 @@ class ResultFailureTests(unittest.TestCase):
         res["protocol"] = {
             "name": "qualification", "status": "valid",
             "worker_isolation_verified": True,
+            "isolation_attestation": self._isolation_attestation(1),
             "target_guidance_present": "activated",
             "target_guidance_hash": "sha256:target",
             "target_absent_in_baseline": "absent",
@@ -872,6 +930,7 @@ class ResultFailureTests(unittest.TestCase):
             "case_id": 1,
             "natural_task_hash": "sha256:" + hashlib.sha256(prompt.encode()).hexdigest(),
             "fixture_hash": "sha256:fixture",
+            "raw_evidence_hash": "sha256:" + "e" * 64,
             "repetitions": [{"rep": 1, "repetition_id": "q1", "runs": {
                 "target": {"session_id": "qt", "container_id": "qct"},
                 "baseline": {"session_id": "qb", "container_id": "qcb"},
@@ -938,6 +997,7 @@ class ResultFailureTests(unittest.TestCase):
         res["protocol"] = {
             "name": "regression", "status": "valid",
             "worker_isolation_verified": True,
+            "isolation_attestation": self._isolation_attestation(1),
             "candidate_guidance_present": "activated",
             "reference_guidance_present": "activated",
             "candidate_guidance_hash": "sha256:candidate-tree",
@@ -949,6 +1009,7 @@ class ResultFailureTests(unittest.TestCase):
             "case_id": 1,
             "natural_task_hash": "sha256:" + hashlib.sha256(prompt.encode()).hexdigest(),
             "fixture_hash": "sha256:fixture",
+            "raw_evidence_hash": "sha256:" + "e" * 64,
             "repetitions": [{"rep": 1, "repetition_id": "r1", "runs": {
                 "candidate": {"session_id": "rc", "container_id": "rcc"},
                 "reference": {"session_id": "rr", "container_id": "rrc"},
@@ -1065,7 +1126,7 @@ class HarnessAdapterTests(unittest.TestCase):
                     receipt = open(os.path.join(
                         request["workspace"],
                         request["workspace_receipt_path"]), encoding="utf-8").read()
-                    return {
+                    response = {
                         "run_status": "success",
                         "returncode": 0,
                         "worker_id": "worker-" + request["condition"],
@@ -1077,6 +1138,9 @@ class HarnessAdapterTests(unittest.TestCase):
                         "workspace_receipt_path": request["workspace_receipt_path"],
                         "workspace_receipt": receipt,
                     }
+                    response["execution_attestation"] = fake_execution_attestation(
+                        request, response)
+                    return response
 
             repetition, _, workspaces = eha.run_condition_repetition(
                 0, ["target", "baseline"], "do task", seed,
@@ -1136,7 +1200,7 @@ class HarnessAdapterTests(unittest.TestCase):
                     receipt = open(os.path.join(
                         request["workspace"],
                         request["workspace_receipt_path"]), encoding="utf-8").read()
-                    return {
+                    response = {
                         "run_status": "success",
                         "returncode": 0,
                         "worker_id": "worker-" + request["condition"],
@@ -1150,6 +1214,9 @@ class HarnessAdapterTests(unittest.TestCase):
                         "workspace_receipt_path": request["workspace_receipt_path"],
                         "workspace_receipt": receipt,
                     }
+                    response["execution_attestation"] = fake_execution_attestation(
+                        request, response)
+                    return response
 
             args = argparse.Namespace(skill="code-review", case_id=5,
                                       model=None, reps=1)
@@ -1185,7 +1252,11 @@ class HarnessAdapterTests(unittest.TestCase):
 
         def condition(name, worker, session, content_hash):
             receipt = "receipt-" + name
-            return {
+            output = "completed"
+            nonce = "nonce-" + name
+            request_hash = "sha256:" + hashlib.sha256(
+                ("request-" + name).encode()).hexdigest()
+            condition = {
                 "repetition_id": repetition_id,
                 "worker_id": worker,
                 "session_id": session,
@@ -1195,7 +1266,7 @@ class HarnessAdapterTests(unittest.TestCase):
                 "ending_task_hash": expected_fixture,
                 "starting_full_hash": "sha256:full-" + name,
                 "ending_full_hash": "sha256:end-" + name,
-                "output": "completed",
+                "output": output,
                 "guidance_probe": "present",
                 "guidance_context_probe": "present",
                 "activation_mechanism": "adapter-defined",
@@ -1205,7 +1276,27 @@ class HarnessAdapterTests(unittest.TestCase):
                 "workspace_receipt": receipt,
                 "workspace_receipt_hash": "sha256:" + hashlib.sha256(
                     receipt.encode()).hexdigest(),
+                "attestation_nonce": nonce,
+                "execution_request_hash": request_hash,
             }
+            condition["execution_observation_hash"] = eha.attestation_observation_hash(
+                condition)
+            condition["execution_attestation"] = {
+                "protocol": eha.EXECUTION_ATTESTATION_PROTOCOL,
+                "status": "verified",
+                "verification_mode": "independent",
+                "source": "worker",
+                "worker_id": worker,
+                "session_id": session,
+                "nonce": nonce,
+                "request_hash": request_hash,
+                "observation_hash": condition["execution_observation_hash"],
+                "workspace_receipt_hash": condition["workspace_receipt_hash"],
+                "output_hash": "sha256:" + hashlib.sha256(
+                    output.encode()).hexdigest(),
+                "returncode": 0,
+            }
+            return condition
 
         evidence = {
             "evidence_type": "regression",
@@ -1275,6 +1366,22 @@ class HarnessAdapterTests(unittest.TestCase):
             "activation_mechanism"] = "different-adapter"
         errors = ve.validate_generic_regression_evidence(evidence)
         self.assertTrue(any("different activation_mechanisms" in error
+                            for error in errors), errors)
+
+    def test_neutral_regression_requires_bound_execution_attestation(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        evidence["repetitions"][0]["conditions"]["reference"][
+            "execution_attestation"]["nonce"] = "wrong-nonce"
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("execution_attestation nonce is not bound" in error
+                            for error in errors), errors)
+
+    def test_neutral_regression_binds_observed_probes(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        evidence["repetitions"][0]["conditions"]["reference"][
+            "guidance_probe"] = "absent"
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("execution observation is not evaluator-bound" in error
                             for error in errors), errors)
 
     def test_neutral_regression_rejects_unanchored_metadata(self):

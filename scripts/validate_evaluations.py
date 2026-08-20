@@ -132,6 +132,10 @@ ALLOWED_ASSERTION_SCOPES = set(ALLOWED_ASSERTION_SCOPES)
 # sandbox with a verified boundary), not instruction-only / prompt-only wording.
 LIMITED_ISOLATION = ("instruction-only", "prompt-only", "no sandbox", "none",
                      "n/a", "unknown")
+ISOLATION_ATTESTATION_PROTOCOL = (
+    "agent-guidance-kit.isolation-attestation/v1")
+EXECUTION_ATTESTATION_PROTOCOL = (
+    "agent-guidance-kit.execution-attestation/v1")
 
 
 def _case_supports_mode(case, mode):
@@ -560,6 +564,50 @@ def check_real_result(base, text, skill_names, case_index):
         check_one_result(base, res, skill_names, case_index)
 
 
+def _validate_isolation_attestation(base, res, cases, status):
+    """Require structured, raw-evidence-bound isolation for valid comparisons."""
+
+    if (status != "valid" or
+            res.get("evaluation_mode") not in (EXEC_MODES | REGRESSION_MODES)):
+        return
+    protocol = res.get("protocol") or {}
+    attestation = protocol.get("isolation_attestation")
+    if not isinstance(attestation, dict):
+        err(f"{base}: valid comparison requires isolation_attestation")
+        return
+    if attestation.get("protocol") != ISOLATION_ATTESTATION_PROTOCOL:
+        err(f"{base}: isolation_attestation protocol is unsupported")
+    if attestation.get("status") != "verified":
+        err(f"{base}: isolation_attestation must be verified")
+    if attestation.get("verification_mode") != "independent":
+        err(f"{base}: isolation_attestation must use independent verification")
+    if attestation.get("boundary") != "os-level":
+        err(f"{base}: valid comparison requires an os-level isolation boundary")
+    if attestation.get("worker_isolation_verified") is not True:
+        err(f"{base}: isolation_attestation must verify worker isolation")
+    runtime = res.get("runtime") or {}
+    if attestation.get("isolation_method") != runtime.get("isolation_method"):
+        err(f"{base}: isolation_attestation does not match isolation_method")
+    evidence_hashes = attestation.get("evidence_hashes")
+    if not isinstance(evidence_hashes, dict):
+        err(f"{base}: isolation_attestation must bind raw evidence hashes")
+        return
+    expected_case_keys = {str(case.get("case_id")) for case in cases
+                          if isinstance(case, dict)}
+    if set(evidence_hashes) != expected_case_keys:
+        err(f"{base}: isolation_attestation evidence hashes do not cover every case")
+    for case in cases:
+        if not isinstance(case, dict):
+            continue
+        case_id = str(case.get("case_id"))
+        raw_hash = case.get("raw_evidence_hash")
+        if not isinstance(raw_hash, str) or not re.fullmatch(
+                r"sha256:[0-9a-f]{64}", raw_hash):
+            err(f"{base} case {case.get('case_id')}: valid comparison requires raw_evidence_hash")
+        elif evidence_hashes.get(case_id) != raw_hash:
+            err(f"{base} case {case.get('case_id')}: isolation_attestation raw hash does not match case evidence")
+
+
 def check_one_result(base, res, skill_names, case_index):
     skill = res.get("skill")
     if skill not in skill_names:
@@ -608,6 +656,7 @@ def check_one_result(base, res, skill_names, case_index):
         if condition in runs and not isinstance(runs[condition], dict):
             err(f"{base}: top-level runs.{condition} must be an object")
     status = pr.get("status")
+    _validate_isolation_attestation(base, res, cases, status)
     if status not in ALLOWED_PROTOCOL:
         err(f"{base}: protocol.status '{status}' invalid")
     if status == "valid" and not cases:
@@ -1108,7 +1157,10 @@ def check_exec_result_case(base, cs, skill, case_index, cid, *, strict=False,
             if expected_fixture and fh != expected_fixture:
                 err(f"{base} case {cid}: fixture_hash does not match frozen fixture hash")
         raw_hash = cs.get("raw_evidence_hash")
-        if raw_hash is not None and not re.fullmatch(
+        if strict and (not isinstance(raw_hash, str) or not re.fullmatch(
+                r"sha256:[0-9a-f]{64}", raw_hash)):
+            err(f"{base} case {cid}: valid comparison requires raw_evidence_hash")
+        elif raw_hash is not None and not re.fullmatch(
                 r"sha256:[0-9a-f]{64}", str(raw_hash)):
             err(f"{base} case {cid}: raw_evidence_hash must be a SHA-256 digest")
     else:
@@ -1123,7 +1175,10 @@ def check_exec_result_case(base, cs, skill, case_index, cid, *, strict=False,
             err(f"{base} case {cid}: missing cases[].fixture_hash "
                 "(per-case frozen fixture hash required)")
         raw_hash = cs.get("raw_evidence_hash")
-        if raw_hash is not None and not re.fullmatch(
+        if strict and (not isinstance(raw_hash, str) or not re.fullmatch(
+                r"sha256:[0-9a-f]{64}", raw_hash)):
+            err(f"{base} case {cid}: valid comparison requires raw_evidence_hash")
+        elif raw_hash is not None and not re.fullmatch(
                 r"sha256:[0-9a-f]{64}", str(raw_hash)):
             err(f"{base} case {cid}: raw_evidence_hash must be a SHA-256 digest")
     # Repetitions provenance: a valid execution case must carry the declared
@@ -1523,10 +1578,14 @@ def validate_generic_execution_evidence(evidence):
                         "guidance_probe", "guidance_context_probe",
                         "guidance_path", "guidance_content_hash",
                         "workspace_receipt", "workspace_receipt_path",
-                        "workspace_receipt_hash"):
+                        "workspace_receipt_hash", "attestation_nonce",
+                        "execution_request_hash", "execution_observation_hash",
+                        "execution_attestation"):
                 if key not in cmeta:
                     errs.append(f"{ctag}: missing {key}")
             _validate_workspace_receipt(
+                cmeta, receipt_hashes.get(name), ctag, errs)
+            _validate_execution_attestation(
                 cmeta, receipt_hashes.get(name), ctag, errs)
             if cmeta.get("run_status") != "success" or cmeta.get("returncode") != 0:
                 errs.append(f"{ctag}: failed condition is not evidence")
@@ -1668,6 +1727,67 @@ def _validate_workspace_receipt(cmeta, expected_hash, ctag, errs):
     actual_hash = HASH_PREFIX + hashlib.sha256(receipt.encode()).hexdigest()
     if actual_hash != expected_hash:
         errs.append(f"{ctag}: workspace receipt does not match the evaluator receipt")
+
+
+def _validate_execution_attestation(cmeta, expected_receipt_hash, ctag, errs):
+    """Require a worker-sourced attestation bound to all neutral evidence."""
+
+    attestation = cmeta.get("execution_attestation")
+    if not isinstance(attestation, dict):
+        errs.append(f"{ctag}: missing execution_attestation")
+        return
+    if attestation.get("protocol") != EXECUTION_ATTESTATION_PROTOCOL:
+        errs.append(f"{ctag}: execution_attestation protocol is unsupported")
+    if attestation.get("status") != "verified":
+        errs.append(f"{ctag}: execution_attestation is not verified")
+    if attestation.get("verification_mode") != "independent":
+        errs.append(f"{ctag}: execution_attestation is not independently verified")
+    if attestation.get("source") != "worker":
+        errs.append(f"{ctag}: execution_attestation source is not the worker")
+    for key in ("worker_id", "session_id", "nonce", "request_hash",
+                "workspace_receipt_hash", "output_hash", "returncode"):
+        if key not in attestation:
+            errs.append(f"{ctag}: execution_attestation missing {key}")
+    for key in ("worker_id", "session_id", "nonce"):
+        value = attestation.get(key)
+        if not isinstance(value, str) or not value.strip():
+            errs.append(f"{ctag}: execution_attestation {key} must be non-empty")
+    for key in ("request_hash", "workspace_receipt_hash", "output_hash",
+                "observation_hash"):
+        value = attestation.get(key)
+        if not isinstance(value, str) or not re.fullmatch(
+                r"sha256:[0-9a-f]{64}", value):
+            errs.append(f"{ctag}: execution_attestation {key} must be a SHA-256 digest")
+    if attestation.get("worker_id") != cmeta.get("worker_id"):
+        errs.append(f"{ctag}: execution_attestation worker_id is not bound")
+    if attestation.get("session_id") != cmeta.get("session_id"):
+        errs.append(f"{ctag}: execution_attestation session_id is not bound")
+    if attestation.get("nonce") != cmeta.get("attestation_nonce"):
+        errs.append(f"{ctag}: execution_attestation nonce is not bound")
+    if attestation.get("request_hash") != cmeta.get("execution_request_hash"):
+        errs.append(f"{ctag}: execution_attestation request is not bound")
+    expected_observation_hash = None
+    if harness_runner is not None:
+        expected_observation_hash = harness_runner.attestation_observation_hash(
+            cmeta)
+    if cmeta.get("execution_observation_hash") != expected_observation_hash:
+        errs.append(f"{ctag}: execution observation is not evaluator-bound")
+    if attestation.get("observation_hash") != expected_observation_hash:
+        errs.append(f"{ctag}: execution_attestation observation is not bound")
+    if attestation.get("workspace_receipt_hash") != expected_receipt_hash:
+        errs.append(f"{ctag}: execution_attestation receipt is not bound")
+    if (not isinstance(attestation.get("returncode"), int) or
+            isinstance(attestation.get("returncode"), bool)):
+        errs.append(f"{ctag}: execution_attestation returncode must be an integer")
+    elif attestation.get("returncode") != cmeta.get("returncode"):
+        errs.append(f"{ctag}: execution_attestation returncode is not bound")
+    output = cmeta.get("output")
+    if not isinstance(output, str):
+        errs.append(f"{ctag}: execution_attestation cannot bind non-text output")
+    else:
+        output_hash = HASH_PREFIX + hashlib.sha256(output.encode()).hexdigest()
+        if attestation.get("output_hash") != output_hash:
+            errs.append(f"{ctag}: execution_attestation output is not bound")
 
 
 def validate_execution_evidence(evidence):
@@ -2312,10 +2432,14 @@ def validate_generic_regression_evidence(evidence):
                         "guidance_probe", "guidance_context_probe",
                         "guidance_path", "guidance_content_hash",
                         "workspace_receipt", "workspace_receipt_path",
-                        "workspace_receipt_hash"):
+                        "workspace_receipt_hash", "attestation_nonce",
+                        "execution_request_hash", "execution_observation_hash",
+                        "execution_attestation"):
                 if key not in cmeta:
                     errs.append(f"{ctag}: missing {key}")
             _validate_workspace_receipt(
+                cmeta, receipt_hashes.get(name), ctag, errs)
+            _validate_execution_attestation(
                 cmeta, receipt_hashes.get(name), ctag, errs)
             if cmeta.get("run_status") != "success" or cmeta.get("returncode") != 0:
                 errs.append(f"{ctag}: failed condition is not evidence")

@@ -29,6 +29,12 @@ from eval_hashing import HASH_PREFIX, hash_task_workspace, hash_workspace
 
 
 ADAPTER_PROTOCOL = "agent-guidance-kit.harness-adapter/v1"
+EXECUTION_ATTESTATION_PROTOCOL = (
+    "agent-guidance-kit.execution-attestation/v1")
+ATTESTED_OBSERVATION_FIELDS = (
+    "run_status", "worker_id", "session_id", "returncode", "output",
+    "guidance_probe", "guidance_context_probe", "activation_mechanism",
+    "workspace_receipt_path", "workspace_receipt")
 WORKSPACE_RECEIPT_PATH = ".evaluation-runtime/workspace-receipt"
 RUNTIME_TREATMENT_PATHS = (".evaluation-runtime/guidance",
                            WORKSPACE_RECEIPT_PATH)
@@ -198,6 +204,26 @@ def _as_text(value) -> str:
     return str(value)
 
 
+def attestation_request_hash(request: dict) -> str:
+    """Hash the exact evaluator request bound by a worker attestation."""
+
+    serialized = json.dumps(request, sort_keys=True, separators=(",", ":"),
+                            ensure_ascii=False)
+    return HASH_PREFIX + hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def attestation_observation_hash(observation: dict) -> str:
+    """Hash the adapter observation bound by a worker attestation."""
+
+    payload = {field: observation.get(field)
+               for field in ATTESTED_OBSERVATION_FIELDS}
+    payload["output"] = _as_text(payload["output"])
+    payload["workspace_receipt"] = _as_text(payload["workspace_receipt"])
+    serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                            ensure_ascii=False)
+    return HASH_PREFIX + hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
 def _failure(returncode: int | None, reason: str, *, stdout: str = "",
              stderr: str = "") -> dict:
     return {
@@ -221,8 +247,11 @@ class CommandHarnessAdapter:
     with at least ``run_status``, ``session_id``, ``worker_id`` (or
     ``container_id``), ``returncode``, ``output``, ``guidance_probe``,
     ``guidance_context_probe``, ``workspace_receipt_path``, and
-    ``workspace_receipt``.  Extra harness-specific metadata is preserved under
-    ``adapter_metadata`` and never interpreted by the protocol validator.
+    ``workspace_receipt``. Successful runs must also return a verified
+    ``execution_attestation`` bound to the request nonce, worker/session IDs,
+    output, probes, activation mechanism, and workspace receipt. Extra
+    harness-specific metadata is preserved under ``adapter_metadata`` and never
+    interpreted by the protocol validator.
     """
 
     def __init__(self, command: str | list[str], *, name: str = "external",
@@ -355,10 +384,27 @@ def run_condition_repetition(
             "natural_task_hash": hashlib.sha256(natural_task.encode()).hexdigest(),
             "workspace": workspaces[name],
             "workspace_receipt_path": WORKSPACE_RECEIPT_PATH,
+            "attestation_nonce": uuid.uuid4().hex,
             "model": model,
             "guidance": guidance.get(name),
         }
+        request_hash = attestation_request_hash(request)
         meta = adapter.run(request)
+        observation = dict(meta)
+        observation.update({
+            "run_status": meta.get("run_status", meta.get("status")),
+            "worker_id": meta.get("worker_id") or meta.get("container_id"),
+            "output": _as_text(meta.get("output", meta.get("text", ""))),
+            "guidance_probe": meta.get(
+                "guidance_probe", meta.get("skill_probe")),
+            "guidance_context_probe": meta.get(
+                "guidance_context_probe", meta.get("skill_context_probe")),
+            "activation_mechanism": meta.get(
+                "activation_mechanism", "adapter" if spec else "none"),
+            "workspace_receipt_path": meta.get("workspace_receipt_path"),
+            "workspace_receipt": meta.get("workspace_receipt"),
+        })
+        observation_hash = attestation_observation_hash(observation)
         task_after = HASH_PREFIX + hash_task_workspace(
             workspaces[name], RUNTIME_TREATMENT_PATHS)
         full_after = HASH_PREFIX + hash_workspace(workspaces[name])
@@ -371,6 +417,7 @@ def run_condition_repetition(
             "session_id": meta.get("session_id"),
             "run_status": meta.get("run_status", meta.get("status")),
             "returncode": meta.get("returncode"),
+            "output": observation["output"],
             "starting_task_hash": task_before,
             "ending_task_hash": task_after,
             "starting_full_hash": full_before,
@@ -387,6 +434,10 @@ def run_condition_repetition(
             "workspace_receipt": meta.get("workspace_receipt"),
             "workspace_receipt_path": meta.get("workspace_receipt_path"),
             "workspace_receipt_hash": workspace_receipts[name]["hash"],
+            "attestation_nonce": request["attestation_nonce"],
+            "execution_request_hash": request_hash,
+            "execution_observation_hash": observation_hash,
+            "execution_attestation": meta.get("execution_attestation"),
             "filesystem_snapshot_before": snapshot_before,
             "filesystem_snapshot_after": snapshot_after,
         })

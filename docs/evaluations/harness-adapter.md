@@ -22,6 +22,7 @@ string supplied by the worker.
   "natural_task_hash": "...",
   "workspace": "/absolute/path/to/independent/workspace",
   "workspace_receipt_path": ".evaluation-runtime/workspace-receipt",
+  "attestation_nonce": "...",
   "model": "provider/model-or-runtime-id",
   "guidance": {
     "skill_name": "code-review",
@@ -57,6 +58,20 @@ The minimum response for a successful run is:
   "activation_mechanism": "adapter-defined",
   "workspace_receipt_path": ".evaluation-runtime/workspace-receipt",
   "workspace_receipt": "random-receipt-read-from-requested-workspace",
+  "execution_attestation": {
+    "protocol": "agent-guidance-kit.execution-attestation/v1",
+    "status": "verified",
+    "verification_mode": "independent",
+    "source": "worker",
+    "worker_id": "worker-...",
+    "session_id": "session-...",
+    "nonce": "...",
+    "request_hash": "sha256:...",
+    "observation_hash": "sha256:...",
+    "workspace_receipt_hash": "sha256:...",
+    "output_hash": "sha256:...",
+    "returncode": 0
+  },
   "guidance_path": ".evaluation-runtime/guidance",
   "guidance_content_hash": "sha256:..."
 }
@@ -74,6 +89,31 @@ those fields.
 evaluator stores only a hash of the expected token in the repetition metadata;
 an adapter that uses a shared or different workspace therefore cannot produce
 valid evidence for both conditions.
+
+Successful responses must also include a verified `execution_attestation`.
+The evaluator binds that attestation to its nonce and request hash, the returned
+worker/session IDs, the workspace receipt, the worker output, and the return
+code, probes, and activation mechanism. The `observation_hash` covers those
+returned observations as a single canonical binding. The adapter must obtain
+the attestation from the worker or harness
+boundary independently of the response fields it is attesting; it must not
+construct it by copying those fields after the fact. If the adapter cannot make
+that claim, it must return an unverified/failed run and the result is limited or
+invalid.
+
+For interoperability, `observation_hash` is the `sha256:` digest of compact,
+UTF-8 JSON with sorted keys over these fields: `run_status`, `worker_id`,
+`session_id`, `returncode`, `output`, `guidance_probe`,
+`guidance_context_probe`, `activation_mechanism`, `workspace_receipt_path`,
+and `workspace_receipt`. Missing values are represented as JSON `null`; output
+and receipt values are UTF-8 text with replacement for invalid byte sequences.
+
+This contract is harness agnostic, but it has an explicit integration trust
+boundary: no universal evaluator can cryptographically prove that an arbitrary
+external adapter launched a worker or that a provider's boundary is genuine.
+The core therefore verifies the declared bindings and fails closed on missing
+or inconsistent attestations; a valid claim still depends on the adapter's
+independent worker/harness attestation and its documented implementation.
 
 For a failed invocation, return `run_status: "failed"`, the non-zero
 `returncode` when available, and a reason. Failed runs are never evidence.

@@ -37,6 +37,18 @@ evaluator's expected hash, so distinct worker/session IDs alone cannot prove
 workspace isolation. Guided conditions in a comparison must also report the
 same `activation_mechanism`.
 
+For a `valid` execution or regression comparison, `protocol.isolation_attestation`
+is also required. It must use the
+`agent-guidance-kit.isolation-attestation/v1` protocol, report
+`status: "verified"`, `verification_mode: "independent"`, and
+`boundary: "os-level"`,
+match `runtime.isolation_method`, and map every case ID to that case's
+`raw_evidence_hash`. Valid comparisons must provide a SHA-256
+`raw_evidence_hash` for every case. The validator checks these structural and
+hash bindings; the adapter remains the trust boundary for provider-specific
+worker and isolation facts, so a result must not claim independent OS evidence
+that its adapter did not actually obtain.
+
 The following is a compact regression result shape. A qualification result uses
 `target`/`baseline` conditions; a smoke may use only `target`.
 
@@ -64,6 +76,15 @@ The following is a compact regression result shape. A qualification result uses
     "status": "limited",
     "tier": "tier-1-fast-dev",
     "worker_isolation_verified": true,
+    "isolation_attestation": {
+      "protocol": "agent-guidance-kit.isolation-attestation/v1",
+      "status": "verified",
+      "verification_mode": "independent",
+      "boundary": "os-level",
+      "worker_isolation_verified": true,
+      "isolation_method": "sandbox",
+      "evidence_hashes": {"5": "sha256:…"}
+    },
     "conditions": ["candidate", "reference"],
     "repeats": 1
   },
@@ -437,6 +458,11 @@ OS-level boundary. Adapter-managed local workers should be marked
 - `tier` — `tier-1-fast-dev`, `tier-2-strict-isolated`, or `tier-3-harness-native`.
 - `worker_isolation_verified` — boolean; how (boundary probe). A `valid` run
   requires it `true`.
+- `isolation_attestation` — structured evidence for a valid execution or
+  regression comparison. It must be independently obtained, declare an
+  `os-level` boundary, match `runtime.isolation_method`, and bind every case
+  ID to its `raw_evidence_hash`. Missing or mismatched attestation means the
+  comparison cannot claim `valid`.
 - `target_guidance_present` — evidence (manifest/log/probe) that the target
   worker's guidance was ACTIVATED (discovery tree present + hash-matched +
   skill command resolved). **Required for execution

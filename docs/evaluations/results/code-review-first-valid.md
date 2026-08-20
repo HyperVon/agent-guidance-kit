@@ -85,6 +85,19 @@ plus over-eager selection when the request is generic/ambiguous.
     "status": "valid",
     "tier": "tier-2-strict-isolated",
     "worker_isolation_verified": true,
+    "isolation_attestation": {
+      "protocol": "agent-guidance-kit.isolation-attestation/v1",
+      "status": "verified",
+      "verification_mode": "independent",
+      "boundary": "os-level",
+      "worker_isolation_verified": true,
+      "isolation_method": "docker",
+      "evidence_hashes": {
+        "1": "sha256:4951776514152daa1a6eb4620a0876b187c435586ce2b08a8cbb7ee45c10a06c",
+        "2": "sha256:4228723869af630ab4be7f4bdb835570a05696737c2c7bb666c3b1b6ab4d1c51",
+        "5": "sha256:935734607c7653cd311e5b385b301be3e9235649a71c83e9ec135b75b752cbfa"
+      }
+    },
     "target_guidance_present": "activation probe confirmed .kilo/skills/code-review/SKILL.md present and hash-matched",
     "target_guidance_hash": "sha256:2cbef0de2b54a3e9b3ed1957d6da2a3d2853d009ed12d4a1fc84d79b9a421071",
     "target_absent_in_baseline": "boundary probe confirmed no .kilo/skills tree in baseline",
