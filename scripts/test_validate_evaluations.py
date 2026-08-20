@@ -389,7 +389,8 @@ class EvidenceValidationTests(unittest.TestCase):
             "rep": 1,
             "workspace_path": "/work/task",
             "canonical_task_seed_hash": fixture_hash,
-            "natural_task_hash": "a" * 64,
+            "natural_task_hash": hashlib.sha256(
+                case["prompt"].encode()).hexdigest(),
             "natural_task_identical_across_conditions": True,
             "condition_workspace_ids": {"target": "ws-target-1",
                                         "baseline": "ws-baseline-1"},
@@ -1213,7 +1214,8 @@ class ExecutionEvidenceAnchorTests(unittest.TestCase):
             "repetitions": [{
                 "rep": 1,
                 "canonical_task_seed_hash": fixture_hash,
-                "natural_task_hash": "a" * 64,
+                "natural_task_hash": hashlib.sha256(
+                    case["prompt"].encode()).hexdigest(),
                 "natural_task_identical_across_conditions": True,
                 "condition_workspace_ids": {"target": "ws-target-1",
                                             "baseline": "ws-baseline-1"},
@@ -1261,6 +1263,22 @@ class ExecutionEvidenceAnchorTests(unittest.TestCase):
     def test_valid_with_anchored_hash(self):
         self.assertEqual(ve.validate_execution_evidence(self._ev()), [])
 
+    def test_natural_task_hash_mismatch_rejected(self):
+        ev = self._ev()
+        ev["repetitions"][0]["natural_task_hash"] = "0" * 64
+        errs = ve.validate_execution_evidence(ev)
+        self.assertTrue(any("current source eval case prompt" in e
+                            for e in errs), errs)
+
+    def test_stale_natural_task_hash_rejected_after_prompt_change(self):
+        # A hash from an older prompt must not remain valid merely because it is
+        # well-formed; the validator anchors it to today's source eval case.
+        ev = self._ev()
+        ev["repetitions"][0]["natural_task_hash"] = hashlib.sha256(
+            b"historical prompt text").hexdigest()
+        errs = ve.validate_execution_evidence(ev)
+        self.assertTrue(any("stale or mismatched task" in e for e in errs), errs)
+
     def test_missing_expected_fixture_hash_rejected(self):
         ev = self._ev()
         del ev["expected_fixture_hash"]
@@ -1274,6 +1292,15 @@ class ExecutionEvidenceAnchorTests(unittest.TestCase):
         del ev["runtime_treatment_paths"]
         errs = ve.validate_execution_evidence(ev)
         self.assertTrue(any("runtime_treatment_paths" in e for e in errs), errs)
+
+    def test_runtime_treatment_paths_must_match_canonical_runner(self):
+        for paths in ([".kilo/skills", "src"], [".kilo/skills", "tests"],
+                      [".kilo"], []):
+            with self.subTest(paths=paths):
+                ev = self._ev(runtime_treatment_paths=paths)
+                errs = ve.validate_execution_evidence(ev)
+                self.assertTrue(any("runtime_treatment_paths" in e
+                                    for e in errs), (paths, errs))
 
     def test_frozen_hash_mismatch_rejected(self):
         # The conditions start from identical task copies, but the canonical
@@ -1753,7 +1780,8 @@ class ExecutionEvidenceV2Tests(unittest.TestCase):
             "repetitions": [{
                 "rep": 1,
                 "canonical_task_seed_hash": fixture_hash,
-                "natural_task_hash": "a" * 64,
+                "natural_task_hash": hashlib.sha256(
+                    case["prompt"].encode()).hexdigest(),
                 "natural_task_identical_across_conditions": True,
                 "condition_workspace_ids": {"target": "ws-t", "baseline": "ws-b"},
                 "conditions": {"target": cond, "baseline": baseline},
@@ -1861,6 +1889,56 @@ class ExecutionRunnerBoundaryTests(unittest.TestCase):
     def test_skill_command_name(self):
         self.assertEqual(ree.skill_command_name("code-review"),
                          "code-review:skill")
+
+    def test_kilo_command_placeholders_are_detected(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            skilldir = os.path.join(tmp, "skill")
+            os.makedirs(skilldir)
+            open(os.path.join(skilldir, "SKILL.md"), "w").write(
+                "# Skill\nUse $ARGUMENTS, $1, $2, and $0.\n")
+            self.assertEqual(ree.kilo_command_placeholders(skilldir),
+                             ["$0", "$1", "$2", "$ARGUMENTS"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_kilo_command_placeholder_check_accepts_normal_skill(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            skilldir = os.path.join(tmp, "skill")
+            os.makedirs(skilldir)
+            open(os.path.join(skilldir, "SKILL.md"), "w").write(
+                "# Skill\nUse the verification checklist.\n")
+            self.assertEqual(ree.kilo_command_placeholders(skilldir), [])
+            ree.validate_activation_sources(
+                skilldir, "code-review", ["target", "baseline"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_runner_refuses_command_placeholders_before_worker(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            fixture = os.path.join(tmp, "fixture")
+            os.makedirs(fixture)
+            open(os.path.join(fixture, "README.md"), "w").write("# task\n")
+            skilldir = os.path.join(tmp, "skill")
+            os.makedirs(skilldir)
+            open(os.path.join(skilldir, "SKILL.md"), "w").write(
+                "# Skill\nUse the supplied $ARGUMENTS and $1.\n")
+            called = []
+
+            def worker(**_kwargs):
+                called.append(True)
+                raise AssertionError("worker must not be launched")
+
+            with self.assertRaisesRegex(ValueError, "placeholder"):
+                ree.run_repetition(
+                    0, ["target", "baseline"], "Fix the bug.", fixture,
+                    "code-review", skilldir, None, None,
+                    "kilo/tencent/hy3:free", "kilo-eval:local", worker)
+            self.assertEqual(called, [])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
     def test_materialize_kilo_skill_creates_discovery_dir(self):
         tmp = tempfile.mkdtemp()
@@ -2355,8 +2433,12 @@ class LayerBProtocolIntegrationTests(unittest.TestCase):
                 image, model, prompt, fixture_dir, skill_command,
                 skill_md_hex, skill_probe_path)
 
+        evals = json.load(open(os.path.join(
+            ROOT, "skills", "code-review", "evals", "evals.json")))
+        natural_task = next(c for c in evals["evals"] if c["id"] == 1)[
+            "prompt"]
         rep, canonical, _ = ree.run_repetition(
-            0, conditions, "Fix the bug in main.py.", seed,
+            0, conditions, natural_task, seed,
             "code-review", target_skill,
             "security-review" if "placebo" in conditions else None,
             placebo_skill if "placebo" in conditions else None,
@@ -2454,6 +2536,42 @@ class LayerBProtocolIntegrationTests(unittest.TestCase):
                 rep["conditions"]["placebo"]["activation_events"][0][
                     "skill_name"], "security-review")
         finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_filesystem_snapshots_capture_worker_mutation(self):
+        # The pre-snapshot must be captured before run_fn, not reconstructed
+        # afterward. This is a runner-level regression, not only a hash check.
+        tmp = tempfile.mkdtemp()
+        try:
+            fixture = self._fixture(tmp)
+            target_skill = self._skill(
+                tmp, "code-review", "# target guidance\nVerify changes.\n")
+            stdout = '{"type":"text","part":{"type":"text",'
+            stdout += '"text":"worker done"}}'
+
+            def mutating_run(image, model, prompt, fixture_dir,
+                             skill_command=None, skill_md_hex=None,
+                             skill_probe_path=None):
+                with open(os.path.join(fixture_dir, "README.md"), "a") as fh:
+                    fh.write("# worker mutation\n")
+                return self._fake_run(stdout)(
+                    image, model, prompt, fixture_dir, skill_command,
+                    skill_md_hex, skill_probe_path)
+
+            rep, _, workspaces = ree.run_repetition(
+                0, ["target", "baseline"], "Fix the bug.", fixture,
+                "code-review", target_skill, None, None,
+                "kilo/tencent/hy3:free", "kilo-eval:local", mutating_run)
+            target = rep["conditions"]["target"]
+            before = target["filesystem_snapshot_before"]
+            after = target["filesystem_snapshot_after"]
+            self.assertNotEqual(before["listing"]["README.md"],
+                                after["listing"]["README.md"])
+            self.assertNotEqual(target["starting_task_hash"],
+                                target["ending_task_hash"])
+            self.assertEqual(set(workspaces), {"target", "baseline"})
+        finally:
+            shutil.rmtree(ree.SHARED_TMP, ignore_errors=True)
             shutil.rmtree(tmp, ignore_errors=True)
 
     def test_target_file_present_but_not_activated_rejected(self):

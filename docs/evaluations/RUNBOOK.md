@@ -221,6 +221,12 @@ Goal: measure the skill's marginal value once it is legitimately active.
        guidance was not activated through this mechanism.
        There is NO separate neutral guidance mount: an un-activated guidance
        copy on disk would conflate "guidance active" with "guidance present".
+       The runner fails closed before Docker/Kilo worker launch when a target or
+       placebo `SKILL.md` contains Kilo command-template placeholders such as
+       `$ARGUMENTS` or positional `$0`, `$1`, and so on. These placeholders can
+       substitute runtime arguments into the `:skill` command body, so the
+       protocol cannot treat that source as unchanged guidance. The canonical
+       skill files are read-only inputs; the runner never rewrites them.
   2. Use the free model through **anonymous Kilo Gateway access** (e.g.
     `kilo/tencent/hy3:free`); no API key or host auth is mounted into the
     container. `kilo run` inside the container needs `--auto` (permission

@@ -195,6 +195,12 @@ more assertions by loading unnecessary guidance is not automatically better.
    ignore, forget, or pretend not to have seen the skill. Reusing a transcript,
    context, memory, hidden skill projection, or worker for both conditions is
    contamination and makes the comparison invalid.
+   The execution runner fails closed before Docker/Kilo worker launch when a
+   target or placebo `SKILL.md` contains Kilo command-template placeholders
+   such as `$ARGUMENTS` or positional `$0`, `$1`, and so on. Because `:skill`
+   command expansion can substitute runtime arguments into the body, such a
+   source cannot be treated as unchanged guidance. The runner never rewrites
+   the canonical skill file.
    Treat harness-level system context as worker-visible too: the baseline must
    not receive the target skill's name, path, description, catalog entry,
    injection label, or skill-list metadata through a system prompt, startup

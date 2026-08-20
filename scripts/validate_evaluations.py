@@ -813,6 +813,10 @@ def validate_execution_evidence(evidence):
     source_anchor = _execution_source_anchor(evidence, errs)
     if source_anchor is not None:
         _placebo_source_anchor(evidence, source_anchor, errs)
+    expected_natural_task_hash = None
+    if source_anchor is not None:
+        expected_natural_task_hash = hashlib.sha256(
+            source_anchor["case"]["prompt"].encode()).hexdigest()
     reps = evidence.get("repetitions") or []
     if not reps:
         errs.append("execution evidence has no repetitions")
@@ -837,13 +841,12 @@ def validate_execution_evidence(evidence):
     if not isinstance(runtime_paths, list) or not runtime_paths:
         errs.append("execution evidence missing runtime_treatment_paths "
                     "(task-state hash exclusion list not recorded)")
-    else:
-        if ".kilo/skills" not in runtime_paths:
-            errs.append("execution evidence runtime_treatment_paths must include "
-                        "'.kilo/skills' (the evaluator-owned discovery tree)")
-        if ".kilo" in runtime_paths:
-            errs.append("execution evidence must not exclude the entire '.kilo' "
-                        "root from task hashing")
+    elif execution_runner is not None:
+        expected_runtime_paths = list(execution_runner.RUNTIME_TREATMENT_PATHS)
+        if runtime_paths != expected_runtime_paths:
+            errs.append(
+                "execution evidence runtime_treatment_paths must exactly "
+                f"match the canonical runner list {expected_runtime_paths!r}")
     if evidence.get("activation_mechanism") != "kilo-command-skill":
         errs.append("execution evidence missing activation_mechanism "
                     "'kilo-command-skill' (controlled post-activation model)")
@@ -885,6 +888,9 @@ def validate_execution_evidence(evidence):
         if not (isinstance(th, str) and len(th) >= 16):
             errs.append(f"{tag}: missing natural_task_hash (identical-task "
                         f"evidence required)")
+        elif expected_natural_task_hash and th != expected_natural_task_hash:
+            errs.append(f"{tag}: natural_task_hash does not match the current "
+                        f"source eval case prompt (stale or mismatched task)")
         elif r.get("natural_task_identical_across_conditions") is not True:
             errs.append(f"{tag}: natural_task_identical_across_conditions != true")
 

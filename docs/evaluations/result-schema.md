@@ -158,9 +158,12 @@ Each repetition MUST prove:
 - **Independent starting state (TASK state).** The runner derives one pristine
   seed, then makes one independent copy per condition and records
   `starting_task_hash` for each. TASK-state hashes EXCLUDE the evaluator
-  runtime treatment paths (`runtime_treatment_paths`, e.g. `.kilo/skills`) — the
-  target/placebo discovery trees are intentionally different from the baseline,
-  so hashing them together and requiring equality would fail by construction.
+  runtime treatment paths (`runtime_treatment_paths`) — the exact ordered list
+  emitted by `scripts/run_execution_eval.py` (currently only `.kilo/skills`).
+  The target/placebo discovery trees are intentionally different from the
+  baseline, so hashing them together and requiring equality would fail by
+  construction; adding broader exclusions such as `.kilo`, `src`, or `tests`
+  is invalid.
   The validator requires all `starting_task_hash` values to equal the frozen
   `canonical_task_seed_hash` / `expected_fixture_hash`. The full-filesystem
   hashes (`starting_full_hash` / `ending_full_hash`) are recorded SEPARATELY so
@@ -256,7 +259,8 @@ Tier 1 fast-developer mode with `protocol_status: limited`.
 - `contamination` — `none` or a description.
 - `natural_task_identical_across_conditions` — `true` only when the runner
   verified the worker-visible prompt hash is identical across all conditions.
-- `natural_task_hash` — the frozen task hash.
+- `natural_task_hash` — SHA-256 of the exact current source eval-case prompt;
+  the validator rejects hashes from a stale or otherwise different prompt.
 - `routing_mechanism` — **required for routing runs**: how the selected skill
   was captured (harness manifest, startup log, named tool-call). Absent/unknown
   ⇒ the routing claim is invalid, never a routing conclusion.

@@ -137,6 +137,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -171,6 +172,12 @@ RUNTIME_TREATMENT_PATHS = (".kilo/skills",)
 SHARED_TMP = os.path.join(ROOT, ".docker-tmp")
 
 ACTIVATION_MECHANISM = "kilo-command-skill"
+
+# Kilo expands these placeholders when a command template is invoked. A skill
+# containing one cannot be evaluated as unchanged guidance through ``:skill``:
+# the command surface would substitute evaluator/runtime arguments into the
+# body before the model sees it. Fail closed before any worker is launched.
+KILO_COMMAND_PLACEHOLDER_RE = re.compile(r"\$(?:ARGUMENTS|[0-9]+)\b")
 
 # Kilo's exported session stores message roles under ``messages[].info.role``
 # (with a top-level ``role`` fallback for compatible exports). Only user-role
@@ -235,6 +242,42 @@ def materialize_kilo_skill(source_skill_dir, skill_name, workspace):
         shutil.copytree(refs, os.path.join(kilo_skills, "references"),
                         dirs_exist_ok=True)
     return kilo_skills
+
+
+def kilo_command_placeholders(skill_dir):
+    """Return Kilo command-template placeholders found in ``SKILL.md``."""
+    skill_md = os.path.join(skill_dir, "SKILL.md")
+    if not os.path.isfile(skill_md):
+        raise ValueError(f"skill source missing SKILL.md: {skill_dir}")
+    with open(skill_md, encoding="utf-8") as fh:
+        return sorted(set(KILO_COMMAND_PLACEHOLDER_RE.findall(fh.read())))
+
+
+def validate_activation_sources(target_dir, target_skill, conditions,
+                                placebo_dir=None, placebo_skill=None):
+    """Reject command-template skills before Docker/Kilo worker launch.
+
+    Kilo command placeholders are intentionally treated as unsafe for this
+    post-activation protocol. The canonical repository files are only read;
+    this check never rewrites or stages a sanitized copy.
+    """
+    sources = [("target", target_dir, target_skill)]
+    if "placebo" in conditions:
+        sources.append(("placebo", placebo_dir, placebo_skill))
+    violations = []
+    for label, skill_dir, skill_name in sources:
+        if not skill_dir or not skill_name:
+            continue
+        tokens = kilo_command_placeholders(skill_dir)
+        if tokens:
+            violations.append(
+                f"{label} skill {skill_name!r} contains Kilo command "
+                f"placeholder(s) {', '.join(tokens)} in SKILL.md")
+    if violations:
+        raise ValueError(
+            "refusing :skill activation because command placeholders would "
+            "change the guidance body before model context: "
+            + "; ".join(violations))
 
 
 def skill_tree_hash(skill_dir):
@@ -657,8 +700,9 @@ def _conditions_arg(value):
     return out
 
 
-def finalize_condition(name, meta, workspace, task_before, task_after,
-                       full_before, full_after, activation):
+def finalize_condition(name, meta, task_before, task_after,
+                       full_before, full_after, snapshot_before,
+                       snapshot_after, activation):
     """Assemble one condition's evidence dict.
 
     ``activation`` is None for the baseline (no treatment) or a dict with:
@@ -680,8 +724,8 @@ def finalize_condition(name, meta, workspace, task_before, task_after,
         "output": meta["output"],
         "stderr": meta["stderr"],
         "stdout": meta.get("stdout", ""),
-        "filesystem_snapshot_before": _snapshot(workspace),
-        "filesystem_snapshot_after": None,
+        "filesystem_snapshot_before": snapshot_before,
+        "filesystem_snapshot_after": snapshot_after,
         "reason": meta["reason"],
     }
     if activation:
@@ -720,6 +764,8 @@ def run_repetition(rep_index, conditions, natural_task, seed_dir,
     for cleanup; the evidence itself records only sanitized basenames).
     Workspace lifecycle (creation and cleanup) is owned by the caller.
     """
+    validate_activation_sources(target_dir, target_skill, conditions,
+                                placebo_dir, placebo_skill)
     canonical = HASH_PREFIX + hash_task_workspace(seed_dir,
                                                   RUNTIME_TREATMENT_PATHS)
     # The pristine seed must not already contain the evaluator-owned discovery
@@ -798,13 +844,15 @@ def run_repetition(rep_index, conditions, natural_task, seed_dir,
         task_before = HASH_PREFIX + hash_task_workspace(
             workspace, RUNTIME_TREATMENT_PATHS)
         full_before = HASH_PREFIX + hash_workspace(workspace)
+        snapshot_before = _snapshot(workspace)
         meta = run_fn(**run_args)
         task_after = HASH_PREFIX + hash_task_workspace(
             workspace, RUNTIME_TREATMENT_PATHS)
         full_after = HASH_PREFIX + hash_workspace(workspace)
-        cond = finalize_condition(name, meta, workspace, task_before, task_after,
-                                  full_before, full_after, act)
-        cond["filesystem_snapshot_after"] = _snapshot(workspace)
+        snapshot_after = _snapshot(workspace)
+        cond = finalize_condition(name, meta, task_before, task_after,
+                                  full_before, full_after, snapshot_before,
+                                  snapshot_after, act)
         cond_meta[name] = cond
 
     rep = {
@@ -888,14 +936,7 @@ def main():
     source = fx.get("source", "setup.sh")
     invocation = fx.get("invocation", "bash setup.sh")
 
-    runtime = _verify_runtime(args.image, args.model)
-
-    # The natural task is the ONLY worker-visible prompt text, byte-identical
-    # across all conditions. Nothing here names the skill, the condition, the
-    # case, or the evaluation.
-    natural_task = case["prompt"]
-    target_tree_hash = skill_tree_hash(skill_dir)
-    if target_tree_hash is None:
+    if not os.path.isfile(os.path.join(skill_dir, "SKILL.md")):
         print(f"target skill dir missing SKILL.md: {skill_dir}", file=sys.stderr)
         sys.exit(2)
 
@@ -908,6 +949,24 @@ def main():
             sys.exit(2)
         placebo_dir = pdir
         placebo_tree_hash = skill_tree_hash(pdir)
+
+    try:
+        validate_activation_sources(skill_dir, args.skill, args.conditions,
+                                   placebo_dir, args.placebo_skill)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(2)
+
+    runtime = _verify_runtime(args.image, args.model)
+
+    # The natural task is the ONLY worker-visible prompt text, byte-identical
+    # across all conditions. Nothing here names the skill, the condition, the
+    # case, or the evaluation.
+    natural_task = case["prompt"]
+    target_tree_hash = skill_tree_hash(skill_dir)
+    if target_tree_hash is None:
+        print(f"target skill dir missing SKILL.md: {skill_dir}", file=sys.stderr)
+        sys.exit(2)
 
     # The frozen fixture hash the worker is SUPPOSED to receive. For a generator
     # fixture this is the worker-visible output_hash (setup.sh already stripped);
