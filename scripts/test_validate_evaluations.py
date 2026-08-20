@@ -16,6 +16,7 @@ import sys
 import tempfile
 import unittest
 import unittest.mock
+import uuid
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
@@ -154,7 +155,8 @@ class ResultFailureTests(unittest.TestCase):
             "protocol": {"status": "limited", "worker_isolation_verified": True,
 "target_guidance_present": "ev", "target_absent_in_baseline": "ev",
                           "target_guidance_hash": "sha256:g", "baseline_guidance_absent": "ev",
-                         "contamination": "none", "routing_mechanism": None},
+                         "contamination": "none", "routing_mechanism": None,
+                         "conditions": ["target", "baseline"], "repeats": 3},
             "runs": {"target": {"session_id": "g1", "container_id": "cg1", "output_hash": "h",
                                 "selected_skill": "code-review"},
                      "baseline": {"session_id": "b1", "container_id": "cb1", "output_hash": "h"}},
@@ -344,13 +346,496 @@ class ResultFailureTests(unittest.TestCase):
         ve.check_one_result("r.md", res, {"code-review"}, {})
         self.assertEqual(ve.errors, [], ve.errors)
 
+    def test_placebo_only_pass_valid(self):
+        # T false, B false, P true => placebo_only_pass
+        evals_path = os.path.join(ve.ROOT, "skills", "code-review", "evals",
+                                  "evals.json")
+        source = json.load(open(evals_path))
+        case = next(c for c in source["evals"] if c["id"] == 1)
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"]["status"] = "valid"
+        res["protocol"]["tier"] = "tier-2-strict-isolated"
+        res["protocol"]["worker_isolation_verified"] = True
+        res["protocol"]["conditions"] = ["target", "baseline", "placebo"]
+        prompt_hash = "sha256:" + hashlib.sha256(
+            case["prompt"].encode()).hexdigest()
+        res["cases"] = [{
+            "case_id": 1,
+            "natural_task_hash": prompt_hash,
+            "fixture_hash": case["fixture"]["content_hash"],
+            "repetitions": [
+                {"rep": 1, "repetition_id": "id1", "runs": {"target": {"session_id": "t1", "container_id": "c1"}, "baseline": {"session_id": "b1", "container_id": "c2"}, "placebo": {"session_id": "p1", "container_id": "c3"}}},
+                {"rep": 2, "repetition_id": "id2", "runs": {"target": {"session_id": "t2", "container_id": "c4"}, "baseline": {"session_id": "b2", "container_id": "c5"}, "placebo": {"session_id": "p2", "container_id": "c6"}}},
+                {"rep": 3, "repetition_id": "id3", "runs": {"target": {"session_id": "t3", "container_id": "c7"}, "baseline": {"session_id": "b3", "container_id": "c8"}, "placebo": {"session_id": "p3", "container_id": "c9"}}},
+            ],
+            "outcome": {"category": "placebo_only_pass", "measurement_status": "non_discriminating", "protocol_status": "valid"},
+            "verdict": {"target_pass": False, "baseline_pass": False, "placebo_pass": True},
+            "assertions": [{"assertion": "frozen", "target": {"pass": False, "evidence": "e"}, "baseline": {"pass": False, "evidence": "e"}, "placebo": {"pass": True, "evidence": "e"}}],
+        }]
+        ve.check_one_result(
+            "r.md", res, {"code-review"},
+            {"code-review": {1: {"prompt": case["prompt"],
+                                  "fixture": case["fixture"],
+                                  "evaluation_modes": ["routing", "execution"],
+                                  "execution": {"assertions": []}}}})
+        self.assertEqual(ve.errors, [], ve.errors)
+
+    def test_limited_execution_may_omit_valid_only_provenance(self):
+        # Compact limited records remain readable, but they are not protocol-valid.
+        res = self._result()
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertEqual(ve.errors, [], ve.errors)
+
+    def test_missing_per_case_fixture_hash_fails(self):
+        import hashlib
+        import json
+        import os
+        evals_path = os.path.join(ve.ROOT, "skills", "code-review", "evals",
+                                  "evals.json")
+        source = json.load(open(evals_path))
+        case = next(c for c in source["evals"] if c["id"] == 1)
+        prompt_hash = "sha256:" + hashlib.sha256(
+            case["prompt"].encode()).hexdigest()
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"].update({"status": "valid",
+                                 "tier": "tier-2-strict-isolated",
+                                 "worker_isolation_verified": True})
+        res["cases"] = [{
+            "case_id": 1,
+            "natural_task_hash": prompt_hash,
+            "repetitions": [
+                {"rep": i, "repetition_id": f"id{i}", "runs": {
+                    "target": {"session_id": f"t{i}",
+                                "container_id": f"ct{i}"},
+                    "baseline": {"session_id": f"b{i}",
+                                  "container_id": f"cb{i}"}}}
+                for i in (1, 2, 3)
+            ],
+            "outcome": {"category": "skill_only_pass",
+                        "measurement_status": "discriminating",
+                        "protocol_status": "valid"},
+            "verdict": {"target_pass": True, "baseline_pass": False},
+            "assertions": [{"assertion": "frozen",
+                            "target": {"pass": True, "evidence": "e"},
+                            "baseline": {"pass": False, "evidence": "e"}}],
+        }]
+        ve.check_one_result(
+            "r.md", res, {"code-review"},
+            {"code-review": {1: {"prompt": case["prompt"],
+                                  "fixture": case["fixture"],
+                                  "execution": {"assertions": ["frozen"]}}}})
+        self.assertTrue(any("fixture_hash" in e for e in ve.errors), ve.errors)
+
+    def test_valid_unknown_case_id_fails(self):
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"].update({"status": "valid",
+                                 "tier": "tier-2-strict-isolated",
+                                 "worker_isolation_verified": True})
+        res["cases"] = [{
+            "case_id": 99,
+            "natural_task_hash": "sha256:" + "a" * 64,
+            "fixture_hash": "sha256:" + "b" * 64,
+            "repetitions": [
+                {"rep": i, "repetition_id": f"id{i}", "runs": {
+                    "target": {"session_id": f"t{i}",
+                                "container_id": f"ct{i}"},
+                    "baseline": {"session_id": f"b{i}",
+                                  "container_id": f"cb{i}"}}}
+                for i in (1, 2, 3)
+            ],
+            "outcome": {"category": "skill_only_pass",
+                        "measurement_status": "discriminating",
+                        "protocol_status": "valid"},
+            "verdict": {"target_pass": True, "baseline_pass": False},
+            "assertions": [{"assertion": "frozen",
+                            "target": {"pass": True, "evidence": "e"},
+                            "baseline": {"pass": False, "evidence": "e"}}],
+        }]
+        ve.check_one_result(
+            "r.md", res, {"code-review"},
+            {"code-review": {1: {"prompt": "known",
+                                  "fixture": {"content_hash": "sha256:b"},
+                                  "execution": {"assertions": ["frozen"]}}}})
+        self.assertTrue(any("case_id is not present" in e for e in ve.errors),
+                        ve.errors)
+
+    def test_all_conditions_pass_cannot_be_discriminating(self):
+        res = self._result()
+        res["cases"][0]["outcome"].update({
+            "category": "both_pass", "measurement_status": "discriminating"})
+        res["cases"][0]["verdict"] = {
+            "target_pass": True, "baseline_pass": True}
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("discriminating measurement requires" in e
+                            for e in ve.errors), ve.errors)
+
+    def test_unique_target_advantage_cannot_be_non_discriminating(self):
+        res = self._result()
+        res["cases"][0]["outcome"].update({
+            "category": "skill_only_pass",
+            "measurement_status": "non_discriminating"})
+        res["cases"][0]["verdict"] = {
+            "target_pass": True, "baseline_pass": False}
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("cannot claim a unique target advantage" in e
+                            for e in ve.errors), ve.errors)
+
+    def test_placebo_pass_prevents_skill_only_pass_category(self):
+        res = self._result()
+        res["protocol"]["conditions"] = ["target", "baseline", "placebo"]
+        res["cases"][0]["outcome"].update({
+            "category": "skill_only_pass",
+            "measurement_status": "non_discriminating"})
+        res["cases"][0]["verdict"] = {
+            "target_pass": True, "baseline_pass": False, "placebo_pass": True}
+        res["cases"][0]["assertions"][0]["placebo"] = {
+            "pass": True, "evidence": "e"}
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("expected non_discriminating" in e
+                            for e in ve.errors), ve.errors)
+
+    def test_routing_unknown_case_id_fails(self):
+        res = self._routing_result()
+        res["protocol"]["status"] = "valid"
+        res["runtime"]["isolation_method"] = "docker"
+        res["cases"][0]["case_id"] = 99
+        ve.check_one_result("r.md", res, {"code-review"},
+                            self._routing_index())
+        self.assertTrue(any("case_id is not present" in e for e in ve.errors),
+                        ve.errors)
+
+    def test_boolean_case_id_fails_closed(self):
+        res = self._result()
+        res["cases"][0]["case_id"] = True
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("case_id must be integer" in e for e in ve.errors),
+                        ve.errors)
+
+    def test_non_object_outcome_and_verdict_fail_closed(self):
+        res = self._result()
+        res["cases"][0]["outcome"] = []
+        res["cases"][0]["verdict"] = []
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("outcome must be an object" in e for e in ve.errors),
+                        ve.errors)
+        self.assertTrue(any("verdict must be an object" in e for e in ve.errors),
+                        ve.errors)
+
+    def test_malformed_protocol_conditions_fails_closed(self):
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"].update({"status": "valid",
+                                 "tier": "tier-2-strict-isolated",
+                                 "worker_isolation_verified": True,
+                                 "conditions": [{"name": "target"}]})
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("conditions must contain only" in e
+                            for e in ve.errors), ve.errors)
+
+    def test_truthy_nested_run_fails_closed(self):
+        res = self._result()
+        res["cases"][0]["repetitions"] = [{}]
+        res["runs"]["target"] = True
+        res["runs"].pop("baseline")
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("top-level runs.target must be an object" in e
+                            for e in ve.errors), ve.errors)
+
+    def test_truthy_assertion_grade_fails_closed(self):
+        res = self._result()
+        res["cases"][0]["assertions"][0]["target"] = True
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("target grade must be an object" in e
+                            for e in ve.errors), ve.errors)
+
+    def test_truthy_invalid_outcome_fails_closed(self):
+        res = self._result()
+        res["protocol"]["status"] = "invalid"
+        res["cases"][0]["outcome"] = True
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("outcome.category" in e for e in ve.errors),
+                        ve.errors)
+
+    def test_valid_result_requires_cases(self):
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"].update({"status": "valid",
+                                 "tier": "tier-2-strict-isolated",
+                                 "worker_isolation_verified": True})
+        res["cases"] = []
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("valid result must contain at least one case" in e
+                            for e in ve.errors), ve.errors)
+
+    def test_valid_case_must_support_result_mode(self):
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"].update({"status": "valid",
+                                 "tier": "tier-2-strict-isolated",
+                                 "worker_isolation_verified": True})
+        case_index = {"code-review": {1: {
+            "prompt": "do a thing",
+            "fixture": {"content_hash": "sha256:b"},
+            "evaluation_modes": ["routing"],
+            "execution": {"assertions": []},
+        }}}
+        ve.check_one_result("r.md", res, {"code-review"}, case_index)
+        self.assertTrue(any("does not support evaluation_mode" in e
+                            for e in ve.errors), ve.errors)
+
+    def test_case_protocol_status_must_match_top_level(self):
+        res = self._result()
+        res["cases"][0]["outcome"]["protocol_status"] = "valid"
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("outcome.protocol_status must match" in e
+                            for e in ve.errors), ve.errors)
+
+    def test_missing_placebo_verdict_fails(self):
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"].update({"status": "valid",
+                                 "tier": "tier-2-strict-isolated",
+                                 "worker_isolation_verified": True,
+                                 "conditions": ["target", "baseline", "placebo"]})
+        res["cases"] = [{
+            "case_id": 1,
+            "natural_task_hash": "sha256:" + "a" * 64,
+            "fixture_hash": "sha256:b",
+            "repetitions": [
+                {"rep": i, "repetition_id": f"id{i}", "runs": {
+                    "target": {"session_id": f"t{i}",
+                                "container_id": f"ct{i}"},
+                    "baseline": {"session_id": f"b{i}",
+                                  "container_id": f"cb{i}"},
+                    "placebo": {"session_id": f"p{i}",
+                                 "container_id": f"cp{i}"}}}
+                for i in (1, 2, 3)
+            ],
+            "outcome": {"category": "skill_only_pass",
+                        "measurement_status": "discriminating",
+                        "protocol_status": "valid"},
+            "verdict": {"target_pass": True, "baseline_pass": False},
+            "assertions": [{"assertion": "frozen",
+                            "target": {"pass": True, "evidence": "e"},
+                            "baseline": {"pass": False, "evidence": "e"},
+                            "placebo": {"pass": False, "evidence": "e"}}],
+        }]
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("placebo_pass" in e for e in ve.errors), ve.errors)
+
+    def test_execution_identity_duplicate_across_cases_fails(self):
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"].update({"status": "valid",
+                                 "tier": "tier-2-strict-isolated",
+                                 "worker_isolation_verified": True})
+
+        def case(cid, session_prefix):
+            return {
+                "case_id": cid,
+                "natural_task_hash": "sha256:" + str(cid) * 64,
+                "fixture_hash": "sha256:" + str(cid),
+                "repetitions": [
+                    {"rep": i, "repetition_id": f"{cid}-{i}", "runs": {
+                        "target": {"session_id": session_prefix if i == 1 else f"t{cid}-{i}",
+                                    "container_id": f"ct{cid}-{i}"},
+                        "baseline": {"session_id": f"b{cid}-{i}",
+                                      "container_id": f"cb{cid}-{i}"}}}
+                    for i in (1, 2, 3)
+                ],
+                "outcome": {"category": "skill_only_pass",
+                            "measurement_status": "discriminating",
+                            "protocol_status": "valid"},
+                "verdict": {"target_pass": True, "baseline_pass": False},
+                "assertions": [{"assertion": "frozen",
+                                "target": {"pass": True, "evidence": "e"},
+                                "baseline": {"pass": False, "evidence": "e"}}],
+            }
+
+        res["cases"] = [case(1, "shared-session"),
+                         case(2, "shared-session")]
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("across cases" in e and "session_id" in e
+                            for e in ve.errors), ve.errors)
+
+    def test_both_fail_with_placebo_true_is_inconsistent(self):
+        # both_fail with placebo true should be placebo_only_pass, so both_fail is inconsistent
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"]["status"] = "valid"
+        res["protocol"]["tier"] = "tier-2-strict-isolated"
+        res["protocol"]["worker_isolation_verified"] = True
+        res["cases"] = [{
+            "case_id": 1,
+            "natural_task_hash": "sha256:" + "a"*64,
+            "fixture_hash": "sha256:b",
+            "repetitions": [
+                {"rep": 1, "repetition_id": "id1", "runs": {"target": {"session_id": "t1", "container_id": "c1"}, "baseline": {"session_id": "b1", "container_id": "c2"}, "placebo": {"session_id": "p1", "container_id": "c3"}}},
+                {"rep": 2, "repetition_id": "id2", "runs": {"target": {"session_id": "t2", "container_id": "c4"}, "baseline": {"session_id": "b2", "container_id": "c5"}, "placebo": {"session_id": "p2", "container_id": "c6"}}},
+                {"rep": 3, "repetition_id": "id3", "runs": {"target": {"session_id": "t3", "container_id": "c7"}, "baseline": {"session_id": "b3", "container_id": "c8"}, "placebo": {"session_id": "p3", "container_id": "c9"}}},
+            ],
+            "outcome": {"category": "both_fail", "measurement_status": "non_discriminating", "protocol_status": "valid"},
+            "verdict": {"target_pass": False, "baseline_pass": False, "placebo_pass": True},
+            "assertions": [{"assertion": "frozen", "target": {"pass": False, "evidence": "e"}, "baseline": {"pass": False, "evidence": "e"}, "placebo": {"pass": True, "evidence": "e"}}],
+        }]
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("inconsistent" in e and "placebo_only_pass" in e for e in ve.errors), ve.errors)
+
+    def test_per_case_natural_task_hash_mismatch_fails(self):
+        # Create a case where case 1 uses case 5's hash
+        import hashlib
+        import json
+        import os
+        evals_path = os.path.join(ve.ROOT, "skills", "code-review", "evals", "evals.json")
+        source = json.load(open(evals_path))
+        case1_prompt = next(c for c in source["evals"] if c["id"] == 1)["prompt"]
+        case5_prompt = next(c for c in source["evals"] if c["id"] == 5)["prompt"]
+        wrong_hash = "sha256:" + hashlib.sha256(case5_prompt.encode()).hexdigest()
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"]["status"] = "valid"
+        res["protocol"]["tier"] = "tier-2-strict-isolated"
+        res["protocol"]["worker_isolation_verified"] = True
+        res["cases"] = [{
+            "case_id": 1,
+            "natural_task_hash": wrong_hash,
+            "fixture_hash": "sha256:b",
+            "repetitions": [
+                {"rep": 1, "repetition_id": "id1", "runs": {"target": {"session_id": "t1", "container_id": "c1"}, "baseline": {"session_id": "b1", "container_id": "c2"}, "placebo": {"session_id": "p1", "container_id": "c3"}}},
+                {"rep": 2, "repetition_id": "id2", "runs": {"target": {"session_id": "t2", "container_id": "c4"}, "baseline": {"session_id": "b2", "container_id": "c5"}, "placebo": {"session_id": "p2", "container_id": "c6"}}},
+                {"rep": 3, "repetition_id": "id3", "runs": {"target": {"session_id": "t3", "container_id": "c7"}, "baseline": {"session_id": "b3", "container_id": "c8"}, "placebo": {"session_id": "p3", "container_id": "c9"}}},
+            ],
+            "outcome": {"category": "skill_only_pass", "measurement_status": "discriminating", "protocol_status": "valid"},
+            "verdict": {"target_pass": True, "baseline_pass": False, "placebo_pass": False},
+            "assertions": [{"assertion": "frozen", "target": {"pass": True, "evidence": "e"}, "baseline": {"pass": False, "evidence": "e"}}],
+        }]
+        ve.check_one_result("r.md", res, {"code-review"}, {"code-review": {1: {"execution": {"assertions": ["frozen"]}, "prompt": case1_prompt}}})
+        self.assertTrue(any("natural_task_hash" in e and "does not match" in e for e in ve.errors), ve.errors)
+
+    def test_single_case_top_level_task_hash_mismatch_fails(self):
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"].update({"status": "valid",
+                                 "tier": "tier-2-strict-isolated",
+                                 "worker_isolation_verified": True,
+                                 "natural_task_hash": "sha256:" + "b" * 64})
+        res["cases"] = [{
+            "case_id": 1,
+            "natural_task_hash": "sha256:" + "a" * 64,
+            "fixture_hash": "sha256:b",
+            "repetitions": [
+                {"rep": i, "repetition_id": f"id{i}", "runs": {
+                    "target": {"session_id": f"t{i}",
+                                "container_id": f"ct{i}"},
+                    "baseline": {"session_id": f"b{i}",
+                                  "container_id": f"cb{i}"}}}
+                for i in (1, 2, 3)
+            ],
+            "outcome": {"category": "skill_only_pass",
+                        "measurement_status": "discriminating",
+                        "protocol_status": "valid"},
+            "verdict": {"target_pass": True, "baseline_pass": False},
+            "assertions": [{"assertion": "frozen",
+                            "target": {"pass": True, "evidence": "e"},
+                            "baseline": {"pass": False, "evidence": "e"}}],
+        }]
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("single-case protocol.natural_task_hash" in e
+                            for e in ve.errors), ve.errors)
+
+    def test_missing_per_case_repetitions_fails(self):
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"]["status"] = "valid"
+        res["protocol"]["tier"] = "tier-2-strict-isolated"
+        res["protocol"]["worker_isolation_verified"] = True
+        res["cases"] = [{
+            "case_id": 1,
+            "natural_task_hash": "sha256:" + "a"*64,
+            "outcome": {"category": "skill_only_pass", "measurement_status": "discriminating", "protocol_status": "valid"},
+            "verdict": {"target_pass": True, "baseline_pass": False},
+            "assertions": [{"assertion": "frozen", "target": {"pass": True, "evidence": "e"}, "baseline": {"pass": False, "evidence": "e"}}],
+        }]
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("repetitions" in e for e in ve.errors), ve.errors)
+
+    def test_duplicate_repetition_id_fails(self):
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"]["status"] = "valid"
+        res["protocol"]["tier"] = "tier-2-strict-isolated"
+        res["protocol"]["worker_isolation_verified"] = True
+        res["cases"] = [{
+            "case_id": 1,
+            "natural_task_hash": "sha256:" + "a"*64,
+            "fixture_hash": "sha256:b",
+            "repetitions": [
+                {"rep": 1, "repetition_id": "dup", "runs": {"target": {"session_id": "t1", "container_id": "c1"}, "baseline": {"session_id": "b1", "container_id": "c2"}}},
+                {"rep": 2, "repetition_id": "dup", "runs": {"target": {"session_id": "t2", "container_id": "c3"}, "baseline": {"session_id": "b2", "container_id": "c4"}}},
+                {"rep": 3, "repetition_id": "id3", "runs": {"target": {"session_id": "t3", "container_id": "c5"}, "baseline": {"session_id": "b3", "container_id": "c6"}}},
+            ],
+            "outcome": {"category": "skill_only_pass", "measurement_status": "discriminating", "protocol_status": "valid"},
+            "verdict": {"target_pass": True, "baseline_pass": False},
+            "assertions": [{"assertion": "frozen", "target": {"pass": True, "evidence": "e"}, "baseline": {"pass": False, "evidence": "e"}}],
+        }]
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("duplicate repetition_id" in e for e in ve.errors), ve.errors)
+
+    def test_duplicate_session_id_across_reps_fails(self):
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"]["status"] = "valid"
+        res["protocol"]["tier"] = "tier-2-strict-isolated"
+        res["protocol"]["worker_isolation_verified"] = True
+        res["cases"] = [{
+            "case_id": 1,
+            "natural_task_hash": "sha256:" + "a"*64,
+            "fixture_hash": "sha256:b",
+            "repetitions": [
+                {"rep": 1, "repetition_id": "id1", "runs": {"target": {"session_id": "dup", "container_id": "c1"}, "baseline": {"session_id": "b1", "container_id": "c2"}}},
+                {"rep": 2, "repetition_id": "id2", "runs": {"target": {"session_id": "dup", "container_id": "c3"}, "baseline": {"session_id": "b2", "container_id": "c4"}}},
+                {"rep": 3, "repetition_id": "id3", "runs": {"target": {"session_id": "t3", "container_id": "c5"}, "baseline": {"session_id": "b3", "container_id": "c6"}}},
+            ],
+            "outcome": {"category": "skill_only_pass", "measurement_status": "discriminating", "protocol_status": "valid"},
+            "verdict": {"target_pass": True, "baseline_pass": False},
+            "assertions": [{"assertion": "frozen", "target": {"pass": True, "evidence": "e"}, "baseline": {"pass": False, "evidence": "e"}}],
+        }]
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("duplicate session_id" in e for e in ve.errors), ve.errors)
+
+    def test_incorrect_repeat_count_fails(self):
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"]["status"] = "valid"
+        res["protocol"]["tier"] = "tier-2-strict-isolated"
+        res["protocol"]["worker_isolation_verified"] = True
+        res["cases"] = [{
+            "case_id": 1,
+            "natural_task_hash": "sha256:" + "a"*64,
+            "fixture_hash": "sha256:b",
+            "repetitions": [
+                {"rep": 1, "repetition_id": "id1", "runs": {"target": {"session_id": "t1", "container_id": "c1"}, "baseline": {"session_id": "b1", "container_id": "c2"}}},
+                {"rep": 2, "repetition_id": "id2", "runs": {"target": {"session_id": "t2", "container_id": "c3"}, "baseline": {"session_id": "b2", "container_id": "c4"}}},
+            ],
+            "outcome": {"category": "skill_only_pass", "measurement_status": "discriminating", "protocol_status": "valid"},
+            "verdict": {"target_pass": True, "baseline_pass": False},
+            "assertions": [{"assertion": "frozen", "target": {"pass": True, "evidence": "e"}, "baseline": {"pass": False, "evidence": "e"}}],
+        }]
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("must contain 3 complete repetitions" in e for e in ve.errors), ve.errors)
+
 
 class EvidenceValidationTests(unittest.TestCase):
     def tearDown(self):
         reset()
 
     def _cond(self, name, cid, sid, **over):
+        rep_id = over.pop("repetition_id", None)
         cond = {
+            "repetition_id": rep_id if rep_id is not None else str(uuid.uuid4()),
             "container_id": cid, "session_id": sid,
             "run_status": "success", "returncode": 0,
             "starting_task_hash": "sha256:seed", "ending_task_hash": "sha256:z",
@@ -381,13 +866,15 @@ class EvidenceValidationTests(unittest.TestCase):
         case = next(c for c in source["evals"] if c["id"] == 1)
         fixture_hash = case["fixture"]["content_hash"]
         target_hash = ree.skill_tree_hash(skill_dir)
+        rep_id = str(uuid.uuid4())
         target = self._cond(
             skill, "cg", "sg", skill_content_hash=target_hash,
-            starting_task_hash=fixture_hash)
+            starting_task_hash=fixture_hash, repetition_id=rep_id)
         baseline = self._cond("baseline", "cb", "sb",
-                              starting_task_hash=fixture_hash)
+                              starting_task_hash=fixture_hash, repetition_id=rep_id)
         rep = {
             "rep": 1,
+            "repetition_id": rep_id,
             "workspace_path": "/work/task",
             "canonical_task_seed_hash": fixture_hash,
             "natural_task_hash": hashlib.sha256(
@@ -531,7 +1018,8 @@ class EvidenceValidationTests(unittest.TestCase):
         ev["repetitions"][0]["conditions"]["placebo"] = self._cond(
             "security-review", "cp", "sp",
             skill_content_hash=ev["placebo_skill_content_hash"],
-            starting_task_hash=ev["expected_fixture_hash"])
+            starting_task_hash=ev["expected_fixture_hash"],
+            repetition_id=ev["repetitions"][0]["repetition_id"])
         self.assertEqual(ve.validate_execution_evidence(ev), [])
 
     def test_execution_evidence_placebo_not_activated_fails(self):
@@ -1380,6 +1868,7 @@ class ExecutionEvidenceAnchorTests(unittest.TestCase):
             os.path.join(ROOT, "skills", "code-review"))
         source_hash = "sha256:" + hashlib.sha256(
             open(evals_path, "rb").read()).hexdigest()
+        rep_id = str(uuid.uuid4())
         ev = {
             "evidence_type": "execution",
             "canonical_task_seed_hash": fixture_hash,
@@ -1397,6 +1886,7 @@ class ExecutionEvidenceAnchorTests(unittest.TestCase):
             "case_id": 1,
             "repetitions": [{
                 "rep": 1,
+                "repetition_id": rep_id,
                 "canonical_task_seed_hash": fixture_hash,
                 "natural_task_hash": hashlib.sha256(
                     case["prompt"].encode()).hexdigest(),
@@ -1404,7 +1894,7 @@ class ExecutionEvidenceAnchorTests(unittest.TestCase):
                 "condition_workspace_ids": {"target": "ws-target-1",
                                             "baseline": "ws-baseline-1"},
                 "conditions": {
-                    "target": {"container_id": "cg", "session_id": "sg",
+                    "target": {"repetition_id": rep_id, "container_id": "cg", "session_id": "sg",
                                "run_status": "success", "returncode": 0,
                                "skill_probe": "present",
                                "skill_context_probe": "present",
@@ -1419,7 +1909,7 @@ class ExecutionEvidenceAnchorTests(unittest.TestCase):
                                "skill_content_hash": target_hash,
                                "skill_tool_invoked": False,
                                "activation_events": []},
-                    "baseline": {"container_id": "cb", "session_id": "sb",
+                    "baseline": {"repetition_id": rep_id, "container_id": "cb", "session_id": "sb",
                                  "run_status": "success", "returncode": 0,
                                  "skill_probe": "absent",
                                  "skill_context_probe": "none",
@@ -1913,7 +2403,9 @@ class ExecutionEvidenceV2Tests(unittest.TestCase):
             os.path.join(ROOT, "skills", "code-review"))
         source_hash = "sha256:" + hashlib.sha256(
             open(evals_path, "rb").read()).hexdigest()
+        rep_id = str(uuid.uuid4())
         cond = {
+            "repetition_id": rep_id,
             "container_id": "c", "session_id": "s",
             "run_status": "success", "returncode": 0,
             "skill_probe": "present",
@@ -1928,6 +2420,7 @@ class ExecutionEvidenceV2Tests(unittest.TestCase):
             "skill_content_hash": target_hash,
             "skill_tool_invoked": False, "activation_events": []}
         baseline = dict(cond, container_id="cb", session_id="sb",
+                        repetition_id=rep_id,
                         skill_probe="absent", skill_context_probe="none",
                         starting_full_hash="sha256:f3",
                         ending_full_hash="sha256:f4",
@@ -1963,6 +2456,7 @@ class ExecutionEvidenceV2Tests(unittest.TestCase):
             "case_id": 1,
             "repetitions": [{
                 "rep": 1,
+                "repetition_id": rep_id,
                 "canonical_task_seed_hash": fixture_hash,
                 "natural_task_hash": hashlib.sha256(
                     case["prompt"].encode()).hexdigest(),

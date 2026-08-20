@@ -143,6 +143,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import uuid
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -730,7 +731,7 @@ def _conditions_arg(value):
 
 def finalize_condition(name, meta, task_before, task_after,
                        full_before, full_after, snapshot_before,
-                       snapshot_after, activation):
+                       snapshot_after, activation, repetition_id=None):
     """Assemble one condition's evidence dict.
 
     ``activation`` is None for the baseline (no treatment) or a dict with:
@@ -739,6 +740,7 @@ def finalize_condition(name, meta, task_before, task_after,
     (the mockable subprocess boundary).
     """
     cond = {
+        "repetition_id": repetition_id,
         "container_id": meta["container_id"],
         "session_id": meta["session_id"],
         "run_status": meta["status"],
@@ -796,6 +798,7 @@ def run_repetition(rep_index, conditions, natural_task, seed_dir,
                                 placebo_dir, placebo_skill)
     canonical = HASH_PREFIX + hash_task_workspace(seed_dir,
                                                   RUNTIME_TREATMENT_PATHS)
+    repetition_id = str(uuid.uuid4())
     # The pristine seed must not already contain the evaluator-owned discovery
     # tree. Other project-level .kilo config is legitimate task state and remains
     # included in the task hash.
@@ -879,12 +882,13 @@ def run_repetition(rep_index, conditions, natural_task, seed_dir,
         full_after = HASH_PREFIX + hash_workspace(workspace)
         snapshot_after = _snapshot(workspace)
         cond = finalize_condition(name, meta, task_before, task_after,
-                                  full_before, full_after, snapshot_before,
-                                  snapshot_after, act)
+                                   full_before, full_after, snapshot_before,
+                                   snapshot_after, act, repetition_id)
         cond_meta[name] = cond
 
     rep = {
         "rep": rep_index + 1,
+        "repetition_id": repetition_id,
         "workspace_path": WORKSPACE_MOUNT,
         "canonical_task_seed_hash": canonical,
         "natural_task_hash": hashlib.sha256(
