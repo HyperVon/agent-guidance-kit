@@ -239,7 +239,7 @@ does not rewrite the historical smoke reports above and does not claim a model
 execution result.
 
 - The deterministic validator passed with 26 skills, 0 hard errors, and 0
-  warnings. `test_validate_evaluations.py` passed with **171 tests** and 4
+  warnings. `test_validate_evaluations.py` passed with **173 tests** and 4
   subtests; `ruff check scripts/`, Python compilation, the README catalog-index
   check, `git diff --check`, and `hash_fixtures.py` (`Updated 0 evals.json
   files`) also passed.
