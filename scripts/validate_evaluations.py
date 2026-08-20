@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -25,8 +26,8 @@ from eval_hashing import (HASH_PREFIX, canonical_hash, source_hash_of,
                           verify_generator_deterministic)
 from evaluation_protocols import (ALLOWED_ASSERTION_SCOPES, PROTOCOL_NAMES,
                                   REGRESSION_STATUSES, get_protocol,
-                                  legacy_protocol_name, protocol_name,
-                                  validate_declaration)
+                                  is_safe_skill_name, legacy_protocol_name,
+                                  protocol_name, validate_declaration)
 
 try:
     import run_execution_eval as execution_runner
@@ -47,6 +48,23 @@ SKILLS_GLOB = os.path.join(ROOT, "skills", "*", "evals", "evals.json")
 # Repository-level evaluation corpora (shared cross-skill cases and holdouts).
 CONFUSION_GLOB = os.path.join(ROOT, "evaluations", "confusion-sets", "*.json")
 HOLDOUT_GLOB = os.path.join(ROOT, "evaluations", "holdout", "*.json")
+
+
+def _git_commit_exists(value):
+    """Return whether a resolved SHA names a commit in the current repo."""
+
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{40}", value):
+        return False
+    try:
+        subprocess.run(
+            ["git", "-C", ROOT, "cat-file", "-e", f"{value}^{{commit}}"],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    return True
 
 # Case classification: the design intent of a case, independent of its
 # ``kind``. ``smoke`` cases are obvious sanity checks (keep them cheap, do not
@@ -1271,6 +1289,9 @@ def _execution_source_anchor(evidence, errs):
     if not isinstance(skill, str) or not skill:
         errs.append("execution evidence missing skill")
         return None
+    if not is_safe_skill_name(skill):
+        errs.append("execution evidence skill must be a single safe skill name")
+        return None
     if not isinstance(case_id, int):
         errs.append("execution evidence missing integer case_id")
         return None
@@ -1388,6 +1409,12 @@ def validate_generic_execution_evidence(evidence):
     if (harness_runner is None or
             runtime_paths != list(harness_runner.RUNTIME_TREATMENT_PATHS)):
         errs.append("neutral execution runtime_treatment_paths do not match the neutral evaluator paths")
+    if not anchor["expected_fixture_hash"]:
+        errs.append("execution evidence current fixture has no frozen content/output hash")
+    elif not isinstance(evidence.get("expected_fixture_hash"), str) or not evidence.get("expected_fixture_hash").strip():
+        errs.append("execution evidence missing expected_fixture_hash for frozen content/output hash")
+    elif evidence.get("expected_fixture_hash") != anchor["expected_fixture_hash"]:
+        errs.append("execution evidence expected_fixture_hash does not match current frozen fixture hash")
     if not evidence.get("target_guidance_hash"):
         errs.append("neutral execution evidence missing target_guidance_hash")
     elif evidence.get("target_skill_content_hash") != evidence.get("target_guidance_hash"):
@@ -1405,7 +1432,9 @@ def validate_generic_execution_evidence(evidence):
         placebo = evidence.get("placebo_skill")
         if placebo == evidence.get("skill"):
             errs.append("neutral execution placebo skill must differ from target")
-        if harness_runner is not None and isinstance(placebo, str):
+        if not is_safe_skill_name(placebo):
+            errs.append("neutral execution placebo skill must be a single safe skill name")
+        elif harness_runner is not None and isinstance(placebo, str):
             placebo_path = os.path.join(ROOT, "skills", placebo)
             current_placebo_hash = harness_runner.skill_tree_hash(placebo_path)
             if evidence.get("placebo_skill_content_hash") != current_placebo_hash:
@@ -1516,6 +1545,9 @@ def _execution_source_anchor_generic(evidence, errs):
     if not isinstance(skill, str) or not skill:
         errs.append("execution evidence missing skill")
         return None
+    if not is_safe_skill_name(skill):
+        errs.append("execution evidence skill must be a single safe skill name")
+        return None
     if not isinstance(case_id, int):
         errs.append("execution evidence missing integer case_id")
         return None
@@ -1551,7 +1583,9 @@ def _execution_source_anchor_generic(evidence, errs):
         errs.append("execution evidence fixture_path does not match current fixture path")
     if evidence.get("fixture_source_hash") != source_hash:
         errs.append("execution evidence fixture_source_hash does not match current evals.json")
-    if expected and evidence.get("expected_fixture_hash") != expected:
+    if not expected:
+        errs.append("execution evidence current fixture has no frozen content/output hash")
+    elif evidence.get("expected_fixture_hash") != expected:
         errs.append("execution evidence expected_fixture_hash does not match current frozen fixture hash")
     expected_skill_path = os.path.join("skills", skill)
     if evidence.get("target_skill_source_path") != expected_skill_path:
@@ -2074,6 +2108,9 @@ def validate_generic_regression_evidence(evidence):
     if not isinstance(skill, str) or not skill:
         errs.append("regression evidence missing skill")
         return errs
+    if not is_safe_skill_name(skill):
+        errs.append("regression evidence skill must be a single safe skill name")
+        return errs
     if not isinstance(case_id, int):
         errs.append("regression evidence missing integer case_id")
         return errs
@@ -2109,12 +2146,23 @@ def validate_generic_regression_evidence(evidence):
         errs.append("regression evidence fixture_path does not match current fixture path")
     if evidence.get("fixture_source_hash") != source_hash:
         errs.append("regression evidence fixture_source_hash does not match current evals.json")
-    if expected_fixture and evidence.get("expected_fixture_hash") != expected_fixture:
+    if not expected_fixture:
+        errs.append("regression evidence current fixture has no frozen content/output hash")
+    elif not isinstance(evidence.get("expected_fixture_hash"), str) or not evidence.get("expected_fixture_hash").strip():
+        errs.append("regression evidence missing expected_fixture_hash for frozen content/output hash")
+    elif evidence.get("expected_fixture_hash") != expected_fixture:
         errs.append("regression evidence expected_fixture_hash does not match frozen fixture hash")
     for key in ("candidate_revision", "reference_revision",
                 "candidate_skill_content_hash", "reference_skill_content_hash"):
         if not isinstance(evidence.get(key), str) or not evidence[key].strip():
             errs.append(f"regression evidence missing {key}")
+    expected_skill_source = f"skills/{skill}"
+    for key in ("candidate_skill_source_path", "reference_skill_source_path"):
+        if evidence.get(key) != expected_skill_source:
+            errs.append(f"regression evidence {key} does not match the current skill")
+    for key in ("candidate_revision", "reference_revision"):
+        if not _git_commit_exists(evidence.get(key)):
+            errs.append(f"regression evidence {key} must be an existing Git commit SHA")
     conditions = evidence.get("conditions")
     if conditions != ["candidate", "reference"]:
         errs.append("regression evidence conditions must be ['candidate', 'reference']")

@@ -34,12 +34,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import evaluation_harness
 from eval_hashing import HASH_PREFIX, materialize_fixture_seed
-from evaluation_protocols import PROTOCOL_NAMES, validate_declaration
+from evaluation_protocols import (PROTOCOL_NAMES, is_safe_skill_name,
+                                  validate_declaration)
 
 
 def _load_case(skill: str, case_id: int) -> tuple[dict, str, str, str, str]:
-    if (not skill or skill in {".", ".."} or os.path.basename(skill) != skill
-            or "/" in skill or "\\" in skill):
+    if not is_safe_skill_name(skill):
         raise ValueError(f"invalid skill name {skill!r}")
     skill_dir = os.path.join(ROOT, "skills", skill)
     evals_path = os.path.join(skill_dir, "evals", "evals.json")
@@ -83,6 +83,8 @@ def build_evidence(args, adapter: evaluation_harness.CommandHarnessAdapter) -> d
             raise ValueError("--placebo-skill is required for a placebo condition")
         if args.placebo_skill == args.skill:
             raise ValueError("--placebo-skill must differ from --skill")
+        if not is_safe_skill_name(args.placebo_skill):
+            raise ValueError(f"invalid placebo skill name {args.placebo_skill!r}")
         placebo_dir = os.path.join(ROOT, "skills", args.placebo_skill)
         if not os.path.isfile(os.path.join(placebo_dir, "SKILL.md")):
             raise ValueError(f"placebo skill does not exist: {args.placebo_skill}")

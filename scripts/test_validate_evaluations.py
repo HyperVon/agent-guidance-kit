@@ -27,6 +27,7 @@ import evaluation_harness as eha
 import evaluation_protocols as ep
 import run_catalog_routing_eval as rc
 import run_execution_eval as ree
+import run_harness_eval as rhe
 import run_skill_regression_eval as rsre
 import validate_evaluations as ve
 
@@ -1106,6 +1107,7 @@ class HarnessAdapterTests(unittest.TestCase):
         prompt_hash = hashlib.sha256(case["prompt"].encode()).hexdigest()
         candidate_hash = "sha256:" + "1" * 64
         reference_hash = "sha256:" + "2" * 64
+        resolved_revision = rsre.resolve_revision("HEAD")
         repetition_id = "rep-neutral"
 
         def condition(name, worker, session, content_hash):
@@ -1134,8 +1136,8 @@ class HarnessAdapterTests(unittest.TestCase):
             "skill": skill,
             "case_id": 5,
             "conditions": ["candidate", "reference"],
-            "candidate_revision": "1" * 40,
-            "reference_revision": "2" * 40,
+            "candidate_revision": resolved_revision,
+            "reference_revision": resolved_revision,
             "candidate_skill_source_path": "skills/code-review",
             "reference_skill_source_path": "skills/code-review",
             "candidate_skill_content_hash": candidate_hash,
@@ -1165,6 +1167,69 @@ class HarnessAdapterTests(unittest.TestCase):
             "guidance_context_probe"] = "absent"
         self.assertTrue(any("context probe" in error
                             for error in ve.validate_generic_regression_evidence(evidence)))
+
+    def test_neutral_regression_rejects_unanchored_metadata(self):
+        skill = "code-review"
+        evals_path = os.path.join(ROOT, "skills", skill, "evals", "evals.json")
+        case = next(item for item in json.load(open(evals_path, encoding="utf-8"))["evals"]
+                    if item["id"] == 5)
+        expected_fixture = (case["fixture"].get("output_hash")
+                            or case["fixture"].get("content_hash"))
+        evidence = {
+            "evidence_type": "regression",
+            "protocol": "regression",
+            "harness": {"adapter_protocol": eha.ADAPTER_PROTOCOL},
+            "skill": skill,
+            "case_id": 5,
+            "candidate_revision": rsre.resolve_revision("HEAD"),
+            "reference_revision": rsre.resolve_revision("HEAD"),
+            "candidate_skill_source_path": "outside",
+            "reference_skill_source_path": "skills/code-review",
+            "candidate_skill_content_hash": "sha256:candidate",
+            "reference_skill_content_hash": "sha256:reference",
+            "conditions": ["candidate", "reference"],
+            "expected_fixture_hash": expected_fixture,
+            "fixture_source_path": "skills/code-review/evals/evals.json",
+            "fixture_path": os.path.normpath(os.path.join(
+                "skills/code-review", case["fixture"]["path"])),
+            "fixture_source_hash": "sha256:source",
+            "repetitions": [],
+        }
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("candidate_skill_source_path" in error for error in errors), errors)
+
+        evidence["candidate_skill_source_path"] = "skills/code-review"
+        evidence["expected_fixture_hash"] = None
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("frozen content/output hash" in error for error in errors), errors)
+
+        evidence["expected_fixture_hash"] = expected_fixture
+        evidence["candidate_revision"] = "f" * 40
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("existing Git commit SHA" in error for error in errors), errors)
+
+    def test_neutral_execution_rejects_unsafe_skill_name(self):
+        errors = ve.validate_generic_execution_evidence({
+            "evidence_type": "execution",
+            "protocol": "qualification",
+            "harness": {"adapter_protocol": eha.ADAPTER_PROTOCOL},
+            "skill": "../code-review",
+            "case_id": 1,
+        })
+        self.assertTrue(any("safe skill name" in error for error in errors), errors)
+
+    def test_neutral_runner_rejects_external_placebo_skill(self):
+        args = argparse.Namespace(
+            skill="code-review",
+            case_id=5,
+            protocol="confirmation",
+            conditions=["target", "baseline", "placebo"],
+            placebo_skill="/tmp/external-guidance",
+            model=None,
+            reps=3,
+        )
+        with self.assertRaisesRegex(ValueError, "invalid placebo skill name"):
+            rhe.build_evidence(args, object())
 
 
 class EvidenceValidationTests(unittest.TestCase):

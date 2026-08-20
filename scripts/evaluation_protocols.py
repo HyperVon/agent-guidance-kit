@@ -9,6 +9,7 @@ configuration language, so runners and validators share one source of truth.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import ntpath
 
 
 @dataclass(frozen=True)
@@ -57,6 +58,24 @@ PROTOCOL_NAMES = frozenset(PROTOCOLS)
 CONDITION_NAMES = frozenset({"target", "baseline", "placebo", "candidate", "reference"})
 ALLOWED_ASSERTION_SCOPES = frozenset({"shared-outcome", "skill-contract", "universal-safety"})
 REGRESSION_STATUSES = frozenset({"improved", "equivalent", "regressed", "inconclusive", "not_run"})
+
+
+def is_safe_skill_name(value: object) -> bool:
+    """Return whether a skill identifier is one repository directory name.
+
+    Evidence and CLI arguments must never turn a skill name into an absolute,
+    parent-relative, or drive-relative filesystem path.
+    """
+
+    return (
+        isinstance(value, str)
+        and bool(value)
+        and value not in {".", ".."}
+        and "\x00" not in value
+        and "/" not in value
+        and "\\" not in value
+        and not ntpath.splitdrive(value)[0]
+    )
 
 
 def get_protocol(name: str | None) -> Protocol | None:
