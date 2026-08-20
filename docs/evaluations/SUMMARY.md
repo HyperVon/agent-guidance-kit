@@ -1,7 +1,8 @@
 # Skill evaluation summary
 
 > **Status: case sets designed; methodology corrected; evaluation *infrastructure*
-> is now proven end-to-end on the 4 pilot skills (Docker execution layer + portable
+> is proven end-to-end on the code-review pilot, with frozen fixtures available for
+> four pilot skills (Docker execution layer + portable
 > catalog-discriminability layer). No *full published efficacy* run (n≥3, graded assertions,
 > committed result file) exists yet, and harness-integrated routing (Layer C) is
 > still blocked where the harness cannot expose the selected skill.**

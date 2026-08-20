@@ -86,7 +86,7 @@ def _verify_host_kilo(model):
     if not os.path.exists(kilo):
         print(f"kilo executable not found ({kilo})", file=sys.stderr)
         sys.exit(2)
-    if not _host_kilo_version():
+    if not _host_kilo_version(kilo):
         print("kilo --version failed on host", file=sys.stderr)
         sys.exit(2)
     try:
@@ -196,12 +196,14 @@ def extract_decision(text, catalog_names=None):
         return {"status": "failed", "error": "action field missing",
                 "decision": None}
     sel = obj["selected_skill"]
-    if sel in ("", "null", "none", "None"):
-        sel = None
     action = obj["action"]
     if action not in ("apply", "clarify"):
         return {"status": "failed",
                 "error": f"invalid action {action!r}", "decision": None}
+    if sel is not None and not isinstance(sel, str):
+        return {"status": "failed",
+                "error": "selected_skill must be a string or null",
+                "decision": None}
     # The selected skill must be one of the skills actually presented in the
     # catalog for this condition (a target-absent catalog omits the target).
     if sel is not None and catalog_names is not None and sel not in catalog_names:

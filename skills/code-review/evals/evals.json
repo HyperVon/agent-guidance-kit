@@ -181,9 +181,9 @@
         "path": "evals/files/case-5",
         "source": "setup.sh",
         "invocation": "bash setup.sh",
-        "content_hash": "sha256:694cc87e4f0496067128d6112026e11212d1534ce71a920fa0fed4865478a51b",
+        "content_hash": "sha256:e3efb80d93336e7472ffad532345e6d22858a457eb6433f6b31c2c96e0ef275f",
         "source_hash": "sha256:2b99b6bfde43b8a0ab6c4d31cea89bd9d4588961941a61bc180449afd604db63",
-        "output_hash": "sha256:694cc87e4f0496067128d6112026e11212d1534ce71a920fa0fed4865478a51b"
+        "output_hash": "sha256:e3efb80d93336e7472ffad532345e6d22858a457eb6433f6b31c2c96e0ef275f"
       }
     }
   ]

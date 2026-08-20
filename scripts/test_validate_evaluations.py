@@ -1021,6 +1021,22 @@ class CatalogRoutingDecisionTests(unittest.TestCase):
         self.assertEqual(r["decision"]["selected_skill"], None)
         self.assertEqual(r["decision"]["action"], "clarify")
 
+    def test_null_like_strings_are_not_json_null(self):
+        for value in ("null", "none", "None", ""):
+            with self.subTest(value=value):
+                raw = json.dumps({"selected_skill": value, "action": "clarify"})
+                r = rc.extract_decision(raw, self._cat(["code-review"]))
+                self.assertEqual(r["status"], "failed")
+                self.assertIn("not in supplied catalog", r["error"])
+
+    def test_non_string_selected_skill_is_rejected(self):
+        for value in ([], {}):
+            with self.subTest(value=value):
+                raw = json.dumps({"selected_skill": value, "action": "clarify"})
+                r = rc.extract_decision(raw, self._cat(["code-review"]))
+                self.assertEqual(r["status"], "failed")
+                self.assertIn("string or null", r["error"])
+
     def test_null_apply_rejected(self):
         r = rc.extract_decision('{"selected_skill": null, "action": "apply"}',
                                 self._cat(["code-review"]))
@@ -1078,12 +1094,179 @@ class CatalogRoutingDecisionTests(unittest.TestCase):
         self.assertEqual(meta["status"], "failed")
         self.assertIsNone(meta["decision"])
 
+    def test_verify_host_kilo_uses_resolved_path_for_version(self):
+        resolved = "/opt/homebrew/bin/kilo"
+        with unittest.mock.patch.object(rc, "_kilo_path", return_value=resolved), \
+                unittest.mock.patch.object(rc.os.path, "exists", return_value=True), \
+                unittest.mock.patch.object(rc, "_host_kilo_version",
+                                           return_value="kilo 1") as version, \
+                unittest.mock.patch.object(rc.subprocess, "check_output",
+                                           return_value="model\n") as check:
+            self.assertTrue(rc._verify_host_kilo("model"))
+        version.assert_called_once_with(resolved)
+        check.assert_called_once_with([resolved, "models"], text=True, timeout=120)
+
 
 class GeneratorHashSemanticsTests(unittest.TestCase):
     """Defect 2 / 14E: source_hash vs worker-visible output_hash semantics."""
 
     def tearDown(self):
         reset()
+
+    def _git(self, cwd, *args, env=None):
+        run_env = os.environ.copy()
+        run_env.update({
+            "GIT_AUTHOR_DATE": "2026-01-01T00:00:00+00:00",
+            "GIT_COMMITTER_DATE": "2026-01-01T00:00:00+00:00",
+        })
+        if env:
+            run_env.update(env)
+        return subprocess.run(["git", *args], cwd=cwd, env=run_env,
+                              check=True, capture_output=True, text=True)
+
+    def _git_fixture(self, parent):
+        root = os.path.join(parent, "fixture")
+        os.makedirs(root)
+        self._git(root, "init", "-q", "-b", "main")
+        self._git(root, "config", "user.name", "Eval Bot")
+        self._git(root, "config", "user.email", "eval@example.com")
+        with open(os.path.join(root, "tracked.txt"), "w") as handle:
+            handle.write("base\n")
+        self._git(root, "add", "tracked.txt")
+        self._git(root, "commit", "-q", "-m", "base")
+        main_sha = self._git(root, "rev-parse", "HEAD").stdout.strip()
+
+        origin = os.path.join(root, ".origin.git")
+        self._git(root, "init", "-q", "--bare", origin)
+        self._git(root, "remote", "add", "origin", "./.origin.git")
+        self._git(root, "push", "-q", "-u", "origin", "main")
+        self._git(root, "checkout", "-q", "-b", "feature")
+        with open(os.path.join(root, "feature.txt"), "w") as handle:
+            handle.write("feature\n")
+        self._git(root, "add", "feature.txt")
+        self._git(root, "commit", "-q", "-m", "feature")
+        feature_sha = self._git(root, "rev-parse", "HEAD").stdout.strip()
+        self._git(root, "push", "-q", "-u", "origin", "feature")
+        self._git(root, "checkout", "-q", "main")
+        return root, origin, main_sha, feature_sha
+
+    def test_bare_remote_branch_change_changes_hash(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            root, origin, main_sha, feature_sha = self._git_fixture(tmp)
+            h1 = eh.hash_workspace(root)
+            self._git(origin, "update-ref", "refs/heads/feature", main_sha)
+            self.assertNotEqual(h1, eh.hash_workspace(root))
+            self._git(origin, "update-ref", "refs/heads/feature", feature_sha)
+            self._git(origin, "symbolic-ref", "HEAD", "refs/heads/feature")
+            self.assertNotEqual(h1, eh.hash_workspace(root))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_detached_bare_remote_head_target_changes_hash(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            root, origin, main_sha, feature_sha = self._git_fixture(tmp)
+            h1 = eh.hash_workspace(root)
+            self._git(origin, "update-ref", "--no-deref", "HEAD", feature_sha)
+            h2 = eh.hash_workspace(root)
+            self.assertNotEqual(h1, h2)
+            self._git(origin, "update-ref", "--no-deref", "HEAD", main_sha)
+            self.assertNotEqual(h2, eh.hash_workspace(root))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_configured_bare_remote_name_is_discovered(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            root, origin, main_sha, _feature_sha = self._git_fixture(tmp)
+            named_origin = os.path.join(root, "origin")
+            os.rename(origin, named_origin)
+            self._git(root, "remote", "set-url", "origin", "./origin")
+            h1 = eh.hash_workspace(root)
+            self._git(named_origin, "config", "core.precomposeUnicode", "true")
+            self.assertEqual(h1, eh.hash_workspace(root))
+            self._git(named_origin, "update-ref", "refs/heads/feature", main_sha)
+            self.assertNotEqual(h1, eh.hash_workspace(root))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_bare_remote_branch_addition_and_removal_change_hash(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            root, origin, main_sha, _feature_sha = self._git_fixture(tmp)
+            h1 = eh.hash_workspace(root)
+            self._git(origin, "update-ref", "refs/heads/new-feature", main_sha)
+            h2 = eh.hash_workspace(root)
+            self.assertNotEqual(h1, h2)
+            self._git(origin, "update-ref", "-d", "refs/heads/feature")
+            h3 = eh.hash_workspace(root)
+            self.assertNotEqual(h2, h3)
+            self.assertNotEqual(h1, h3)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_bare_remote_tag_change_changes_hash(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            root, origin, main_sha, feature_sha = self._git_fixture(tmp)
+            self._git(origin, "update-ref", "refs/tags/v1", main_sha)
+            h1 = eh.hash_workspace(root)
+            self._git(origin, "update-ref", "refs/tags/v1", feature_sha)
+            self.assertNotEqual(h1, eh.hash_workspace(root))
+            self._git(origin, "update-ref", "-d", "refs/tags/v1")
+            self.assertNotEqual(h1, eh.hash_workspace(root))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_bare_remote_config_noise_does_not_change_hash(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            root, origin, _main_sha, _feature_sha = self._git_fixture(tmp)
+            h1 = eh.hash_workspace(root)
+            self._git(origin, "config", "core.precomposeUnicode", "true")
+            self.assertEqual(h1, eh.hash_workspace(root))
+            self._git(origin, "config", "fixture.irrelevant", "noise")
+            self.assertEqual(h1, eh.hash_workspace(root))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_working_upstream_change_changes_hash(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            root, _origin, _main_sha, _feature_sha = self._git_fixture(tmp)
+            h1 = eh.hash_workspace(root)
+            self._git(root, "config", "branch.main.remote", "upstream")
+            self.assertNotEqual(h1, eh.hash_workspace(root))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_fixture_local_absolute_remote_paths_normalize(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            root, _origin, _main_sha, _feature_sha = self._git_fixture(tmp)
+            root_copy = os.path.join(tmp, "other-fixture")
+            self._git(root, "remote", "set-url", "origin",
+                      os.path.join(root, ".origin.git"))
+            shutil.copytree(root, root_copy)
+            self._git(root_copy, "remote", "set-url", "origin",
+                      os.path.join(root_copy, ".origin.git"))
+            self.assertEqual(eh.hash_workspace(root), eh.hash_workspace(root_copy))
+            self.assertEqual(
+                eh._normalize_fixture_remote_url(
+                    "https://github.com/foo/bar.git", root),
+                "https://github.com/foo/bar.git",
+            )
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_bare_remote_hash_is_repeatable(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            root, _origin, _main_sha, _feature_sha = self._git_fixture(tmp)
+            self.assertEqual(eh.hash_workspace(root), eh.hash_workspace(root))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
     def test_setup_sh_absent_from_worker_seed(self):
         tmp = tempfile.mkdtemp()
