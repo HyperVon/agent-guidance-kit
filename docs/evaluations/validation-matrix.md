@@ -38,6 +38,8 @@ Status dimensions are kept separate (per the corrected methodology):
 > **catalog-discriminability = proven**, **harness-routing = `not_run` (blocked)**,
 > protocol `not_run` (no graded n≥3 run published yet), repeats 0. The historical
 > exploratory pilots remain `invalid` and were not reused.
+>
+> **Update 2026-08-20:** `code-review` now has a protocol-valid Tier-2 execution run (Docker, n=3) at `results/code-review-first-valid.md` — execution `valid`, protocol `valid`, measurement non-discriminating on the frozen design (see result for routing catalog analysis and placebo gap).
 
 **Target harness:** Kilo/CLI  |  **Model:** kilo/tencent/hy3:free (anonymous, free)  |  **Reasoning effort:** high
 **Isolation available:** Layer B uses **Docker OS-containment** (`isolation_method: docker`,
@@ -48,7 +50,7 @@ production-valid); host-only runs are still instruction-only and must be labeled
 | [adversarial-pr-review](../../skills/adversarial-pr-review/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
 | [ai-slop-detector](../../skills/ai-slop-detector/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
 | [architecture-review](../../skills/architecture-review/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
-| [code-review](../../skills/code-review/evals/evals.json) | 5 | ready (5/5) | not_run | exploratory (force-injected) | invalid | 1 | [results](results/code-review.md) |
+| [code-review](../../skills/code-review/evals/evals.json) | 5 | ready (5/5) | not_run | valid | valid | 3 | [results](results/code-review-first-valid.md) |
 | [codebase-orientation](../../skills/codebase-orientation/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
 | [dependency-upgrade](../../skills/dependency-upgrade/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
 | [documentation-review](../../skills/documentation-review/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | – | – |
@@ -74,8 +76,7 @@ production-valid); host-only runs are still instruction-only and must be labeled
 
 Total: 26 skills, 130 designed cases. Fixtures frozen for 4/26 (the four pilot
 skills: code-review, git-github-workflow, review-feedback-resolution,
-security-review). Routing measured for 0/26. Execution validated for 0/26 (4
-exploratory invalid pilots only).
+security-review). Routing measured for 0/26. Execution validated for 1/26 (code-review valid at `results/code-review-first-valid.md`; 3 others exploratory invalid).
 
 **Phase 1 (2026-08-16) + follow-up, four pilot skills:** Layer A catalog-discriminability and
 Layer B Docker execution **infrastructure proven** (single-rep smoke on `code-review`;
