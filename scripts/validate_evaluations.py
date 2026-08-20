@@ -82,6 +82,20 @@ ALLOWED_ASSERTION_TYPES = {"behavioral", "quality", "presentation"}
 # sandbox with a verified boundary), not instruction-only / prompt-only wording.
 LIMITED_ISOLATION = ("instruction-only", "prompt-only", "no sandbox", "none",
                      "n/a", "unknown")
+
+
+def _case_supports_mode(case, mode):
+    """Whether an authoritative eval case can support the result mode."""
+    modes = case.get("evaluation_modes") if isinstance(case, dict) else None
+    if not isinstance(modes, list):
+        return False
+    if mode in modes:
+        return True
+    # Catalog- and harness-routing are routing-family variants; existing eval
+    # catalogs may declare their shared mode simply as ``routing``.
+    return mode in ROUTING_MODES and "routing" in modes
+
+
 HISTORICAL = {"code-review.md", "git-github-workflow.md",
               "review-feedback-resolution.md", "security-review.md"}
 
@@ -476,6 +490,9 @@ def check_real_result(base, text, skill_names, case_index):
         err(f"{base}: a real run result must contain a ```result-json block with the required metadata")
         return
     for res in blocks:
+        if not isinstance(res, dict):
+            err(f"{base}: result-json block must contain an object")
+            continue
         check_one_result(base, res, skill_names, case_index)
 
 
@@ -492,15 +509,40 @@ def check_one_result(base, res, skill_names, case_index):
     method = res.get("method")
     if method not in {"docker-isolated", "harness-routing"}:
         err(f"{base}: method '{method}' invalid; expected docker-isolated or harness-routing")
-    rt = res.get("runtime") or {}
+    rt = res.get("runtime")
+    if rt is None:
+        rt = {}
+    elif not isinstance(rt, dict):
+        err(f"{base}: result runtime must be an object")
+        rt = {}
     for key in ("harness", "model", "reasoning_effort", "tool_policy",
                 "network_policy", "isolation_method"):
         if not rt.get(key):
             err(f"{base}: missing runtime field '{key}'")
-    pr = res.get("protocol") or {}
+    pr = res.get("protocol")
+    if pr is None:
+        pr = {}
+    elif not isinstance(pr, dict):
+        err(f"{base}: result protocol must be an object")
+        pr = {}
+    cases = res.get("cases")
+    if not isinstance(cases, list):
+        err(f"{base}: result cases must be a list")
+        cases = []
+    runs = res.get("runs")
+    if runs is None:
+        runs = {}
+    elif not isinstance(runs, dict):
+        err(f"{base}: result runs must be an object")
+        runs = {}
+    for condition in ("target", "baseline", "placebo"):
+        if condition in runs and not isinstance(runs[condition], dict):
+            err(f"{base}: top-level runs.{condition} must be an object")
     status = pr.get("status")
     if status not in ALLOWED_PROTOCOL:
         err(f"{base}: protocol.status '{status}' invalid")
+    if status == "valid" and not cases:
+        err(f"{base}: valid result must contain at least one case")
     if not isinstance(pr.get("worker_isolation_verified"), bool):
         err(f"{base}: protocol.worker_isolation_verified must be boolean")
     if status == "valid" and pr.get("worker_isolation_verified") is not True:
@@ -521,73 +563,195 @@ def check_one_result(base, res, skill_names, case_index):
             err(f"{base}: execution result missing baseline_guidance_absent evidence (baseline received no guidance)")
         # Docker execution: the target and baseline workers must run in distinct
         # fresh containers, not a shared process.
-        runs = res.get("runs") or {}
         # Top-level container IDs: for multi-case with per-case reps, top-level is optional
         has_per_case_reps_early = False
         if res.get("evaluation_mode") == "execution":
-            for cs in res.get("cases") or []:
-                if isinstance(cs.get("repetitions"), list) and cs.get("repetitions"):
+            for cs in cases:
+                if isinstance(cs, dict) and isinstance(
+                        cs.get("repetitions"), list) and cs.get("repetitions"):
                     has_per_case_reps_early = True
                     break
         if not has_per_case_reps_early:
-            g_cid = (runs.get("target") or {}).get("container_id")
-            b_cid = (runs.get("baseline") or {}).get("container_id")
+            target_run = runs.get("target")
+            baseline_run = runs.get("baseline")
+            if target_run is None:
+                target_run = {}
+            if baseline_run is None:
+                baseline_run = {}
+            if not isinstance(target_run, dict) or not isinstance(
+                    baseline_run, dict):
+                err(f"{base}: execution target/baseline runs must be objects")
+                g_cid = b_cid = None
+            else:
+                g_cid = target_run.get("container_id")
+                b_cid = baseline_run.get("container_id")
             if not g_cid or not b_cid:
                 err(f"{base}: execution result must record distinct target/baseline container_ids")
             elif g_cid == b_cid:
                 err(f"{base}: target and baseline share a container_id (contamination)")
+    strict_execution = mode in EXEC_MODES and status == "valid"
+    required_conditions = ("target", "baseline")
+    declared_repeats = None
+    global_identity = (
+        {"repetition_id": set(), "session_id": set(), "container_id": set()}
+        if strict_execution else None)
+    if mode in EXEC_MODES:
+        declared_conditions = pr.get("conditions")
+        if strict_execution:
+            if not isinstance(declared_conditions, list):
+                err(f"{base}: valid execution result must declare protocol.conditions")
+            else:
+                non_string = [condition for condition in declared_conditions
+                               if not isinstance(condition, str)]
+                if non_string:
+                    err(f"{base}: protocol.conditions must contain only "
+                        f"condition names, got {non_string!r}")
+                else:
+                    unknown = set(declared_conditions) - {
+                        "target", "baseline", "placebo"}
+                    if unknown:
+                        err(f"{base}: protocol.conditions contains unknown "
+                            f"condition(s) {sorted(unknown)!r}")
+                    if not set(declared_conditions) >= set(required_conditions):
+                        err(f"{base}: valid execution result protocol.conditions "
+                            "must include target and baseline")
+                    if "placebo" in declared_conditions:
+                        required_conditions += ("placebo",)
+            declared_repeats = pr.get("repeats")
+            if not isinstance(declared_repeats, int) or isinstance(
+                    declared_repeats, bool) or declared_repeats < 1:
+                err(f"{base}: valid execution result must declare a positive "
+                    "integer protocol.repeats")
+                declared_repeats = None
+        else:
+            declared_conditions = pr.get("conditions")
+            if isinstance(declared_conditions, list) and "placebo" in declared_conditions:
+                required_conditions += ("placebo",)
+        # A committed case may still carry placebo data even when an older
+        # result omitted protocol.conditions. Treat that as a declared placebo
+        # for strict verdict validation rather than silently dropping it.
+        if strict_execution and "placebo" not in required_conditions:
+            has_placebo = False
+            for c in cases:
+                if not isinstance(c, dict):
+                    continue
+                verdict = c.get("verdict")
+                if isinstance(verdict, dict) and "placebo" in verdict:
+                    has_placebo = True
+                    break
+                assertions = c.get("assertions")
+                if isinstance(assertions, list) and any(
+                        isinstance(assertion, dict) and "placebo" in assertion
+                        for assertion in assertions):
+                    has_placebo = True
+                    break
+                repetitions = c.get("repetitions")
+                if isinstance(repetitions, list) and any(
+                        isinstance(repetition, dict) and
+                        isinstance(repetition.get("runs"), dict) and
+                        "placebo" in repetition["runs"]
+                        for repetition in repetitions):
+                    has_placebo = True
+                    break
+            if has_placebo:
+                required_conditions += ("placebo",)
     if mode in ROUTING_MODES:
         if not pr.get("routing_mechanism"):
             err(f"{base}: routing result missing routing_mechanism (selected skill unverified)")
     # Worker / run identity: for single-case backward compat a top-level
     # runs block is allowed, but for multi-case results the per-case/per-repetition
     # runs are authoritative. If per-case repetitions are present, top-level is optional.
-    runs = res.get("runs") or {}
     # Detect if this is a multi-case result with per-case repetitions
     has_per_case_reps = False
     if res.get("evaluation_mode") == "execution":
-        for cs in res.get("cases") or []:
-            if isinstance(cs.get("repetitions"), list) and cs.get("repetitions"):
+        for cs in cases:
+            if isinstance(cs, dict) and isinstance(
+                    cs.get("repetitions"), list) and cs.get("repetitions"):
                 has_per_case_reps = True
                 break
     if has_per_case_reps:
         # Per-case repetitions are authoritative; top-level is optional alias
         # If top-level is present, it must still be distinct if used, but we don't
         # require it and we don't treat it as an independent execution for uniqueness
-        if runs.get("target") and runs.get("baseline"):
-            g = runs.get("target") or {}
-            b = runs.get("baseline") or {}
+        g = runs.get("target")
+        b = runs.get("baseline")
+        if g is not None and b is not None and (
+                not isinstance(g, dict) or not isinstance(b, dict)):
+            err(f"{base}: top-level target/baseline runs must be objects")
+        elif isinstance(g, dict) and isinstance(b, dict):
             if g.get("session_id") and b.get("session_id") and g["session_id"] == b["session_id"]:
                 err(f"{base}: top-level target and baseline share a session_id (contamination)")
     else:
-        g = runs.get("target") or {}
-        b = runs.get("baseline") or {}
-        if not g.get("session_id") or not b.get("session_id"):
+        g = runs.get("target")
+        b = runs.get("baseline")
+        if g is None:
+            g = {}
+        if b is None:
+            b = {}
+        if not isinstance(g, dict) or not isinstance(b, dict):
+            err(f"{base}: top-level target/baseline runs must be objects")
+        elif not g.get("session_id") or not b.get("session_id"):
             err(f"{base}: result must record distinct target/baseline session_ids")
         elif g["session_id"] == b["session_id"]:
             err(f"{base}: target and baseline share a session_id (contamination)")
     # Multi-case execution results must use per-case natural_task_hash; a single
     # top-level protocol.natural_task_hash cannot represent several different prompts.
     if mode in EXEC_MODES and status == "valid":
-        cases = res.get("cases") or []
-        if len(cases) > 1 and pr.get("natural_task_hash"):
+        has_top_task_hash = "natural_task_hash" in pr
+        top_task_hash = pr.get("natural_task_hash")
+        if len(cases) > 1 and has_top_task_hash:
             err(f"{base}: multi-case execution result has ambiguous top-level protocol.natural_task_hash; use per-case cases[].natural_task_hash instead (top-level must be absent for multi-case)")
+        elif len(cases) == 1 and has_top_task_hash:
+            case_task_hash = (cases[0].get("natural_task_hash")
+                              if isinstance(cases[0], dict) else None)
+            if not isinstance(top_task_hash, str) or not isinstance(
+                    case_task_hash, str) or \
+                    top_task_hash.removeprefix("sha256:") != \
+                    case_task_hash.removeprefix("sha256:"):
+                err(f"{base}: single-case protocol.natural_task_hash must "
+                    "match cases[].natural_task_hash")
     # Protocol-validity gates: invalid/contaminated cannot produce success.
     if status in ("invalid", "contaminated"):
-        for cs in res.get("cases", []):
-            cat = (cs.get("outcome") or {}).get("category")
+        for cs in cases:
+            if not isinstance(cs, dict):
+                continue
+            outcome = cs.get("outcome")
+            cat = (outcome.get("category")
+                   if isinstance(outcome, dict) else None)
             if cat in ("skill_only_pass", "baseline_only_pass", "both_pass"):
                 err(f"{base} case {cs.get('case_id')}: {status} result cannot claim a success outcome ({cat})")
-    for cs in res.get("cases", []):
-        check_result_case(base, cs, skill, mode, case_index)
+    for cs in cases:
+        check_result_case(
+            base, cs, skill, mode, case_index,
+            strict_execution=strict_execution,
+            require_authoritative_case=(status == "valid"),
+            protocol_status=status,
+            required_conditions=required_conditions,
+            declared_repeats=declared_repeats,
+            global_identity=global_identity,
+        )
 
 
-def check_result_case(base, cs, skill, mode, case_index):
+def check_result_case(base, cs, skill, mode, case_index, *,
+                      strict_execution=False,
+                      require_authoritative_case=False,
+                      protocol_status=None,
+                      required_conditions=("target", "baseline"),
+                      declared_repeats=None,
+                      global_identity=None):
+    if not isinstance(cs, dict):
+        err(f"{base}: result case must be an object")
+        return
     cid = cs.get("case_id")
-    if not isinstance(cid, int):
+    if not isinstance(cid, int) or isinstance(cid, bool):
         err(f"{base}: case_id must be integer")
         return
-    oc = cs.get("outcome") or {}
+    oc = cs.get("outcome")
+    if oc is None:
+        oc = {}
+    elif not isinstance(oc, dict):
+        err(f"{base} case {cid}: outcome must be an object")
+        oc = {}
     cat = oc.get("category")
     if cat not in ALLOWED_OUTCOME:
         err(f"{base} case {cid}: outcome.category '{cat}' invalid")
@@ -595,19 +759,33 @@ def check_result_case(base, cs, skill, mode, case_index):
         err(f"{base} case {cid}: outcome.measurement_status invalid")
     if oc.get("protocol_status") not in ALLOWED_PROTOCOL:
         err(f"{base} case {cid}: outcome.protocol_status invalid")
+    elif protocol_status in ALLOWED_PROTOCOL and oc.get("protocol_status") != protocol_status:
+        err(f"{base} case {cid}: outcome.protocol_status must match "
+            f"top-level protocol.status ({protocol_status!r})")
     # outcome <-> verdict consistency (verdict booleans are required for every mode)
-    verdict = cs.get("verdict") or {}
+    verdict = cs.get("verdict")
+    if verdict is None:
+        verdict = {}
+    elif not isinstance(verdict, dict):
+        err(f"{base} case {cid}: verdict must be an object")
+        verdict = {}
     gp = verdict.get("target_pass")
     bp = verdict.get("baseline_pass")
     pp = verdict.get("placebo_pass")
     if not isinstance(gp, bool) or not isinstance(bp, bool):
         err(f"{base} case {cid}: missing verdict.target_pass/baseline_pass booleans")
         return
+    requires_placebo = "placebo" in required_conditions
+    if requires_placebo and not isinstance(pp, bool):
+        err(f"{base} case {cid}: valid placebo comparison requires "
+            "verdict.placebo_pass boolean")
     expect = None
     if gp and not bp:
         # skill_only_pass requires placebo to fail (or not be run)
-        if pp is False or pp is None:
+        if pp is False or (pp is None and not requires_placebo):
             expect = "skill_only_pass"
+        elif pp is True:
+            expect = "non_discriminating"
     elif bp and not gp:
         # baseline_only_pass: placebo status doesn't change the category
         expect = "baseline_only_pass"
@@ -617,20 +795,50 @@ def check_result_case(base, cs, skill, mode, case_index):
         # both_pass (benchmark at least separates real guidance from placebo).
         if pp is True:
             expect = "non_discriminating"
-        else:
+        elif pp is False or (pp is None and not requires_placebo):
             expect = "both_pass"
     elif not gp and not bp:
-        if pp is False or pp is None:
+        if pp is False or (pp is None and not requires_placebo):
             expect = "both_fail"
-        else:
+        elif pp is True:
             expect = "placebo_only_pass"
     if expect and cat != expect:
         err(f"{base} case {cid}: outcome.category '{cat}' inconsistent with verdict (expected {expect})")
 
+    if mode in EXEC_MODES:
+        measurement = oc.get("measurement_status")
+        controls = [bp]
+        if requires_placebo:
+            controls.append(pp)
+        if measurement == "discriminating":
+            if gp is not True or any(control is not False for control in controls):
+                err(f"{base} case {cid}: discriminating measurement requires "
+                    "target_pass=true and every declared control to fail")
+        elif measurement == "non_discriminating":
+            if gp is True and all(control is False for control in controls):
+                err(f"{base} case {cid}: non_discriminating measurement cannot "
+                    "claim a unique target advantage")
+
+    if require_authoritative_case:
+        authoritative = case_index.get(skill, {}).get(cid)
+        if authoritative is None:
+            err(f"{base} case {cid}: case_id is not present in the current "
+                f"{skill} evals; valid provenance must reference an "
+                "authoritative case")
+        elif not _case_supports_mode(authoritative, mode):
+            err(f"{base} case {cid}: authoritative eval case does not support "
+                f"evaluation_mode {mode!r}")
+
     if mode in ROUTING_MODES:
         check_routing_result_case(base, cs, skill, case_index, cid, gp, bp)
     else:
-        check_exec_result_case(base, cs, skill, case_index, cid)
+        check_exec_result_case(
+            base, cs, skill, case_index, cid,
+            strict=strict_execution,
+            required_conditions=required_conditions,
+            declared_repeats=declared_repeats,
+            global_identity=global_identity,
+        )
 
 
 def _routing_match(selected, expected, fallbacks):
@@ -653,9 +861,17 @@ def check_routing_result_case(base, cs, skill, case_index, cid, gp, bp):
     == runs.baseline) to be present, and verifies the captured selected skills
     against the case's routing expectation. No execution assertions are graded.
     """
-    rn = cs.get("runs") or {}
+    rn = cs.get("runs")
+    if rn is None:
+        rn = {}
+    elif not isinstance(rn, dict):
+        err(f"{base} case {cid}: routing runs must be an object")
+        return
     g = rn.get("target") or {}
     b = rn.get("baseline") or {}
+    if not isinstance(g, dict) or not isinstance(b, dict):
+        err(f"{base} case {cid}: routing target/baseline runs must be objects")
+        return
     # target-present condition evidence (a concrete selected skill must exist)
     sel_p = g.get("selected_skill")
     if not sel_p:
@@ -691,11 +907,15 @@ def check_routing_result_case(base, cs, skill, case_index, cid, gp, bp):
             f"absent={sel_a!r}->{exp_absent!r}, fallbacks={fallbacks!r})")
 
 
-def check_exec_result_case(base, cs, skill, case_index, cid):
+def check_exec_result_case(base, cs, skill, case_index, cid, *, strict=False,
+                           required_conditions=("target", "baseline"),
+                           declared_repeats=None,
+                           global_identity=None):
     """Execution results grade frozen assertions with evidence on both conditions."""
-    # Per-case provenance: natural_task_hash, fixture_hash, repetitions with identities
-    # are required for valid execution results. This keeps multi-case files honest and
-    # makes spliced repetitions detectable.
+    # Per-case provenance is mandatory for protocol-valid execution results.
+    # Limited/invalid records may remain compact, but any fields they do carry
+    # are still checked. This keeps historical records readable without allowing
+    # a valid claim to omit its provenance.
     import hashlib
     from eval_hashing import HASH_PREFIX
     # Validate per-case natural_task_hash against authoritative prompt (when case is known)
@@ -705,47 +925,68 @@ def check_exec_result_case(base, cs, skill, case_index, cid):
         expected_hex = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
         expected_prefixed = HASH_PREFIX + expected_hex
         actual = cs.get("natural_task_hash")
-        if not isinstance(actual, str) or not actual.strip():
+        if strict and (not isinstance(actual, str) or not actual.strip()):
             err(f"{base} case {cid}: missing cases[].natural_task_hash (per-case prompt hash required)")
-        elif actual not in (expected_hex, expected_prefixed):
+        elif isinstance(actual, str) and actual.strip() and actual not in (
+                expected_hex, expected_prefixed):
             err(f"{base} case {cid}: natural_task_hash does not match current source prompt (expected {expected_prefixed[:16]}.., got {actual[:16] if isinstance(actual,str) else actual!r})")
-        # Fixture hash per case (optional but if present must match)
+        # Fixture hash is mandatory for valid execution and, when present on a
+        # non-valid record, must still match the frozen source.
         expected_fixture = None
         fx = case.get("fixture") or {}
         if fx.get("type") == "generator":
             expected_fixture = fx.get("output_hash") or fx.get("content_hash")
         else:
             expected_fixture = fx.get("content_hash")
-        if "fixture_hash" in cs:
+        if strict and not expected_fixture:
+            err(f"{base} case {cid}: authoritative frozen fixture hash is missing")
+        if strict and (not isinstance(cs.get("fixture_hash"), str) or
+                       not cs.get("fixture_hash", "").strip()):
+            err(f"{base} case {cid}: missing cases[].fixture_hash "
+                "(per-case frozen fixture hash required)")
+        if "fixture_hash" in cs and cs.get("fixture_hash") is not None:
             fh = cs.get("fixture_hash")
             if expected_fixture and fh != expected_fixture:
                 err(f"{base} case {cid}: fixture_hash does not match frozen fixture hash")
+        raw_hash = cs.get("raw_evidence_hash")
+        if raw_hash is not None and not re.fullmatch(
+                r"sha256:[0-9a-f]{64}", str(raw_hash)):
+            err(f"{base} case {cid}: raw_evidence_hash must be a SHA-256 digest")
     else:
-        # Even when case not in index (e.g., test harness), still require per-case hash for valid execution
-        # to ensure provenance is present; we cannot validate correctness without authoritative prompt,
-        # but we can require presence
-        if not isinstance(cs.get("natural_task_hash"), str) or not cs.get("natural_task_hash").strip():
-            # Only require for valid execution results; historical invalid may lack it
-            # Check if this is a valid execution case (protocol valid)
-            # We need to know status, but cs doesn't have it; we check outer. For now, require for all execution cases
-            # to make tests pass, we will require it
+        # Unknown cases cannot be hash-checked against the current source, but a
+        # limited/invalid execution result may still carry the field for later
+        # auditing without being checked against the current source.
+        if strict and (not isinstance(cs.get("natural_task_hash"), str) or
+                       not cs.get("natural_task_hash", "").strip()):
             err(f"{base} case {cid}: missing cases[].natural_task_hash (per-case prompt hash required)")
-    # Repetitions provenance: each valid execution case must have 3 complete
-    # repetitions with unique repetition_id and per-rep runs (required for all execution cases)
+        if strict and (not isinstance(cs.get("fixture_hash"), str) or
+                       not cs.get("fixture_hash", "").strip()):
+            err(f"{base} case {cid}: missing cases[].fixture_hash "
+                "(per-case frozen fixture hash required)")
+        raw_hash = cs.get("raw_evidence_hash")
+        if raw_hash is not None and not re.fullmatch(
+                r"sha256:[0-9a-f]{64}", str(raw_hash)):
+            err(f"{base} case {cid}: raw_evidence_hash must be a SHA-256 digest")
+    # Repetitions provenance: a valid execution case must carry the declared
+    # number of complete repetitions. Non-valid records may omit this block.
     reps = cs.get("repetitions")
     if reps is None:
-        err(f"{base} case {cid}: missing cases[].repetitions (per-case/per-repetition execution identity required)")
-    elif not isinstance(reps, list) or not reps:
+        if strict:
+            err(f"{base} case {cid}: missing cases[].repetitions (per-case/per-repetition execution identity required)")
+    elif not isinstance(reps, list):
+        err(f"{base} case {cid}: cases[].repetitions must be a list")
+    elif not reps and strict:
         err(f"{base} case {cid}: cases[].repetitions must be a non-empty list")
-    else:
-        # Expect 3 repetitions for a valid n=3 claim; allow historical invalid to skip
-        # but valid must have 3.
-        if len(reps) != 3:
-            err(f"{base} case {cid}: cases[].repetitions must contain 3 complete repetitions (found {len(reps)})")
+    elif isinstance(reps, list):
+        expected_repeats = declared_repeats if strict else None
+        if strict and expected_repeats is not None and len(reps) != expected_repeats:
+            err(f"{base} case {cid}: cases[].repetitions must contain "
+                f"{expected_repeats} complete repetitions (found {len(reps)})")
         # Check each repetition structure and uniqueness
         seen_rep_ids = set()
         seen_sids = set()
         seen_cids = set()
+        rep_indices = []
         for r in reps:
             if not isinstance(r, dict):
                 err(f"{base} case {cid}: repetition is not an object")
@@ -758,19 +999,26 @@ def check_exec_result_case(base, cs, skill, case_index, cid):
             else:
                 seen_rep_ids.add(rid)
             rep_idx = r.get("rep")
-            if not isinstance(rep_idx, int):
+            if not isinstance(rep_idx, int) or isinstance(rep_idx, bool):
                 err(f"{base} case {cid}: repetition missing integer rep index")
+            else:
+                rep_indices.append(rep_idx)
             runs = r.get("runs") or {}
             if not isinstance(runs, dict):
                 err(f"{base} case {cid} rep{rep_idx}: runs must be an object")
                 continue
-            # Each rep must contain all required conditions
-            for cond in ("target", "baseline", "placebo"):
+            # Each rep must contain every condition declared by the result.
+            conditions_to_check = list(required_conditions)
+            if "placebo" not in conditions_to_check and "placebo" in runs:
+                conditions_to_check.append("placebo")
+            for cond in conditions_to_check:
                 if cond not in runs:
-                    if cond in ("target", "baseline"):
-                        err(f"{base} case {cid} rep{rep_idx}: missing runs.{cond}")
+                    err(f"{base} case {cid} rep{rep_idx}: missing runs.{cond}")
                     continue
                 cr = runs.get(cond) or {}
+                if not isinstance(cr, dict):
+                    err(f"{base} case {cid} rep{rep_idx} {cond}: run must be an object")
+                    continue
                 sid = cr.get("session_id")
                 cid_ = cr.get("container_id")
                 if not isinstance(sid, str) or not sid.strip():
@@ -779,12 +1027,31 @@ def check_exec_result_case(base, cs, skill, case_index, cid):
                     err(f"{base} case {cid} rep{rep_idx} {cond}: duplicate session_id {sid!r} (spliced or shared execution)")
                 else:
                     seen_sids.add(sid)
+                    if global_identity is not None:
+                        if sid in global_identity["session_id"]:
+                            err(f"{base} case {cid} rep{rep_idx} {cond}: duplicate session_id {sid!r} across cases")
+                        global_identity["session_id"].add(sid)
                 if not isinstance(cid_, str) or not cid_.strip():
                     err(f"{base} case {cid} rep{rep_idx} {cond}: missing container_id")
                 elif cid_ in seen_cids:
                     err(f"{base} case {cid} rep{rep_idx} {cond}: duplicate container_id {cid_!r} (spliced or shared execution)")
                 else:
                     seen_cids.add(cid_)
+                    if global_identity is not None:
+                        if cid_ in global_identity["container_id"]:
+                            err(f"{base} case {cid} rep{rep_idx} {cond}: duplicate container_id {cid_!r} across cases")
+                        global_identity["container_id"].add(cid_)
+            if strict and isinstance(rid, str) and rid.strip() and \
+                    global_identity is not None:
+                if rid in global_identity["repetition_id"]:
+                    err(f"{base} case {cid} rep{rep_idx}: duplicate repetition_id "
+                        f"{rid!r} across cases")
+                global_identity["repetition_id"].add(rid)
+        if strict and expected_repeats is not None:
+            expected_indices = list(range(1, expected_repeats + 1))
+            if sorted(rep_indices) != expected_indices:
+                err(f"{base} case {cid}: repetition rep indices must be "
+                    f"{expected_indices!r}")
         # Cross-rep duplicate detection already done via seen sets
     assertions = cs.get("assertions") or []
     if not isinstance(assertions, list) or not assertions:
@@ -793,15 +1060,27 @@ def check_exec_result_case(base, cs, skill, case_index, cid):
     frozen = []
     if skill in case_index and cid in case_index[skill]:
         frozen = case_index[skill][cid].get("execution", {}).get("assertions", [])
-    graded_texts = [a.get("assertion") for a in assertions]
+    graded_texts = [a.get("assertion") for a in assertions
+                    if isinstance(a, dict)]
     for fa in frozen:
         if fa not in graded_texts:
             err(f"{base} case {cid}: frozen assertion missing from graded result: {fa[:60]}")
     for a in assertions:
+        if not isinstance(a, dict):
+            err(f"{base} case {cid}: assertion entry must be an object")
+            continue
+        for cond in required_conditions:
+            if cond not in a:
+                err(f"{base} case {cid}: assertion missing {cond} grade")
         for cond in ("target", "baseline", "placebo"):
             if cond not in a:
                 continue
-            g = a.get(cond) or {}
+            g = a.get(cond)
+            if g is None:
+                g = {}
+            elif not isinstance(g, dict):
+                err(f"{base} case {cid}: assertion {cond} grade must be an object")
+                continue
             if not isinstance(g.get("pass"), bool):
                 err(f"{base} case {cid}: assertion missing {cond}.pass")
             elif g["pass"] is True and not str(g.get("evidence", "")).strip():

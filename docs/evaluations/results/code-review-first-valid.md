@@ -95,6 +95,7 @@ plus over-eager selection when the request is generic/ambiguous.
       "baseline",
       "placebo"
     ],
+    "repeats": 3,
     "activation_mechanism": "kilo-command-skill",
     "runtime_treatment_paths": [
       ".kilo/skills"

@@ -440,12 +440,16 @@ independent dimensions:
   - `baseline_only_pass`
   - `both_pass`
   - `both_fail`
+  - `placebo_only_pass` (target and baseline fail while an unrelated placebo passes)
   - `invalid`
   - `not_run`
 - **Measurement status**:
-  - `discriminating` — conditions differ on a meaningful case
-  - `non_discriminating` — both pass or both fail (fixture too easy/ambiguous)
-  - `inconclusive`
+  - `discriminating` — the target beats the declared controls on a meaningful case
+  - `non_discriminating` — the result demonstrates no unique target advantage
+    (for example, all declared conditions pass or all fail, or a control
+    outperforms the target)
+  - `inconclusive` — evidence is mixed or incomplete enough that the measurement
+    status cannot be settled
 - **Protocol status**:
   - `valid`
   - `limited` (weaker fallback; e.g. instruction-only containment or injection
@@ -456,6 +460,12 @@ independent dimensions:
 
 A `both_pass` case means something very different from `both_fail`; preserve the
 distinction.
+
+Protocol-valid execution result blocks additionally declare `protocol.conditions`
+and `protocol.repeats`. Each case carries its own task and fixture hashes plus one
+complete `repetitions[]` entry per declared repetition, with unique execution
+identities. Limited or invalid historical records may retain the older compact
+shape, but they must not be presented as valid evidence.
 
 ## 10. Evidence retention
 

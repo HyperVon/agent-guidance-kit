@@ -38,6 +38,7 @@ parses and checks. The block is JSON.
     "baseline_guidance_absent": "boundary probe confirmed no discovery tree in baseline",
     "contamination": "none",
     "conditions": ["target", "baseline", "placebo"],
+    "repeats": 3,
     "activation_mechanism": "kilo-command-skill",
     "runtime_treatment_paths": [".kilo/skills"],
     "target_skill_kilo_path": ".kilo/skills/code-review",
@@ -116,16 +117,20 @@ parses and checks. The block is JSON.
   `natural_task_hash` is retained for backward compatibility, it must be a clearly named
   aggregate (e.g., `case_task_hashes`) or removed — do not keep an ambiguous single hash
   that pretends to represent several different tasks. The validator fails closed on mismatch.
-- **Per-case `fixture_hash` and optional `raw_evidence_hash`:** Each case records its
-  `fixture_hash` (the frozen fixture hash from `evals.json`) and, when available,
+- **Per-case `fixture_hash` and optional `raw_evidence_hash`:** Each protocol-valid
+  execution case MUST record its `fixture_hash` (the frozen fixture hash from
+  `evals.json`) and, when available,
   `raw_evidence_hash` (SHA-256 of the canonical raw evidence file that produced the case
   summary, e.g., `.eval-evidence/exec-<skill>-case<id>.json`). The raw file remains
   ignored/local, but someone with the raw evidence can verify it matches the committed
   summary's source. Calculate the hash from a stable canonical file, not a mutable temp.
+  Limited or invalid historical records may omit the new per-case fields, but they
+  cannot claim `protocol_status: valid` without them.
 - **Per-case/per-repetition execution identity:** Single `protocol.runs` / top-level `runs`
   cannot provenance-identify 27 condition executions. Each `cases[].repetitions[]` entry
   must contain `rep`, `repetition_id` (stable UUID or hash unique per repetition), and
-  `runs` with `target`/`baseline`/`placebo` each having `session_id` and `container_id`.
+  `runs` with the declared `target`/`baseline` conditions (and `placebo` when
+  declared), each having `session_id` and `container_id`.
   Sanitized IDs are okay if the project intentionally shortens them, but they must remain
   uniquely traceable to the local ignored evidence. The validator checks:
   - repetition count matches the declared repeat count;
@@ -345,6 +350,10 @@ Tier 1 fast-developer mode with `protocol_status: limited`.
   was captured (harness manifest, startup log, named tool-call). Absent/unknown
   ⇒ the routing claim is invalid, never a routing conclusion.
 - `conditions` — list of condition names used (`target`/`baseline`/`placebo`).
+- `repeats` — positive integer number of repetitions claimed for each execution
+  case. A protocol-valid result must declare this explicitly, and every case's
+  `repetitions` list must contain exactly that many entries with `rep` indices
+  `1..repeats`.
 
 ## Per-case grades
 
@@ -360,17 +369,19 @@ Tier 1 fast-developer mode with `protocol_status: limited`.
   - `both_pass` ⇔ target and baseline both pass
   - `both_fail` ⇔ target, baseline, and placebo all fail
   - `placebo_only_pass` ⇔ target fails, baseline fails, placebo passes
-  - `non_discriminating` ⇔ all conditions pass equally (no skill advantage)
+  - `non_discriminating` ⇔ the target has no unique advantage over the
+    declared controls (including a control matching or outperforming it)
 - **Execution mode** — every frozen assertion from `evals.json` must appear in
   the graded `assertions` list (no assertion silently disappears). Each assertion
   grades `target` and `baseline` (and `placebo` when present) with a `pass`
   boolean; **every passing condition must carry concrete `evidence`** (quoted
   span / diff line / exit code) — plausible prose or self-assertion is not
-  evidence. Each case must have `natural_task_hash`, `fixture_hash`, and
-  `repetitions` with per-repetition `repetition_id` and `runs` as described above;
-  the validator checks that `repetitions` count matches the declared repeat count,
-  that each repetition has all required conditions, and that session/container/repetition
-  IDs are unique.
+  evidence. Each protocol-valid case must have `natural_task_hash`, `fixture_hash`,
+  and `repetitions` with per-repetition `repetition_id` and `runs` as described
+  above; the validator checks that `repetitions` count matches `protocol.repeats`,
+  that each repetition has all declared conditions, and that session/container/
+  repetition IDs are unique across the complete result. Limited or invalid
+  records may retain the older compact shape, but are not valid evidence.
 - **Routing mode** — no execution `assertions` are graded. Instead each case's
   `runs.target.selected_skill` / `runs.baseline.selected_skill` are checked
   against the case `routing` expectation (`target_present.expected_selected_skill`
