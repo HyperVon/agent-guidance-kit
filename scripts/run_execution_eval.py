@@ -280,6 +280,18 @@ def validate_activation_sources(target_dir, target_skill, conditions,
             + "; ".join(violations))
 
 
+def validate_materialized_seed_hash(seed_task_hash, expected_fixture_hash):
+    """Fail closed before worker launch when the seed is not the frozen task."""
+    if not expected_fixture_hash:
+        raise ValueError("refusing to launch workers: fixture has no frozen "
+                         "worker-visible hash")
+    if seed_task_hash != expected_fixture_hash:
+        raise ValueError(
+            "refusing to launch workers: materialized seed task hash "
+            f"{seed_task_hash!r} does not match frozen fixture hash "
+            f"{expected_fixture_hash!r}")
+
+
 def skill_tree_hash(skill_dir):
     """Deterministic hash of a skill's DISCOVERY TREE: exactly ``SKILL.md`` +
     ``references/**``, sorted by relative path, each file hashed by content.
@@ -1009,10 +1021,16 @@ def main():
     try:
         for i in range(args.reps):
             # One pristine seed; one independent worker copy per condition.
-            seed, seed_hash = materialize_fixture_seed(
+            seed, _ = materialize_fixture_seed(
                 fx_src, ftype, source, invocation)
             seed_task_hash = HASH_PREFIX + hash_task_workspace(
                 seed, RUNTIME_TREATMENT_PATHS)
+            try:
+                validate_materialized_seed_hash(seed_task_hash,
+                                                expected_fixture_hash)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                sys.exit(2)
             rep, canonical, workspace_paths = run_repetition(
                 i, args.conditions, natural_task, seed,
                 args.skill, skill_dir,
@@ -1020,13 +1038,6 @@ def main():
                 placebo_dir,
                 args.model, args.image, run_container)
             evidence["canonical_task_seed_hash"] = canonical
-            # The pristine seed is task-state only; its task hash must equal the
-            # frozen worker-visible fixture hash (the same materialization the
-            # validator uses).
-            if seed_task_hash != expected_fixture_hash:
-                print(f"WARNING: materialized seed task hash "
-                      f"{seed_task_hash[:10]}.. != frozen fixture hash "
-                      f"{expected_fixture_hash[:10]}..", file=sys.stderr)
             evidence["repetitions"].append(rep)
 
             for name in args.conditions:

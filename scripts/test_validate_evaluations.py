@@ -1915,6 +1915,12 @@ class ExecutionRunnerBoundaryTests(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_materialized_seed_hash_mismatch_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "launch workers"):
+            ree.validate_materialized_seed_hash(
+                "sha256:actual", "sha256:frozen")
+        ree.validate_materialized_seed_hash("sha256:frozen", "sha256:frozen")
+
     def test_runner_refuses_command_placeholders_before_worker(self):
         tmp = tempfile.mkdtemp()
         try:

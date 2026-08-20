@@ -112,6 +112,11 @@ The corrected pipeline was exercised against the four pilot skills
   This confirms the pipeline blocks the weakening the rules forbid.
 - **Repeats:** 0 at the time. **Protocol status:** `not_run` for host runs.
 
+> The next two dated sections are historical records. Their paths and command
+> descriptions reflect the runner and commit being reported at that time; the
+> current protocol is documented in **Current integrity follow-up (2026-08-20)**
+> below.
+
 ## Infrastructure proven (2026-08-16, follow-up)
 
 The corrected pipeline was taken past "schema green" to a working three-layer
