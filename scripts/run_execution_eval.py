@@ -1,18 +1,42 @@
 #!/usr/bin/env python3
 """Execution-efficacy evaluation runner (Docker-isolated layer B).
 
-For each repetition, runs fresh, independent Docker containers — one per
-condition. The supported conditions are:
+POST-ACTIVATION MODEL
+---------------------
+Layer B answers: *once guidance is active, does that guidance improve task
+execution?* It does NOT test whether Kilo's router decides to activate the
+target/placebo skill — that belongs to routing evaluation (Layer A/C).
+Therefore the evaluator ACTIVATES the guidance deterministically through
+Kilo's own skill-command surface:
 
-  * ``target``: an independent COPY of the pristine fixture plus
-    the target guidance mounted read-only at a NEUTRAL path; the worker
-    receives ONLY the natural task.
+    kilo run --command "<skill>:skill" --dir /work/task "<natural task>"
+
+  * ``--command <skill>:skill`` resolves against the project-level skill
+    discovery location ``.kilo/skills/<skill>/SKILL.md`` in the worker's
+    working directory. If the skill is not discovered there, ``kilo run``
+    EXITS NON-ZERO with "Command not found" and the available commands —
+    so a successful (RC=0) run is machine-verifiable proof that the skill
+    was discovered and its body injected into model context at session
+    start.
+  * The SAME mechanism activates the target and the placebo condition.
+  * The baseline runs WITHOUT ``--command`` and receives no ``.kilo/skills``
+    tree at all: no guidance enters its context.
+
+For each repetition, fresh, independent Docker containers — one per condition.
+The supported conditions are:
+
+  * ``target``: an independent writable COPY of the pristine task fixture plus
+    the target ``SKILL.md`` (+ ``references/``) at
+    ``.kilo/skills/<target>/`` inside the workspace, activated via
+    ``--command <target>:skill``; the worker receives ONLY the natural task.
   * ``baseline`` (harness/default): a SEPARATE independent COPY of the same
-                           pristine fixture, NO guidance; the SAME natural task.
-  * ``placebo`` (optional): a SEPARATE independent COPY of the same pristine
-                           fixture plus IRRELEVANT, similarly-sized guidance
-                           (a different skill) mounted at the SAME neutral
-                           path; the SAME natural task.
+    task fixture, NO evaluator-owned ``.kilo/skills`` tree, NO ``--command``;
+    the SAME natural
+    task.
+  * ``placebo`` (optional): a SEPARATE independent COPY of the same task
+    fixture plus IRRELEVANT, similarly-sized guidance (a different skill) at
+    ``.kilo/skills/<placebo>/``, activated via ``--command <placebo>:skill`` —
+    the EXACT SAME mechanism as the target; the SAME natural task.
 
 TREATMENT-BOUNDARY CONTRACT (see skills/skill-evaluation/SKILL.md and
 docs/evaluations/RUNBOOK.md):
@@ -21,19 +45,59 @@ docs/evaluations/RUNBOOK.md):
     target/baseline/placebo workers must not be told that an evaluation is
     happening, which condition they are in, the target skill's canonical name,
     the expected outcome, the scoring rubric, or that another condition exists.
-  * The guidance is exposed at a NEUTRAL path — ``/work/guidance/task/SKILL.md``
-    — that never encodes the skill name, the condition, a case id, or the
-    evaluation purpose. The worker-visible prompt is the natural task only.
-  * The only way a worker learns guidance exists is by its runtime environment
-    (the mounted read-only guidance tree). No prompt text names it.
-  * The placebo condition receives an irrelevant skill's guidance at the SAME
-    neutral path, so "presence of extra procedural guidance" is controlled for.
+  * Layer B is a POST-ACTIVATION experiment: it measures whether guidance, once
+    active, improves task execution. It does NOT test whether Kilo's router
+    decides to activate a skill (that is Layer A/C routing). The evaluator
+    ACTIVATES the target/placebo guidance deterministically through
+    ``kilo run --command "<skill>:skill"`` — Kilo's own skill-command
+    invocation path, which injects the full SKILL.md body into the worker
+    context as the command template. The same mechanism is used for the target
+    and the placebo; the baseline runs without ``--command`` and receives no
+    skill tree.
+  * The worker-visible prompt is the natural task only. ``--command`` is a
+    runtime/harness-level activation, identical for target and placebo, and is
+    NOT part of the user-visible prompt text.
+  * Guidance exists in a worker's environment ONLY through its discovery tree
+    ``.kilo/skills/<name>/`` (which is what ``--command`` activates). There is
+    no separate neutral guidance mount: a second, un-activated copy of the
+    guidance on disk would conflate "guidance active" with "guidance present
+    and readable", which is exactly the confound this runner removes.
+  * The placebo condition receives an irrelevant skill's guidance through the
+    SAME activation mechanism, so "presence of extra procedural guidance" is
+    controlled for.
+
+TASK STATE vs RUNTIME TREATMENT STATE (see docs/evaluations/RUNBOOK.md):
+
+  * **Task state** — the actual thing the worker works on (source, docs,
+    tests, fixture content, git state). It MUST be byte-identical across
+    conditions and equal to the frozen fixture hash.
+  * **Runtime treatment state** — what the evaluator adds to deliver the
+    treatment (``.kilo/skills/`` discovery trees, injected guidance). It is
+    INTENTIONALLY different between target and placebo and absent in baseline.
+
+  The runner therefore records, per condition, BOTH:
+
+    * ``starting_task_hash`` / ``ending_task_hash`` — computed by
+    ``eval_hashing.hash_task_workspace`` which EXCLUDES the explicit
+    runtime treatment paths (``RUNTIME_TREATMENT_PATHS``, default
+    ``(".kilo/skills",)``). These prove the task state was identical before the run
+      and record what each worker actually changed.
+    * ``starting_full_hash`` / ``ending_full_hash`` — computed by
+      ``eval_hashing.hash_workspace`` over EVERYTHING (treatment included),
+      proving the raw condition copies differ exactly where treatment differs.
+
+  The runtime treatment itself is recorded separately per condition:
+  ``activation_mechanism``, ``skill_command``, ``skill_kilo_path``,
+  ``skill_content_hash`` (frozen discovery-tree hash), and — when the model
+  ALSO issues a native ``skill`` tool call — the parsed ``activation_events``
+  (see ``extract_activation_events``).
 
 Crucial correctness properties (see docs/evaluations/isolation-protocol.md):
 
   * The conditions never share a mutable fixture. Each gets its own copy made
     from one pristine seed; we verify all copies hash-identically BEFORE the
-    run and record starting and ending hashes.
+    run (TASK-state hash) and record starting and ending task hashes plus the
+    full-filesystem hashes separately.
   * Generator source (e.g. ``setup.sh``) is evaluator-only. It is run under a
     sanitized environment by ``eval_hashing.materialize_fixture_seed`` and then
     STRIPPED from the seed the worker sees.
@@ -41,12 +105,19 @@ Crucial correctness properties (see docs/evaluations/isolation-protocol.md):
     unparseable/empty model output, missing session) is recorded as
     ``run_status="failed"`` and can never masquerade as valid evidence. The
     validator rejects any repetition whose worker failed.
-  * The guidance boundary is verified INSIDE the container by a probe that
-    checks ``/work/guidance/task/SKILL.md`` presence (target/placebo) /
-    absence (baseline).
+  * The activation boundary is verified INSIDE the container by a probe that
+    checks the discovery path ``.kilo/skills/<name>/SKILL.md`` presence AND
+    content-hash match (target/placebo) / the absence of any
+    ``.kilo/skills`` tree (baseline).
+  * Activation is recorded per condition: ``activation_mechanism``
+    (``"kilo-command-skill"`` for target/placebo, ``"none"`` for baseline),
+    the resolved skill-command name, the skill discovery path, and the frozen
+    skill content hash. If the model ALSO issues a native ``skill`` tool call,
+    the parsed activation events are recorded as ``skill_tool_invoked`` /
+    ``activation_events`` (see ``extract_activation_events``).
 
 All workers use the same pinned, anonymous free model (cost-safety gate), so
-the only systematic difference between conditions is the mounted guidance.
+the only systematic difference between conditions is the activated guidance.
 
 Usage:
     python3 scripts/run_execution_eval.py \
@@ -73,7 +144,7 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from eval_hashing import (source_hash_of, hash_workspace,
+from eval_hashing import (hash_workspace, hash_task_workspace,
                            materialize_fixture_seed, HASH_PREFIX)
 
 IMAGE = "kilo-eval:local"
@@ -84,18 +155,37 @@ IMAGE = "kilo-eval:local"
 # --allow-paid-model to use a non-free model deliberately.
 DEFAULT_MODEL = "kilo/tencent/hy3:free"
 
-# Neutral worker-visible guidance mount. It deliberately does NOT encode the
-# skill name, the condition, a case id, or the evaluation purpose. In a real
-# harness the equivalent is the harness's own guidance-loading surface, which
-# is part of the runtime condition and identical across conditions.
-GUIDANCE_MOUNT = "/work/guidance/task"
 WORKSPACE_MOUNT = "/work/task"
+
+# Evaluator-controlled runtime treatment paths inside the worker workspace.
+# These are excluded from the TASK-state hash (they are intentionally different
+# between target/placebo and absent in baseline) but recorded separately as
+# runtime-treatment evidence. The evaluator owns only this explicit discovery
+# tree; other project-level ``.kilo`` config remains task state.
+RUNTIME_TREATMENT_PATHS = (".kilo/skills",)
 
 # Docker Desktop on macOS only bind-mounts paths under its shared roots (the
 # project, which lives under /Users). system temp dirs like /var/folders are NOT
 # shared and silently appear empty inside the container. Materialize anything that
-# gets mounted (fixtures, guidance, prompt files) under this repo-relative dir.
+# gets mounted (fixtures, prompt files) under this repo-relative dir.
 SHARED_TMP = os.path.join(ROOT, ".docker-tmp")
+
+ACTIVATION_MECHANISM = "kilo-command-skill"
+
+# Kilo's exported session stores message roles under ``messages[].info.role``
+# (with a top-level ``role`` fallback for compatible exports). Only user-role
+# text is evidence that the command template entered user context; assistant
+# echoes or tool output must not prove activation.
+CONTEXT_PROBE_NODE_SCRIPT = (
+    'const fs=require("fs"); '
+    'let data; try { data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); } '
+    'catch (_) { process.stdout.write("absent"); process.exit(0); } '
+    'const skill=fs.readFileSync(process.argv[2],"utf8"); '
+    'const body=skill.replace(/^---\\r?\\n[\\s\\S]*?\\r?\\n---\\r?\\n?/,"").trim(); '
+    'const texts=(data.messages||[]).filter(m=>{const role=(m.info&&m.info.role)||m.role; '
+    'return role==="user";}).flatMap(m=>(m.parts||[]).filter(p=>p.type==="text").map(p=>p.text||"")); '
+    'process.stdout.write(texts.some(t=>t.includes(body))?"present":"absent");'
+)
 
 
 def require_free_model(model, allow_paid):
@@ -116,65 +206,114 @@ def _mkdtemp(prefix):
     return d
 
 
-def materialize_guidance(skill_dir, skill_name):
-    """Build a temp dir with ONLY the guidance (SKILL.md + references/).
+def materialize_kilo_skill(source_skill_dir, skill_name, workspace):
+    """Place a skill at Kilo's project-level discovery location.
 
-    Mounted read-only at the NEUTRAL path ``/work/guidance/task`` (see
-    GUIDANCE_MOUNT). The directory is always staged as ``task/`` so the mount
-    target is identical for the target and placebo conditions, and never
-    encodes the skill name, the condition, or the evaluation purpose.
-    Crucially it EXCLUDES the evals/ tree (which contains the fixture
-    snapshot), so the target worker can never see the expected output it is
-    supposed to produce.
-    """
-    dst = _mkdtemp(prefix="kilo-guidance-")
-    task = os.path.join(dst, "task")
-    os.makedirs(task)
-    skill_md = os.path.join(skill_dir, "SKILL.md")
-    if os.path.exists(skill_md):
-        shutil.copy(skill_md, os.path.join(task, "SKILL.md"))
-    refs = os.path.join(skill_dir, "references")
-    if os.path.isdir(refs):
-        shutil.copytree(refs, os.path.join(task, "references"))
-    return dst
+    Creates ``<workspace>/.kilo/skills/<skill-name>/SKILL.md`` (+ ``references/``
+    when present) so Kilo scans it at session start and exposes it to the model
+    via the ``skill`` tool / ``<skill-name>:skill`` skill-command surface. This
+    discovery tree IS the runtime treatment: ``kilo run --command
+    "<skill-name>:skill"`` activates exactly this file's content.
 
+    ``source_skill_dir`` must be the canonical repository skill directory —
+    the directory that directly contains the ``SKILL.md`` to copy
+    (``skills/<name>/``). It must NOT be a staged neutral bundle shaped as
+    ``<dir>/task/SKILL.md``: that shape belongs to the old neutral mount which
+    this runner no longer uses (an un-activated guidance copy on disk would
+    conflate "guidance active" with "guidance present").
 
-def materialize_skill_for_kilo(skill_dir, skill_name, workspace):
-    """Create ``.kilo/skills/<skill-name>/`` in the worker's workspace so Kilo
-    discovers the skill through its normal startup scan.
-
-    This is the activation mechanism for Layer B.  Merely mounting a
-    ``SKILL.md`` at an arbitrary neutral path does not cause Kilo to load the
-    skill into the worker's context.  Kilo discovers skills from
-    ``.kilo/skills/`` (project-level) in the working directory at session
-    start; once discovered, the agent may read the ``SKILL.md`` into context
-    when it decides the task matches the skill description.
-
-    The placebo condition gets the same mechanism with an irrelevant skill.
-    The baseline receives no ``.kilo/skills/`` directory at all.
+    Returns the created ``.kilo/skills/<name>`` directory.
     """
     kilo_skills = os.path.join(workspace, ".kilo", "skills", skill_name)
     os.makedirs(kilo_skills, exist_ok=True)
-    skill_md = os.path.join(skill_dir, "SKILL.md")
-    if os.path.exists(skill_md):
-        shutil.copy(skill_md, os.path.join(kilo_skills, "SKILL.md"))
-    refs = os.path.join(skill_dir, "references")
+    skill_md = os.path.join(source_skill_dir, "SKILL.md")
+    if not os.path.isfile(skill_md):
+        raise ValueError(f"skill source missing SKILL.md: {source_skill_dir}")
+    shutil.copy(skill_md, os.path.join(kilo_skills, "SKILL.md"))
+    refs = os.path.join(source_skill_dir, "references")
     if os.path.isdir(refs):
         shutil.copytree(refs, os.path.join(kilo_skills, "references"),
                         dirs_exist_ok=True)
     return kilo_skills
 
 
-def extract_skill_loads(stdout, skill_name, workspace_path):
-    """Detect whether the agent actually loaded a skill by reading its SKILL.md.
+def skill_tree_hash(skill_dir):
+    """Deterministic hash of a skill's DISCOVERY TREE: exactly ``SKILL.md`` +
+    ``references/**``, sorted by relative path, each file hashed by content.
 
-    Returns a list of ``{path, timestamp}`` dicts for each detected load event
-    in the Kilo JSONL output.  A skill is considered ``loaded`` when the agent
-    issues a ``read`` tool call against the ``.kilo/skills/<skill>/SKILL.md``
-    path inside the worker workspace.
+    This is precisely the set of files ``materialize_kilo_skill`` copies into a
+    worker's ``.kilo/skills/<name>/`` tree — NOT the whole repository skill
+    directory (which also contains ``evals/`` fixtures that must never reach a
+    worker). Hashing the canonical ``skills/<name>/`` dir with this function
+    yields the same value as hashing the materialized workspace tree, so the
+    frozen runtime-guidance artifact is byte-comparable.
     """
-    skill_md_rel = os.path.join(".kilo", "skills", skill_name, "SKILL.md")
-    loads = []
+    if not os.path.isdir(skill_dir):
+        return None
+    if not os.path.isfile(os.path.join(skill_dir, "SKILL.md")):
+        return None
+    h = hashlib.sha256()
+    rels = []
+    skill_md = os.path.join(skill_dir, "SKILL.md")
+    if os.path.exists(skill_md):
+        rels.append("SKILL.md")
+    refs = os.path.join(skill_dir, "references")
+    if os.path.isdir(refs):
+        for root, _, names in os.walk(refs):
+            for n in names:
+                full = os.path.join(root, n)
+                if os.path.islink(full):
+                    continue
+                rels.append(os.path.relpath(full, skill_dir))
+    for rel in sorted(rels):
+        full = os.path.join(skill_dir, rel)
+        fh = hashlib.sha256(open(full, "rb").read()).hexdigest()
+        h.update((rel + ":" + fh + "\n").encode())
+    return HASH_PREFIX + h.hexdigest()
+
+
+def extract_activation_events(stdout, skill_name):
+    """Parse REAL Kilo JSONL activation evidence for a skill.
+
+    Kilo's native activation event is a ``tool_use`` record whose ``part`` is a
+    tool call of the dedicated ``skill`` tool. This is the actual structure
+    emitted by ``kilo run --format json`` (verified against the installed CLI):
+
+    .. code-block:: json
+
+        {"type": "tool_use", "timestamp": 1787124430157,
+         "sessionID": "ses_...",
+         "part": {"type": "tool", "tool": "skill", "callID": "chatcmpl-...",
+                  "state": {"status": "completed",
+                            "input": {"name": "probe-skill"},
+                            "output": "<skill_content name=\"probe-skill\">...",
+                            "title": "Loaded skill: probe-skill",
+                            "metadata": {"name": "probe-skill",
+                                         "dir": "/work/task/.kilo/skills/probe-skill",
+                                         "truncated": false,
+                                         "approval": {...}},
+                            "time": {"start": ..., "end": ...}}}}
+
+    A normal filesystem ``read`` of ``.kilo/skills/<name>/SKILL.md`` is NOT
+    activation: the guidance only enters context through the ``skill`` tool or
+    an explicit skill-command invocation. We therefore parse the dedicated
+    tool event and ignore arbitrary file reads.
+
+    Layer B's PRIMARY activation is the evaluator-forced ``--command
+    <skill>:skill`` invocation (see the module docstring); those runs do not
+    emit a ``tool_use`` event. The events parsed here are the model's OWN
+    native ``skill`` invocations — supplementary evidence recorded when they
+    occur.
+
+    Only completed calls with a non-empty ``<skill_content>`` result count: a
+    running/error call or a malformed event does not prove that guidance entered
+    context. Returns a list of event dicts (one per detected activation):
+    ``{"tool": "skill", "skill_name": ..., "timestamp": ...,
+      "session_id": ..., "title": ..., "dir": ...}``. Events whose recorded
+    skill name differs from ``skill_name`` are NOT counted (another skill's
+    activation must not count as this skill's).
+    """
+    events = []
     for line in stdout.splitlines():
         line = line.strip()
         if not line:
@@ -183,42 +322,54 @@ def extract_skill_loads(stdout, skill_name, workspace_path):
             obj = json.loads(line)
         except Exception:
             continue
-        if obj.get("type") == "tool_use":
-            part = obj.get("part", {})
-            if part.get("tool") == "read":
-                file_path = part.get("state", {}).get("input", {}).get("filePath", "")
-                if skill_md_rel in file_path or (
-                    skill_name in file_path and "SKILL.md" in file_path
-                ):
-                    loads.append({
-                        "path": file_path,
-                        "timestamp": obj.get("timestamp"),
-                    })
-    return loads
+        if obj.get("type") != "tool_use":
+            continue
+        part = obj.get("part") or {}
+        if part.get("tool") != "skill":
+            continue
+        state = part.get("state") or {}
+        if state.get("status") != "completed":
+            continue
+        inp = state.get("input") or {}
+        name = inp.get("name")
+        if not name or name != skill_name:
+            continue
+        output = state.get("output")
+        opening = f'<skill_content name="{skill_name}">'
+        closing = "</skill_content>"
+        if not isinstance(output, str) or opening not in output:
+            continue
+        body_start = output.find(opening) + len(opening)
+        body_end = output.find(closing, body_start)
+        if body_end < 0 or not output[body_start:body_end].strip():
+            continue
+        session_id = obj.get("sessionID")
+        if not isinstance(session_id, str) or not session_id:
+            continue
+        metadata = state.get("metadata") or {}
+        if metadata.get("name") not in (None, skill_name):
+            continue
+        events.append({
+            "tool": "skill",
+            "skill_name": name,
+            "timestamp": obj.get("timestamp"),
+            "session_id": session_id,
+            "title": state.get("title"),
+            "dir": metadata.get("dir"),
+        })
+    return events
 
 
-def guidance_bundle_hash(guidance_dir):
-    """Deterministic hash of the EXACT guidance artifact mounted read-only into the
-    target worker: SKILL.md plus references/** (sorted by relative path, each file
-    hashed by content). This is the frozen bundle the evaluator intends to inject,
-    recorded so the validator can prove the target worker received exactly this
-    guidance (the mount is read-only; the worker cannot alter the source bundle).
+def skill_command_name(skill_name):
+    """The namespaced skill-command form Kilo resolves for ``--command``.
+
+    Skills are surfaced as commands with ``source: "skill"`` and resolve via
+    the ``<name>:skill`` namespaced form (see Kilo's command registry:
+    ``/name:skill`` always resolves to the skill). An unresolvable command
+    makes ``kilo run`` exit non-zero with "Command not found", so RC=0 is
+    machine-verifiable proof the skill command resolved.
     """
-    if not os.path.isdir(guidance_dir):
-        return None
-    h = hashlib.sha256()
-    rels = []
-    for root, _, names in os.walk(guidance_dir):
-        for n in names:
-            full = os.path.join(root, n)
-            if os.path.islink(full):
-                continue
-            rels.append(os.path.relpath(full, guidance_dir))
-    for rel in sorted(rels):
-        full = os.path.join(guidance_dir, rel)
-        fh = hashlib.sha256(open(full, "rb").read()).hexdigest()
-        h.update((rel + ":" + fh + "\n").encode())
-    return HASH_PREFIX + h.hexdigest()
+    return f"{skill_name}:skill"
 
 
 def _snapshot(workspace):
@@ -335,23 +486,29 @@ def _verify_runtime(image, model):
     return out
 
 
-def run_container(image, model, prompt, fixture_dir, guidance_dir):
+def run_container(image, model, prompt, fixture_dir, skill_command=None,
+                  skill_md_hex=None, skill_probe_path=None):
     """Run one worker container; return structured execution metadata.
 
     {
       "returncode": int|None, "stdout": str, "stderr": str,
       "container_id": str|None, "session_id": str|None,
-      "output": str, "guidance_probe": "present"|"absent"|None,
+      "output": str, "skill_probe": "present"|"absent"|"hash_mismatch"|None,
       "status": "success"|"failed", "reason": str|None
     }
 
-    The worker-visible prompt is the natural task ONLY — no skill name, no
-    condition label, no evaluation mention. Guidance (if any) is mounted at the
-    neutral ``GUIDANCE_MOUNT`` path, which is identical for the target and
-    placebo conditions.
+        The worker-visible prompt is the natural task ONLY — no skill name, no
+    condition label, no evaluation mention. Guidance (if any) is ACTIVATED
+    through ``--command <skill>:skill``, which resolves against the
+    ``.kilo/skills/`` discovery tree in the worker's own workspace
+    (``fixture_dir`` mounted at /work/task); there is no separate guidance
+    mount.
 
     A run is successful ONLY if: docker/Kilo returned 0, a container id exists,
     the output was parsed, a session id exists, and model text was produced.
+    An unresolvable skill command makes kilo exit non-zero ("Command not
+    found"), so a successful run implies the skill command resolved and the
+    guidance body entered context at session start.
     """
     # Place the cid/prompt files inside a mkdtemp directory (secure; avoids the
     # CodeQL py/insecure-temp-file finding on tempfile.mktemp). docker --cidfile
@@ -366,27 +523,75 @@ def run_container(image, model, prompt, fixture_dir, guidance_dir):
         cmd = ["docker", "run", "--rm", "--cidfile", cidfile,
                "-v", f"{fixture_dir}:{WORKSPACE_MOUNT}",
                "-v", f"{promptfile}:/work/prompt.txt:ro"]
-        if guidance_dir:
-            cmd += ["-v", f"{guidance_dir}:{GUIDANCE_MOUNT}:ro"]
         # ENTRYPOINT is `kilo`; override to bash so we can run kilo then a boundary
-        # probe that records whether the guidance path is actually present/absent.
+        # probe that records whether the activation discovery path is present and
+        # hash-matched (target/placebo) or absent (baseline).
+        command_arg = f"--command {skill_command}" if skill_command else ""
+        if skill_command:
+            probe = skill_probe_path or f"{WORKSPACE_MOUNT}/.kilo/skills"
+            # Probe the exact SKILL.md: presence + content hash match.
+            probe_cmd = (
+                f"if [ -e \"{probe}\" ]; then "
+                f"A=$(sha256sum \"{probe}\" | cut -d' ' -f1); "
+                f"if [ \"$A\" = \"{skill_md_hex}\" ]; then "
+                "echo SKILL_PROBE:present; "
+                f"else echo SKILL_PROBE:hash_mismatch; fi; "
+                "else echo SKILL_PROBE:absent; fi"
+            )
+        else:
+            # Baseline: any .kilo/skills tree at all is a treatment leak.
+            probe_cmd = (f"if [ -e \"{WORKSPACE_MOUNT}/.kilo/skills\" ]; then "
+                         "echo SKILL_PROBE:present; "
+                         "else echo SKILL_PROBE:absent; fi")
+        if skill_command:
+            # ``--command <name>:skill`` is a controlled Kilo command, not a
+            # native model-issued ``skill`` tool call. Export the completed
+            # session and verify that Kilo serialized the complete skill body
+            # into the user-context message. This is stronger evidence than
+            # command resolution or filesystem presence alone and avoids
+            # storing the guidance body in the evidence file.
+            context_probe_cmd = (
+                "SKILL_CONTEXT_PROBE=unavailable\n"
+                "if [ \"$KILO_RC\" -eq 0 ]; then\n"
+                "  SESSION=$(node -e 'const fs=require(\"fs\"); "
+                "for (const line of fs.readFileSync(process.argv[1],\"utf8\")"
+                ".split(/\\r?\\n/)) { try { const obj=JSON.parse(line); "
+                "if (typeof obj.sessionID===\"string\" && obj.sessionID) "
+                "{ process.stdout.write(obj.sessionID); break; } } catch (_) {} }' "
+                "/tmp/kilo.out)\n"
+                "  if [ -n \"$SESSION\" ]; then\n"
+                "    kilo export \"$SESSION\" > /tmp/kilo.export "
+                "2>/tmp/kilo-export.err\n"
+                "    if [ $? -eq 0 ]; then\n"
+                f"      node -e '{CONTEXT_PROBE_NODE_SCRIPT}' "
+                f"/tmp/kilo.export \"{probe}\" > /tmp/kilo-context-status\n"
+                "      SKILL_CONTEXT_PROBE=$(cat /tmp/kilo-context-status)\n"
+                "    fi\n"
+                "  fi\n"
+                "fi\n"
+                "echo SKILL_CONTEXT_PROBE:$SKILL_CONTEXT_PROBE\n"
+            )
+        else:
+            context_probe_cmd = "echo SKILL_CONTEXT_PROBE:none\n"
         script = (
             "set +e\n"
             f"kilo run --model {model} --variant high --format json --pure --auto "
+            f"{command_arg} "
             f"--dir {WORKSPACE_MOUNT} \"$(cat /work/prompt.txt)\" < /dev/null "
             "> /tmp/kilo.out 2> /tmp/kilo.err\n"
             "KILO_RC=$?\n"
             "cat /tmp/kilo.out\n"
             "cat /tmp/kilo.err >&2\n"
-            f"if [ -e \"{GUIDANCE_MOUNT}/SKILL.md\" ]; then "
-            "echo GUIDANCE_PROBE:present; else echo GUIDANCE_PROBE:absent; fi\n"
+            f"{context_probe_cmd}"
+            f"{probe_cmd}\n"
             "exit $KILO_RC\n"
         )
         cmd += ["--entrypoint", "bash", image, "-c", script]
 
         meta = {"returncode": None, "stdout": "", "stderr": "",
                 "container_id": None, "session_id": None, "output": "",
-                "guidance_probe": None, "status": "failed", "reason": None}
+                "skill_probe": None, "skill_context_probe": None,
+                "status": "failed", "reason": None}
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
         except Exception as e:
@@ -400,13 +605,17 @@ def run_container(image, model, prompt, fixture_dir, guidance_dir):
         session = _extract_session(stdout)
         text = _collect_text(stdout)
         probe = None
+        context_probe = None
         for line in stdout.splitlines():
-            if line.strip().startswith("GUIDANCE_PROBE:"):
+            if line.strip().startswith("SKILL_PROBE:"):
                 probe = line.strip().split(":", 1)[1]
+            if line.strip().startswith("SKILL_CONTEXT_PROBE:"):
+                context_probe = line.strip().split(":", 1)[1]
 
         meta.update({"returncode": proc.returncode, "stdout": stdout,
                      "stderr": stderr, "container_id": cid, "session_id": session,
-                     "output": text, "guidance_probe": probe})
+                     "output": text, "skill_probe": probe,
+                     "skill_context_probe": context_probe})
 
         if proc.returncode != 0:
             meta["reason"] = f"kilo/docker exited {proc.returncode}"
@@ -446,6 +655,195 @@ def _conditions_arg(value):
             "--conditions must include at least 'target' and 'baseline' "
             "(placebo is optional)")
     return out
+
+
+def finalize_condition(name, meta, workspace, task_before, task_after,
+                       full_before, full_after, activation):
+    """Assemble one condition's evidence dict.
+
+    ``activation`` is None for the baseline (no treatment) or a dict with:
+    ``skill_name``, ``skill_command``, ``skill_kilo_path``,
+    ``skill_content_hash``. ``meta`` is the ``run_container``-shaped dict
+    (the mockable subprocess boundary).
+    """
+    cond = {
+        "container_id": meta["container_id"],
+        "session_id": meta["session_id"],
+        "run_status": meta["status"],
+        "returncode": meta["returncode"],
+        "starting_task_hash": task_before,
+        "ending_task_hash": task_after,
+        "starting_full_hash": full_before,
+        "ending_full_hash": full_after,
+        "skill_probe": meta["skill_probe"],
+        "skill_context_probe": meta.get("skill_context_probe"),
+        "output": meta["output"],
+        "stderr": meta["stderr"],
+        "stdout": meta.get("stdout", ""),
+        "filesystem_snapshot_before": _snapshot(workspace),
+        "filesystem_snapshot_after": None,
+        "reason": meta["reason"],
+    }
+    if activation:
+        events = extract_activation_events(
+            meta.get("stdout", ""), activation["skill_name"])
+        cond.update({
+            "activation_mechanism": ACTIVATION_MECHANISM,
+            "skill_command": activation["skill_command"],
+            "skill_kilo_path": activation["skill_kilo_path"],
+            "skill_content_hash": activation["skill_content_hash"],
+            "skill_tool_invoked": bool(events),
+            "activation_events": events,
+        })
+    else:
+        cond.update({
+            "activation_mechanism": "none",
+            "skill_command": None,
+            "skill_kilo_path": None,
+            "skill_content_hash": None,
+            "skill_tool_invoked": False,
+            "activation_events": [],
+        })
+    return cond
+
+
+def run_repetition(rep_index, conditions, natural_task, seed_dir,
+                   target_skill, target_dir,
+                   placebo_skill, placebo_dir,
+                   model, image, run_fn):
+    """Run one full repetition: seed copies -> treatment placement -> workers ->
+    evidence. ``run_fn`` is the container boundary (mockable); it must have the
+    ``run_container`` signature.
+
+    Returns ``(rep, canonical_task_seed_hash, workspace_paths)`` where
+    ``workspace_paths`` maps condition name to the FULL workspace path (used
+    for cleanup; the evidence itself records only sanitized basenames).
+    Workspace lifecycle (creation and cleanup) is owned by the caller.
+    """
+    canonical = HASH_PREFIX + hash_task_workspace(seed_dir,
+                                                  RUNTIME_TREATMENT_PATHS)
+    # The pristine seed must not already contain the evaluator-owned discovery
+    # tree. Other project-level .kilo config is legitimate task state and remains
+    # included in the task hash.
+    collisions = [p for p in RUNTIME_TREATMENT_PATHS
+                  if os.path.exists(os.path.join(seed_dir, p))]
+    if collisions:
+        raise ValueError(
+            f"pristine seed contains evaluator runtime treatment paths "
+            f"({collisions}); a user fixture must not ship those paths")
+
+    cond_fx = {name: _copy_seed(seed_dir) for name in conditions}
+
+    # Layer B controlled post-activation: place the target/placebo skills at
+    # Kilo's project-level discovery location ``.kilo/skills/<name>/`` inside
+    # each worker's workspace, and record the frozen discovery-tree hash. The
+    # baseline receives no evaluator-owned ``.kilo/skills`` tree and therefore
+    # cannot discover (or activate) any skill. Activation itself happens
+    # deterministically via
+    # ``kilo run --command <name>:skill`` (see run_container), never via the
+    # model's routing choice.
+    activation = {}
+    for name in conditions:
+        if name == "target":
+            tree = materialize_kilo_skill(target_dir, target_skill, cond_fx[name])
+            content_hash = skill_tree_hash(tree)
+            if content_hash is None:
+                raise ValueError("target skill tree missing after materialization")
+            activation[name] = {
+                "skill_name": target_skill,
+                "skill_command": skill_command_name(target_skill),
+                "skill_kilo_path": os.path.join(".kilo", "skills", target_skill),
+                "skill_content_hash": content_hash,
+            }
+        elif name == "placebo" and placebo_dir:
+            tree = materialize_kilo_skill(placebo_dir, placebo_skill,
+                                          cond_fx[name])
+            content_hash = skill_tree_hash(tree)
+            if content_hash is None:
+                raise ValueError("placebo skill tree missing after materialization")
+            activation[name] = {
+                "skill_name": placebo_skill,
+                "skill_command": skill_command_name(placebo_skill),
+                "skill_kilo_path": os.path.join(".kilo", "skills", placebo_skill),
+                "skill_content_hash": content_hash,
+            }
+
+    cond_meta = {}
+    for name in conditions:
+        act = activation.get(name)
+        workspace = cond_fx[name]
+        if act:
+            skill_md_hex = _skill_md_hex(workspace, act["skill_name"])
+            run_args = {
+                "image": image,
+                "model": model,
+                "prompt": natural_task,
+                "fixture_dir": workspace,
+                "skill_command": act["skill_command"],
+                "skill_md_hex": skill_md_hex,
+                "skill_probe_path": os.path.join(
+                    WORKSPACE_MOUNT, ".kilo", "skills",
+                    act["skill_name"], "SKILL.md"),
+            }
+        else:
+            run_args = {
+                "image": image,
+                "model": model,
+                "prompt": natural_task,
+                "fixture_dir": workspace,
+                "skill_command": None,
+                "skill_md_hex": None,
+                "skill_probe_path": None,
+            }
+        task_before = HASH_PREFIX + hash_task_workspace(
+            workspace, RUNTIME_TREATMENT_PATHS)
+        full_before = HASH_PREFIX + hash_workspace(workspace)
+        meta = run_fn(**run_args)
+        task_after = HASH_PREFIX + hash_task_workspace(
+            workspace, RUNTIME_TREATMENT_PATHS)
+        full_after = HASH_PREFIX + hash_workspace(workspace)
+        cond = finalize_condition(name, meta, workspace, task_before, task_after,
+                                  full_before, full_after, act)
+        cond["filesystem_snapshot_after"] = _snapshot(workspace)
+        cond_meta[name] = cond
+
+    rep = {
+        "rep": rep_index + 1,
+        "workspace_path": WORKSPACE_MOUNT,
+        "canonical_task_seed_hash": canonical,
+        "natural_task_hash": hashlib.sha256(
+            natural_task.encode()).hexdigest(),
+        "natural_task_identical_across_conditions": True,
+        "condition_workspace_ids": {
+            name: os.path.basename(cond_fx[name]) for name in conditions},
+        "conditions": {},
+        "distinct_containers": True,
+        "distinct_sessions": True,
+        "starting_task_hashes_match": True,
+        "task_hashes_match_canonical_seed": True,
+        "workspace_paths_differ": True,
+    }
+    for name in conditions:
+        rep["conditions"][name] = cond_meta[name]
+
+    # Cross-condition isolation facts (computed from actual captures).
+    cids = [cond_meta[n]["container_id"] for n in conditions]
+    sids = [cond_meta[n]["session_id"] for n in conditions]
+    starts = [cond_meta[n]["starting_task_hash"] for n in conditions]
+    wids = [os.path.basename(cond_fx[n]) for n in conditions]
+    rep["distinct_containers"] = (all(cids) and len(set(cids)) == len(cids))
+    rep["distinct_sessions"] = (all(sids) and len(set(sids)) == len(sids))
+    rep["starting_task_hashes_match"] = (
+        len(set(starts)) == 1 and starts[0] == canonical)
+    rep["task_hashes_match_canonical_seed"] = all(s == canonical for s in starts)
+    rep["workspace_paths_differ"] = (len(set(wids)) == len(wids))
+    return rep, canonical, cond_fx
+
+
+def _skill_md_hex(workspace, skill_name):
+    """sha256 hex of the SKILL.md the worker will actually have at discovery."""
+    p = os.path.join(workspace, ".kilo", "skills", skill_name, "SKILL.md")
+    return hashlib.sha256(open(p, "rb").read()).hexdigest()
 
 
 def main():
@@ -496,19 +894,20 @@ def main():
     # across all conditions. Nothing here names the skill, the condition, the
     # case, or the evaluation.
     natural_task = case["prompt"]
-    guidance_src = materialize_guidance(skill_dir, args.skill)
-    skill_hash = source_hash_of(os.path.join(skill_dir, "SKILL.md"))
-    guidance_bundle = guidance_bundle_hash(guidance_src)
+    target_tree_hash = skill_tree_hash(skill_dir)
+    if target_tree_hash is None:
+        print(f"target skill dir missing SKILL.md: {skill_dir}", file=sys.stderr)
+        sys.exit(2)
 
     placebo_dir = None
-    placebo_hash = None
+    placebo_tree_hash = None
     if "placebo" in args.conditions:
         pdir = os.path.join(ROOT, "skills", args.placebo_skill)
         if not os.path.exists(os.path.join(pdir, "SKILL.md")):
             print(f"placebo skill dir missing: {pdir}", file=sys.stderr)
             sys.exit(2)
-        placebo_dir = materialize_guidance(pdir, args.placebo_skill)
-        placebo_hash = guidance_bundle_hash(placebo_dir)
+        placebo_dir = pdir
+        placebo_tree_hash = skill_tree_hash(pdir)
 
     # The frozen fixture hash the worker is SUPPOSED to receive. For a generator
     # fixture this is the worker-visible output_hash (setup.sh already stripped);
@@ -527,140 +926,54 @@ def main():
         "image_digest": runtime.get("image_digest"),
         "node_version": runtime.get("node_version"),
         "model_listed": runtime.get("model_listed"),
-        "skill_hash": skill_hash,
-        "guidance_bundle_hash": guidance_bundle,
-        "guidance_mount_path": GUIDANCE_MOUNT,
+        "activation_mechanism": ACTIVATION_MECHANISM,
+        "runtime_treatment_paths": list(RUNTIME_TREATMENT_PATHS),
         "target_skill_kilo_path": os.path.join(".kilo", "skills", args.skill),
+        "target_skill_content_hash": target_tree_hash,
         "placebo_skill_kilo_path": (
             os.path.join(".kilo", "skills", args.placebo_skill)
             if "placebo" in args.conditions else None
         ),
+        "placebo_skill_content_hash": placebo_tree_hash,
         "expected_fixture_hash": expected_fixture_hash,
-        "canonical_seed_hash": None,  # filled in after the first seed is materialized
+        "fixture_source_path": os.path.relpath(evals_path, ROOT),
+        "fixture_path": os.path.normpath(os.path.relpath(fx_src, ROOT)),
+        "fixture_source_hash": HASH_PREFIX + hashlib.sha256(
+            open(evals_path, "rb").read()).hexdigest(),
+        "target_skill_source_path": os.path.join("skills", args.skill),
+        "canonical_task_seed_hash": None,  # filled in after the first seed is materialized
         "conditions": list(args.conditions),
         "placebo_skill": args.placebo_skill if "placebo" in args.conditions else None,
-        "placebo_bundle_hash": placebo_hash,
         "repetitions": [],
     }
-
-    def run_condition(name, prompt, workspace, guidance):
-        before = HASH_PREFIX + hash_workspace(workspace)
-        snap_before = _snapshot(workspace)
-        meta = run_container(args.image, args.model, prompt, workspace, guidance)
-        after = HASH_PREFIX + hash_workspace(workspace)
-        snap_after = _snapshot(workspace)
-        return {
-            "container_id": meta["container_id"],
-            "session_id": meta["session_id"],
-            "run_status": meta["status"],
-            "returncode": meta["returncode"],
-            "guidance_mounted": guidance is not None,
-            "guidance_verified": (meta["guidance_probe"] == "present"),
-            "guidance_verified_absent": (meta["guidance_probe"] == "absent"),
-            "guidance_probe": meta["guidance_probe"],
-            "starting_fixture_hash": before,
-            "ending_fixture_hash": after,
-            "output": meta["output"],
-            "stderr": meta["stderr"],
-            "stdout": meta.get("stdout", ""),
-            "filesystem_snapshot_before": snap_before,
-            "filesystem_snapshot_after": snap_after,
-            "reason": meta["reason"],
-        }
 
     try:
         for i in range(args.reps):
             # One pristine seed; one independent worker copy per condition.
             seed, seed_hash = materialize_fixture_seed(
                 fx_src, ftype, source, invocation)
-            evidence["canonical_seed_hash"] = HASH_PREFIX + seed_hash
-            cond_fx = {name: _copy_seed(seed) for name in args.conditions}
-
-            # Layer B activation: place the target/placebo skills in
-            # ``.kilo/skills/<name>/`` inside each worker's workspace so Kilo
-            # discovers them through its normal startup scan.  The baseline
-            # receives no skill directory and therefore cannot discover the
-            # target.  This is the mechanism that proves activation: not merely
-            # that a file exists, but that the runtime's own discovery surface
-            # was provided with the skill.
-            for name in args.conditions:
-                if name == "target":
-                    materialize_skill_for_kilo(skill_dir, args.skill, cond_fx[name])
-                elif name == "placebo" and placebo_dir:
-                    materialize_skill_for_kilo(placebo_dir, args.placebo_skill,
-                                               cond_fx[name])
-
-            cond_meta = {}
-            for name in args.conditions:
-                guid = None
-                if name == "target":
-                    guid = guidance_src
-                elif name == "placebo":
-                    guid = placebo_dir
-                cond_meta[name] = run_condition(name, natural_task,
-                                                cond_fx[name], guid)
-                # Detect whether the agent actually loaded the skill by reading
-                # its SKILL.md from the .kilo/skills/ discovery path.
-                if name == "target":
-                    loads = extract_skill_loads(
-                        cond_meta[name]["stdout"], args.skill, WORKSPACE_MOUNT)
-                    cond_meta[name]["skill_kilo_path"] = os.path.join(
-                        ".kilo", "skills", args.skill)
-                    cond_meta[name]["skill_loaded"] = bool(loads)
-                    cond_meta[name]["skill_loads"] = loads
-                elif name == "placebo" and placebo_dir:
-                    loads = extract_skill_loads(
-                        cond_meta[name]["stdout"], args.placebo_skill,
-                        WORKSPACE_MOUNT)
-                    cond_meta[name]["skill_kilo_path"] = os.path.join(
-                        ".kilo", "skills", args.placebo_skill)
-                    cond_meta[name]["skill_loaded"] = bool(loads)
-                    cond_meta[name]["skill_loads"] = loads
-                else:
-                    cond_meta[name]["skill_kilo_path"] = None
-                    cond_meta[name]["skill_loaded"] = False
-                    cond_meta[name]["skill_loads"] = []
-
-            rep = {
-                "rep": i + 1,
-                "workspace_path": WORKSPACE_MOUNT,
-                "guidance_mount_path": GUIDANCE_MOUNT,
-                "canonical_seed_hash": HASH_PREFIX + seed_hash,
-                "natural_task_hash": hashlib.sha256(
-                    natural_task.encode()).hexdigest(),
-                "natural_task_identical_across_conditions": True,
-                "condition_workspace_ids": {
-                    name: os.path.basename(cond_fx[name])
-                    for name in args.conditions},
-                "conditions": {},
-                "distinct_containers": True,
-                "distinct_sessions": True,
-                "starting_fixture_hashes_match": True,
-                "workspace_paths_differ": True,
-            }
-            for name in args.conditions:
-                rep["conditions"][name] = cond_meta[name]
-            # Cross-condition isolation facts (computed from actual captures).
-            cids = [cond_meta[n]["container_id"] for n in args.conditions]
-            sids = [cond_meta[n]["session_id"] for n in args.conditions]
-            starts = [cond_meta[n]["starting_fixture_hash"] for n in args.conditions]
-            wids = [os.path.basename(cond_fx[n]) for n in args.conditions]
-            rep["distinct_containers"] = (
-                all(cids) and len(set(cids)) == len(cids))
-            rep["distinct_sessions"] = (
-                all(sids) and len(set(sids)) == len(sids))
-            rep["starting_fixture_hashes_match"] = (
-                len(set(starts)) == 1 and starts[0] == HASH_PREFIX + seed_hash)
-            rep["workspace_paths_differ"] = (len(set(wids)) == len(wids))
+            seed_task_hash = HASH_PREFIX + hash_task_workspace(
+                seed, RUNTIME_TREATMENT_PATHS)
+            rep, canonical, workspace_paths = run_repetition(
+                i, args.conditions, natural_task, seed,
+                args.skill, skill_dir,
+                args.placebo_skill if "placebo" in args.conditions else None,
+                placebo_dir,
+                args.model, args.image, run_container)
+            evidence["canonical_task_seed_hash"] = canonical
+            # The pristine seed is task-state only; its task hash must equal the
+            # frozen worker-visible fixture hash (the same materialization the
+            # validator uses).
+            if seed_task_hash != expected_fixture_hash:
+                print(f"WARNING: materialized seed task hash "
+                      f"{seed_task_hash[:10]}.. != frozen fixture hash "
+                      f"{expected_fixture_hash[:10]}..", file=sys.stderr)
             evidence["repetitions"].append(rep)
 
             for name in args.conditions:
-                shutil.rmtree(cond_fx[name], ignore_errors=True)
+                shutil.rmtree(workspace_paths.get(name, ""), ignore_errors=True)
             shutil.rmtree(seed, ignore_errors=True)
     finally:
-        shutil.rmtree(guidance_src, ignore_errors=True)
-        if placebo_dir:
-            shutil.rmtree(placebo_dir, ignore_errors=True)
         shutil.rmtree(SHARED_TMP, ignore_errors=True)
 
     if args.out:
@@ -674,16 +987,18 @@ def main():
             cm = r["conditions"][name]
             parts.append(f"{name}[{cm['run_status']}] "
                          f"{str(cm['container_id'])[:12]} "
-                         f"start={cm['starting_fixture_hash'][:10]}")
+                         f"task={cm['starting_task_hash'][:10]}")
         print(f"rep{r['rep']}: {' '.join(parts)}")
         print(f"  distinct_containers={r['distinct_containers']} "
               f"distinct_sessions={r['distinct_sessions']} "
-              f"start_match={r['starting_fixture_hashes_match']} "
+              f"start_match={r['starting_task_hashes_match']} "
               f"task_hash={r['natural_task_hash'][:10]}")
         for name in args.conditions:
             cm = r["conditions"][name]
             print(f"  {name}: output {len(cm['output'])} chars, "
-                  f"after-hash {cm['ending_fixture_hash'][:10]}")
+                  f"activation={cm['activation_mechanism']} "
+                  f"probe={cm['skill_probe']} "
+                  f"after-task-hash {cm['ending_task_hash'][:10]}")
 
 
 if __name__ == "__main__":

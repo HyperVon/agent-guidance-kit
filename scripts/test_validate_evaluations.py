@@ -6,9 +6,11 @@ Run from repo root:  python3 scripts/test_validate_evaluations.py
 Tests the validator's failure detection directly (no network / no real runs).
 """
 import argparse
+import hashlib
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -114,6 +116,15 @@ class SchemaFailureTests(unittest.TestCase):
                       routing=routing_exp())
         ve.check_case(fake_path(), "x/evals.json", c)
         self.assertFalse(any("bad evaluation_modes" in e for e in ve.errors))
+
+    def test_routing_oracle_requires_expected_selection(self):
+        c = base_case(1, "matching", ["catalog-routing"],
+                      routing_context=routing_ctx(),
+                      routing=routing_exp())
+        del c["routing"]["target_present"]["expected_selected_skill"]
+        ve.check_case(fake_path(), "x/evals.json", c)
+        self.assertTrue(any("expected_selected_skill" in e
+                            for e in ve.errors))
 
     def test_execution_no_assertions(self):
         c = base_case(5, "edge", ["execution"],
@@ -337,49 +348,91 @@ class EvidenceValidationTests(unittest.TestCase):
     def tearDown(self):
         reset()
 
+    def _cond(self, name, cid, sid, **over):
+        cond = {
+            "container_id": cid, "session_id": sid,
+            "run_status": "success", "returncode": 0,
+            "starting_task_hash": "sha256:seed", "ending_task_hash": "sha256:z",
+            "starting_full_hash": f"sha256:full-{name}",
+            "ending_full_hash": f"sha256:end-{name}",
+            "skill_probe": "present" if name != "baseline" else "absent",
+            "output": f"{name} output", "stderr": "",
+            "activation_mechanism": ("kilo-command-skill"
+                                     if name != "baseline" else "none"),
+            "skill_context_probe": ("present" if name != "baseline"
+                                      else "none"),
+            "skill_command": (f"{name}:skill" if name != "baseline" else None),
+            "skill_kilo_path": (f".kilo/skills/{name}"
+                                if name != "baseline" else None),
+            "skill_content_hash": (f"sha256:{name}guidance"
+                                   if name != "baseline" else None),
+            "skill_tool_invoked": False,
+            "activation_events": [],
+        }
+        cond.update(over)
+        return cond
+
     def _exec_evidence(self, **over_rep):
-        target = {
-            "container_id": "cg", "session_id": "sg",
-            "run_status": "success", "returncode": 0,
-            "guidance_mounted": True, "guidance_verified": True,
-            "guidance_verified_absent": False, "guidance_probe": "present",
-            "starting_fixture_hash": "sha256:seed", "ending_fixture_hash": "sha256:g",
-            "output": "target output", "stderr": "",
-            "skill_kilo_path": ".kilo/skills/code-review",
-            "skill_loaded": True, "skill_loads": []}
-        baseline = {
-            "container_id": "cb", "session_id": "sb",
-            "run_status": "success", "returncode": 0,
-            "guidance_mounted": False, "guidance_verified": False,
-            "guidance_verified_absent": True, "guidance_probe": "absent",
-            "starting_fixture_hash": "sha256:seed", "ending_fixture_hash": "sha256:h",
-            "output": "baseline output", "stderr": "",
-            "skill_kilo_path": None, "skill_loaded": False, "skill_loads": []}
+        skill = "code-review"
+        skill_dir = os.path.join(ROOT, "skills", skill)
+        evals_path = os.path.join(skill_dir, "evals", "evals.json")
+        source = json.load(open(evals_path))
+        case = next(c for c in source["evals"] if c["id"] == 1)
+        fixture_hash = case["fixture"]["content_hash"]
+        target_hash = ree.skill_tree_hash(skill_dir)
+        target = self._cond(
+            skill, "cg", "sg", skill_content_hash=target_hash,
+            starting_task_hash=fixture_hash)
+        baseline = self._cond("baseline", "cb", "sb",
+                              starting_task_hash=fixture_hash)
         rep = {
             "rep": 1,
             "workspace_path": "/work/task",
-            "guidance_mount_path": "/work/guidance/task",
-            "canonical_seed_hash": "sha256:seed",
+            "canonical_task_seed_hash": fixture_hash,
             "natural_task_hash": "a" * 64,
             "natural_task_identical_across_conditions": True,
             "condition_workspace_ids": {"target": "ws-target-1",
                                         "baseline": "ws-baseline-1"},
             "conditions": {"target": target, "baseline": baseline},
             "distinct_containers": True, "distinct_sessions": True,
-            "starting_fixture_hashes_match": True, "workspace_paths_differ": True,
+            "starting_task_hashes_match": True,
+            "task_hashes_match_canonical_seed": True,
+            "workspace_paths_differ": True,
         }
         rep.update(over_rep)
         return {"evidence_type": "execution",
-                "canonical_seed_hash": "sha256:seed",
-                "expected_fixture_hash": "sha256:seed",
-                "guidance_bundle_hash": "sha256:bundle",
-                "guidance_mount_path": "/work/guidance/task",
-                "target_skill_kilo_path": ".kilo/skills/code-review",
+                "canonical_task_seed_hash": fixture_hash,
+                "expected_fixture_hash": fixture_hash,
+                "runtime_treatment_paths": [".kilo/skills"],
+                "activation_mechanism": "kilo-command-skill",
+                "target_skill_kilo_path": f".kilo/skills/{skill}",
+                "target_skill_content_hash": target_hash,
                 "conditions": ["target", "baseline"],
+                "skill": skill,
+                "case_id": 1,
+                "fixture_source_path": "skills/code-review/evals/evals.json",
+                "fixture_path": "skills/code-review/evals/files/case-1",
+                "fixture_source_hash": "sha256:" + hashlib.sha256(
+                    open(evals_path, "rb").read()).hexdigest(),
+                "target_skill_source_path": "skills/code-review",
                 "repetitions": [rep]}
 
     def _cat_evidence(self, present_reps, absent_reps):
-        return {"evidence_type": "catalog-routing", "conditions": {
+        evals = json.load(open(os.path.join(
+            ROOT, "skills", "code-review", "evals", "evals.json")))
+        prompt = next(c for c in evals["evals"] if c["id"] == 1)["prompt"]
+        for name, reps, absent in (("target_present", present_reps, None),
+                                   ("target_absent", absent_reps,
+                                    "code-review")):
+            catalog = rc.render_catalog(rc.build_catalog(absent))
+            catalog_hash = hashlib.sha256(catalog.encode()).hexdigest()
+            prompt_hash = hashlib.sha256(
+                rc.build_prompt(catalog, prompt).encode()).hexdigest()
+            for rep in reps:
+                rep["catalog_hash"] = catalog_hash
+                rep["prompt_hash"] = prompt_hash
+        return {"evidence_type": "catalog-routing", "skill": "code-review",
+                "case_id": 1, "conditions": {
             "target_present": {"repetitions": present_reps},
             "target_absent": {"repetitions": absent_reps}}}
 
@@ -393,31 +446,39 @@ class EvidenceValidationTests(unittest.TestCase):
                             for e in ve.validate_execution_evidence(ev)))
 
     def test_execution_evidence_baseline_leak_fails(self):
+        # Baseline must not receive the target runtime treatment (no .kilo/skills).
         ev = self._exec_evidence()
-        ev["repetitions"][0]["conditions"]["baseline"] \
-            ["guidance_verified_absent"] = False
-        self.assertTrue(any("guidance_verified_absent" in e
+        ev["repetitions"][0]["conditions"]["baseline"]["skill_probe"] = "present"
+        self.assertTrue(any("baseline: skill_probe" in e
                             for e in ve.validate_execution_evidence(ev)))
 
-    def test_execution_evidence_fixture_mismatch_fails(self):
+    def test_execution_evidence_baseline_runtime_path_fails(self):
         ev = self._exec_evidence()
-        ev["repetitions"][0]["conditions"]["baseline"] \
-            ["starting_fixture_hash"] = "sha256:other"
-        self.assertTrue(any("starting fixture hashes differ" in e
+        ev["repetitions"][0]["conditions"]["baseline"]["skill_kilo_path"] = \
+            ".kilo/skills/target"
+        self.assertTrue(any("baseline: skill_kilo_path" in e
+                            for e in ve.validate_execution_evidence(ev)))
+
+    def test_execution_evidence_task_hash_mismatch_fails(self):
+        # Real task-state difference between conditions (not treatment files)
+        # must be rejected: task-state hashes exclude the .kilo treatment tree.
+        ev = self._exec_evidence()
+        ev["repetitions"][0]["conditions"]["baseline"]["starting_task_hash"] = \
+            "sha256:other"
+        self.assertTrue(any("TASK hash" in e or "differ" in e
                             for e in ve.validate_execution_evidence(ev)))
 
     def test_execution_evidence_failed_run_rejected(self):
-        # Defect 3/9: a failed Docker/Kilo run cannot be valid evidence.
+        # A failed Docker/Kilo run cannot be valid evidence.
         ev = self._exec_evidence()
         ev["repetitions"][0]["conditions"]["target"]["run_status"] = "failed"
         ev["repetitions"][0]["conditions"]["target"]["returncode"] = 1
-        ev["repetitions"][0]["conditions"]["target"]["guidance_verified"] = False
         ev["repetitions"][0]["conditions"]["target"]["output"] = ""
         self.assertTrue(any("run_status" in e
                             for e in ve.validate_execution_evidence(ev)))
 
     def test_execution_evidence_shared_workspace_rejected(self):
-        # Defect 1: target and baseline must use independent workspace ids.
+        # Target and baseline must use independent workspace ids.
         ev = self._exec_evidence()
         ev["repetitions"][0]["condition_workspace_ids"]["baseline"] = "ws-target-1"
         self.assertTrue(any("workspace ids" in e
@@ -429,34 +490,81 @@ class EvidenceValidationTests(unittest.TestCase):
         self.assertTrue(any("target_skill_kilo_path" in e
                             for e in ve.validate_execution_evidence(ev)))
 
-    def test_execution_evidence_baseline_skill_kilo_path_fails(self):
+    def test_execution_evidence_target_not_activated_fails(self):
+        # P0-D: skill merely PRESENT (probe ok, file on disk) but NOT activated
+        # through the controlled mechanism must be rejected: activation is the
+        # evaluator-forced skill-command, not file presence.
         ev = self._exec_evidence()
-        ev["repetitions"][0]["conditions"]["baseline"]["skill_kilo_path"] = \
-            ".kilo/skills/code-review"
-        self.assertTrue(any("baseline: skill_kilo_path" in e
+        t = ev["repetitions"][0]["conditions"]["target"]
+        t["activation_mechanism"] = "none"
+        t["skill_command"] = None
+        self.assertTrue(any("activation_mechanism" in e
                             for e in ve.validate_execution_evidence(ev)))
 
-    def test_execution_evidence_target_skill_not_loaded_fails(self):
+    def test_execution_evidence_target_probe_mismatch_fails(self):
         ev = self._exec_evidence()
-        ev["repetitions"][0]["conditions"]["target"]["skill_loaded"] = False
-        self.assertTrue(any("skill_loaded" in e
+        ev["repetitions"][0]["conditions"]["target"]["skill_probe"] = "absent"
+        self.assertTrue(any("target: skill_probe" in e
                             for e in ve.validate_execution_evidence(ev)))
 
-    def test_execution_evidence_placebo_skill_kilo_path_required(self):
+    def test_execution_evidence_target_event_wrong_skill_fails(self):
+        # Another skill's invocation must not count as the target's activation.
+        ev = self._exec_evidence()
+        t = ev["repetitions"][0]["conditions"]["target"]
+        t["skill_tool_invoked"] = True
+        t["activation_events"] = [
+            {"tool": "skill", "skill_name": "other-skill", "timestamp": 1,
+             "session_id": "sg"}]
+        self.assertTrue(any("names skill" in e
+                            for e in ve.validate_execution_evidence(ev)))
+
+    def test_execution_evidence_placebo_valid(self):
         ev = self._exec_evidence()
         ev["conditions"] = ["target", "baseline", "placebo"]
-        placebo = {
-            "container_id": "cp", "session_id": "sp",
-            "run_status": "success", "returncode": 0,
-            "guidance_mounted": True, "guidance_verified": True,
-            "guidance_verified_absent": False, "guidance_probe": "present",
-            "starting_fixture_hash": "sha256:seed", "ending_fixture_hash": "sha256:p",
-            "output": "placebo output", "stderr": "",
-            "skill_kilo_path": ".kilo/skills/security-review",
-            "skill_loaded": True, "skill_loads": []}
-        ev["repetitions"][0]["conditions"]["placebo"] = placebo
         ev["placebo_skill"] = "security-review"
-        self.assertTrue(any("placebo_skill_kilo_path" in e
+        ev["placebo_skill_kilo_path"] = ".kilo/skills/security-review"
+        ev["placebo_skill_content_hash"] = ree.skill_tree_hash(
+            os.path.join(ROOT, "skills", "security-review"))
+        ev["repetitions"][0]["condition_workspace_ids"]["placebo"] = "ws-placebo-1"
+        ev["repetitions"][0]["conditions"]["placebo"] = self._cond(
+            "security-review", "cp", "sp",
+            skill_content_hash=ev["placebo_skill_content_hash"],
+            starting_task_hash=ev["expected_fixture_hash"])
+        self.assertEqual(ve.validate_execution_evidence(ev), [])
+
+    def test_execution_evidence_placebo_not_activated_fails(self):
+        # P0-D: the placebo must be activated through the SAME mechanism as the
+        # target; a discoverable-but-not-activated placebo is rejected.
+        ev = self._exec_evidence()
+        ev["conditions"] = ["target", "baseline", "placebo"]
+        ev["placebo_skill"] = "placebo"
+        ev["placebo_skill_kilo_path"] = ".kilo/skills/placebo"
+        ev["placebo_skill_content_hash"] = "sha256:placeboguidance"
+        ev["repetitions"][0]["condition_workspace_ids"]["placebo"] = "ws-placebo-1"
+        ev["repetitions"][0]["conditions"]["placebo"] = self._cond(
+            "placebo", "cp", "sp", activation_mechanism="none",
+            skill_command=None, skill_probe="absent")
+        self.assertTrue(any("placebo: activation_mechanism" in e
+                            for e in ve.validate_execution_evidence(ev)))
+
+    def test_execution_evidence_placebo_missing_path_fails(self):
+        ev = self._exec_evidence()
+        ev["conditions"] = ["target", "baseline", "placebo"]
+        ev["placebo_skill"] = "placebo"
+        ev["placebo_skill_kilo_path"] = ".kilo/skills/placebo"
+        ev["placebo_skill_content_hash"] = "sha256:placeboguidance"
+        ev["repetitions"][0]["condition_workspace_ids"]["placebo"] = "ws-placebo-1"
+        # No placebo condition entry in the repetition -> evidence is missing a
+        # declared condition (a placebo that never ran cannot be evidence).
+        self.assertTrue(any("missing condition" in e
+                            for e in ve.validate_execution_evidence(ev)))
+
+    def test_execution_evidence_missing_runtime_treatment_paths_fails(self):
+        # P0-B: the validator must know which runtime paths were excluded from
+        # the task-state hash; omitting the list is an error.
+        ev = self._exec_evidence()
+        del ev["runtime_treatment_paths"]
+        self.assertTrue(any("runtime_treatment_paths" in e
                             for e in ve.validate_execution_evidence(ev)))
 
     def test_catalog_routing_evidence_valid(self):
@@ -475,7 +583,7 @@ class EvidenceValidationTests(unittest.TestCase):
                             for e in ve.validate_catalog_routing_evidence(ev)))
 
     def test_catalog_failed_model_cannot_pass(self):
-        # Defect 5/14B: a failed model invocation must NOT be a null-selection pass.
+        # A failed model invocation must NOT be a null-selection pass.
         ev = self._cat_evidence(
             [{"rep": 1, "status": "success", "decision":
               {"selected_skill": "code-review", "action": "apply"}, "match": True}],
@@ -504,6 +612,31 @@ class EvidenceValidationTests(unittest.TestCase):
         self.assertTrue(any("action 'apply'" in e
                             for e in ve.validate_catalog_routing_evidence(ev)))
 
+    def test_catalog_absent_selection_and_match_are_rechecked(self):
+        ev = self._cat_evidence(
+            [{"rep": 1, "status": "success", "decision":
+              {"selected_skill": "code-review", "action": "apply"},
+              "match": True}],
+            [{"rep": 1, "status": "success", "decision":
+              {"selected_skill": "code-review", "action": "apply"},
+              "match": True}])
+        errs = ve.validate_catalog_routing_evidence(ev)
+        self.assertTrue(any("not in the target_absent catalog" in e
+                            for e in errs), errs)
+        self.assertTrue(any("match does not match" in e for e in errs), errs)
+
+    def test_catalog_stale_catalog_hash_rejected(self):
+        ev = self._cat_evidence(
+            [{"rep": 1, "status": "success", "decision":
+              {"selected_skill": "code-review", "action": "apply"},
+              "match": True}],
+            [{"rep": 1, "status": "success", "decision":
+              {"selected_skill": None, "action": "clarify"}, "match": True}])
+        ev["conditions"]["target_present"]["repetitions"][0][
+            "catalog_hash"] = "0" * 64
+        errs = ve.validate_catalog_routing_evidence(ev)
+        self.assertTrue(any("catalog_hash" in e for e in errs), errs)
+
 
 class EvidenceDirDispatchTests(unittest.TestCase):
     """Defect 4 / 14A / 14G: --check-evidence must really inspect files and must
@@ -522,6 +655,60 @@ class EvidenceDirDispatchTests(unittest.TestCase):
         finally:
             shutil.rmtree(d, ignore_errors=True)
             ve.EVALS_DIR = os.path.join(ROOT, "docs", "evaluations")
+
+    def _case_set_evidence(self, source_rel, case_id, selected):
+        source_path = os.path.join(ROOT, source_rel)
+        source = json.load(open(source_path))
+        source_key = "confusion_set" if "confusion_set" in source else "holdout"
+        source_name = source[source_key]
+        recorded_cases = []
+        for case in source["cases"]:
+            turns = case.get("turns")
+            case_selected = selected if case["id"] == case_id else None
+            if turns:
+                turn_results = []
+                for i, turn in enumerate(turns, 1):
+                    expected = turn["expected_route"]
+                    turn_selected = (case_selected if case_selected is not None
+                                     else expected)
+                    turn_results.append({
+                        "turn": i, "status": "success",
+                        "expected_route": expected,
+                        "expected_route_declared": True,
+                        "selected_skill": turn_selected,
+                        "action": "apply" if turn_selected else "clarify",
+                        "pass": turn_selected == expected,
+                    })
+                repetitions = [{"rep": 1, "turns": turn_results}]
+            else:
+                expected = case.get("expected_skill")
+                plain_selected = (case_selected if case_selected is not None
+                                  else expected)
+                repetitions = [{
+                    "rep": 1, "status": "success",
+                    "decision": {"selected_skill": plain_selected,
+                                 "action": "apply" if plain_selected
+                                 else "clarify"},
+                    "match": plain_selected == expected,
+                }]
+            recorded_cases.append({
+                "id": case["id"], "case_type": case.get("case_type"),
+                "expected_skill": case.get("expected_skill"), "turns": turns,
+                "repetitions": repetitions,
+            })
+        canonical = json.dumps(source, sort_keys=True,
+                               separators=(",", ":"), ensure_ascii=False).encode()
+        evidence = {
+            "evidence_type": ("confusion-set" if source_key == "confusion_set"
+                               else "holdout"),
+            source_key: source_name,
+            "case_set_path": source_rel,
+            "case_set_hash": "sha256:" + hashlib.sha256(canonical).hexdigest(),
+            "skills": source["skills"], "cases": recorded_cases,
+        }
+        evidence["aggregate"] = rc.build_aggregate(
+            evidence["cases"], evidence["skills"])
+        return evidence
 
     def test_malformed_exec_evidence_fails(self):
         # A malformed execution evidence file must cause validator failure.
@@ -548,8 +735,57 @@ class EvidenceDirDispatchTests(unittest.TestCase):
             "target_absent": {"repetitions": [
                 {"rep": 1, "status": "success", "decision":
                  {"selected_skill": None, "action": "clarify"}, "match": True}]}}}
+        good.update({"skill": "code-review", "case_id": 1})
+        prompt = json.load(open(os.path.join(
+            ROOT, "skills", "code-review", "evals", "evals.json")))
+        prompt = next(c for c in prompt["evals"] if c["id"] == 1)["prompt"]
+        for name, absent in (("target_present", None),
+                             ("target_absent", "code-review")):
+            catalog = rc.render_catalog(rc.build_catalog(absent))
+            for rep in good["conditions"][name]["repetitions"]:
+                rep["catalog_hash"] = hashlib.sha256(
+                    catalog.encode()).hexdigest()
+                rep["prompt_hash"] = hashlib.sha256(
+                    rc.build_prompt(catalog, prompt).encode()).hexdigest()
         errs = self._run_check({"catalog-routing-x.json": json.dumps(good)})
         self.assertEqual(errs, [], errs)
+
+    def test_case_set_evidence_validated_via_dispatch(self):
+        # Confusion-set/holdout runners emit cases + aggregate, not the
+        # legacy target-present/target-absent conditions shape.
+        good = self._case_set_evidence(
+            "evaluations/holdout/review-discrim-1.json", 1, "code-review")
+        errs = self._run_check({"holdout-x.json": json.dumps(good)})
+        self.assertEqual(errs, [], errs)
+
+    def test_workflow_case_set_evidence_validated_via_dispatch(self):
+        good = self._case_set_evidence(
+            "evaluations/confusion-sets/review-family.json", 13,
+            "review-feedback-resolution")
+        errs = self._run_check({"confusion-set-x.json": json.dumps(good)})
+        self.assertEqual(errs, [], errs)
+
+    def test_case_set_stale_aggregate_rejected(self):
+        good = self._case_set_evidence(
+            "evaluations/holdout/review-discrim-1.json", 1, "code-review")
+        good["aggregate"]["observations"] = 99
+        errs = self._run_check({"holdout-stale.json": json.dumps(good)})
+        self.assertTrue(any("aggregate does not match" in e for e in errs),
+                        errs)
+
+    def test_case_set_out_of_catalog_selection_rejected(self):
+        good = self._case_set_evidence(
+            "evaluations/holdout/review-discrim-1.json", 1,
+            "not-in-catalog")
+        errs = self._run_check({"holdout-membership.json": json.dumps(good)})
+        self.assertTrue(any("not in catalog skills" in e for e in errs), errs)
+
+    def test_case_set_stale_source_hash_rejected(self):
+        good = self._case_set_evidence(
+            "evaluations/holdout/review-discrim-1.json", 1, "code-review")
+        good["case_set_hash"] = "sha256:" + "0" * 64
+        errs = self._run_check({"holdout-stale-source.json": json.dumps(good)})
+        self.assertTrue(any("case_set_hash" in e for e in errs), errs)
 
 
 class GeneratorSeedTests(unittest.TestCase):
@@ -943,51 +1179,79 @@ class GeneratorHashSemanticsTests(unittest.TestCase):
 
 
 class ExecutionEvidenceAnchorTests(unittest.TestCase):
-    """Defect 3 / 14C: execution evidence must anchor to the frozen fixture hash
-    and freeze the injected guidance bundle."""
+    """Execution evidence must anchor to the frozen fixture hash, record the
+    runtime-treatment exclusion list, and freeze the injected guidance tree."""
 
     def tearDown(self):
         reset()
 
     def _ev(self, **over):
+        evals_path = os.path.join(ROOT, "skills", "code-review", "evals",
+                                  "evals.json")
+        source = json.load(open(evals_path))
+        case = next(c for c in source["evals"] if c["id"] == 1)
+        fixture_hash = case["fixture"]["content_hash"]
+        target_hash = ree.skill_tree_hash(
+            os.path.join(ROOT, "skills", "code-review"))
+        source_hash = "sha256:" + hashlib.sha256(
+            open(evals_path, "rb").read()).hexdigest()
         ev = {
             "evidence_type": "execution",
-            "canonical_seed_hash": "sha256:seed",
-            "expected_fixture_hash": "sha256:seed",
-            "guidance_bundle_hash": "sha256:bundle",
-            "guidance_mount_path": "/work/guidance/task",
+            "canonical_task_seed_hash": fixture_hash,
+            "expected_fixture_hash": fixture_hash,
+            "fixture_source_path": "skills/code-review/evals/evals.json",
+            "fixture_path": "skills/code-review/evals/files/case-1",
+            "fixture_source_hash": source_hash,
+            "target_skill_source_path": "skills/code-review",
+            "runtime_treatment_paths": [".kilo/skills"],
+            "activation_mechanism": "kilo-command-skill",
             "target_skill_kilo_path": ".kilo/skills/code-review",
+            "target_skill_content_hash": target_hash,
             "conditions": ["target", "baseline"],
+            "skill": "code-review",
+            "case_id": 1,
             "repetitions": [{
                 "rep": 1,
-                "canonical_seed_hash": "sha256:seed",
+                "canonical_task_seed_hash": fixture_hash,
                 "natural_task_hash": "a" * 64,
                 "natural_task_identical_across_conditions": True,
                 "condition_workspace_ids": {"target": "ws-target-1",
                                             "baseline": "ws-baseline-1"},
-                "guidance_mount_path": "/work/guidance/task",
                 "conditions": {
                     "target": {"container_id": "cg", "session_id": "sg",
                                "run_status": "success", "returncode": 0,
-                               "guidance_verified": True,
-                               "guidance_probe": "present",
-                               "starting_fixture_hash": "sha256:seed",
-                               "ending_fixture_hash": "sha256:g",
+                               "skill_probe": "present",
+                               "skill_context_probe": "present",
+                               "starting_task_hash": fixture_hash,
+                               "ending_task_hash": "sha256:g",
+                               "starting_full_hash": "sha256:f1",
+                               "ending_full_hash": "sha256:f2",
                                "output": "out", "stderr": "",
+                               "activation_mechanism": "kilo-command-skill",
+                               "skill_command": "code-review:skill",
                                "skill_kilo_path": ".kilo/skills/code-review",
-                               "skill_loaded": True, "skill_loads": []},
+                               "skill_content_hash": target_hash,
+                               "skill_tool_invoked": False,
+                               "activation_events": []},
                     "baseline": {"container_id": "cb", "session_id": "sb",
-                                  "run_status": "success", "returncode": 0,
-                                  "guidance_verified_absent": True,
-                                  "guidance_probe": "absent",
-                                  "starting_fixture_hash": "sha256:seed",
-                                  "ending_fixture_hash": "sha256:h",
-                                  "output": "out", "stderr": "",
-                                  "skill_kilo_path": None,
-                                  "skill_loaded": False, "skill_loads": []},
+                                 "run_status": "success", "returncode": 0,
+                                 "skill_probe": "absent",
+                                 "skill_context_probe": "none",
+                                 "starting_task_hash": fixture_hash,
+                                 "ending_task_hash": "sha256:h",
+                                 "starting_full_hash": "sha256:f3",
+                                 "ending_full_hash": "sha256:f4",
+                                 "output": "out", "stderr": "",
+                                 "activation_mechanism": "none",
+                                 "skill_command": None,
+                                 "skill_kilo_path": None,
+                                 "skill_content_hash": None,
+                                 "skill_tool_invoked": False,
+                                 "activation_events": []},
                 },
                 "distinct_containers": True, "distinct_sessions": True,
-                "starting_fixture_hashes_match": True,
+                "starting_task_hashes_match": True,
+                "task_hashes_match_canonical_seed": True,
                 "workspace_paths_differ": True,
             }],
         }
@@ -1003,15 +1267,17 @@ class ExecutionEvidenceAnchorTests(unittest.TestCase):
         errs = ve.validate_execution_evidence(ev)
         self.assertTrue(any("expected_fixture_hash" in e for e in errs), errs)
 
-    def test_missing_guidance_bundle_rejected(self):
+    def test_missing_runtime_treatment_paths_rejected(self):
+        # P0-B: the validator must be able to prove WHICH paths the task-state
+        # hash excluded; omitting the list is a schema error.
         ev = self._ev()
-        del ev["guidance_bundle_hash"]
+        del ev["runtime_treatment_paths"]
         errs = ve.validate_execution_evidence(ev)
-        self.assertTrue(any("guidance_bundle_hash" in e for e in errs), errs)
+        self.assertTrue(any("runtime_treatment_paths" in e for e in errs), errs)
 
     def test_frozen_hash_mismatch_rejected(self):
-        # Guided and baseline start from identical copies, but the canonical seed
-        # does not match the frozen expected hash -> evidence must be rejected.
+        # The conditions start from identical task copies, but the canonical
+        # seed does not match the frozen expected hash -> evidence rejected.
         ev = self._ev(expected_fixture_hash="sha256:wrong")
         errs = ve.validate_execution_evidence(ev)
         self.assertTrue(any("frozen" in e or "expected_fixture_hash" in e
@@ -1113,6 +1379,19 @@ class ConfusionSetAndHoldoutTests(unittest.TestCase):
             ve.check_confusion_set(p, "evaluations/confusion-sets/review.json")
             self.assertTrue(any("workflow-transition case must carry"
                                 in e for e in ve.errors))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_nonworkflow_turns_rejected(self):
+        d = self._confusion()
+        d["cases"][0]["turns"] = [{"user": "follow-up",
+                                    "expected_route": "code-review"}]
+        tmp = tempfile.mkdtemp()
+        try:
+            p = self._write(tmp, "review.json", d)
+            ve.check_confusion_set(p, "evaluations/confusion-sets/review.json")
+            self.assertTrue(any("turns are only valid" in e for e in ve.errors),
+                            ve.errors)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -1407,49 +1686,80 @@ class CaseTypeTests(unittest.TestCase):
 
 
 class ExecutionEvidenceV2Tests(unittest.TestCase):
-    """New-format execution evidence: neutral guidance path, identical natural
-    task, target/baseline/placebo conditions."""
+    """Execution evidence: controlled activation mechanism, identical natural
+    task, target/baseline/placebo conditions, task-vs-runtime hashing."""
 
     def tearDown(self):
         reset()
 
     def _evidence(self, **over):
+        evals_path = os.path.join(ROOT, "skills", "code-review", "evals",
+                                  "evals.json")
+        source = json.load(open(evals_path))
+        case = next(c for c in source["evals"] if c["id"] == 1)
+        fixture_hash = case["fixture"]["content_hash"]
+        target_hash = ree.skill_tree_hash(
+            os.path.join(ROOT, "skills", "code-review"))
+        source_hash = "sha256:" + hashlib.sha256(
+            open(evals_path, "rb").read()).hexdigest()
         cond = {
             "container_id": "c", "session_id": "s",
             "run_status": "success", "returncode": 0,
-            "guidance_mounted": True, "guidance_verified": True,
-            "guidance_verified_absent": False, "guidance_probe": "present",
-            "starting_fixture_hash": "sha256:seed",
-            "ending_fixture_hash": "sha256:after",
-            "output": "worker output", "stderr": "",
+            "skill_probe": "present",
+            "skill_context_probe": "present",
+            "starting_task_hash": fixture_hash,
+            "ending_task_hash": "sha256:after",
+            "starting_full_hash": "sha256:f1", "ending_full_hash": "sha256:f2",
+                "output": "worker output", "stderr": "",
+            "activation_mechanism": "kilo-command-skill",
+            "skill_command": "code-review:skill",
             "skill_kilo_path": ".kilo/skills/code-review",
-            "skill_loaded": True, "skill_loads": []}
+            "skill_content_hash": target_hash,
+            "skill_tool_invoked": False, "activation_events": []}
         baseline = dict(cond, container_id="cb", session_id="sb",
-                        guidance_mounted=False, guidance_verified=False,
-                        guidance_verified_absent=True, guidance_probe="absent",
-                        skill_kilo_path=None, skill_loaded=False, skill_loads=[])
+                        skill_probe="absent", skill_context_probe="none",
+                        starting_full_hash="sha256:f3",
+                        ending_full_hash="sha256:f4",
+                        activation_mechanism="none",
+                        skill_command=None,
+                        skill_kilo_path=None,
+                        skill_content_hash=None,
+                        skill_tool_invoked=False,
+                        activation_events=[])
         placebo_skill = over.get('placebo_skill')
+        placebo_hash = (ree.skill_tree_hash(
+            os.path.join(ROOT, "skills", placebo_skill))
+                        if placebo_skill else None)
         ev = {
             "evidence_type": "execution",
-            "canonical_seed_hash": "sha256:seed",
-            "expected_fixture_hash": "sha256:seed",
-            "guidance_bundle_hash": "sha256:bundle",
-            "guidance_mount_path": "/work/guidance/task",
+            "canonical_task_seed_hash": fixture_hash,
+            "expected_fixture_hash": fixture_hash,
+            "fixture_source_path": "skills/code-review/evals/evals.json",
+            "fixture_path": "skills/code-review/evals/files/case-1",
+            "fixture_source_hash": source_hash,
+            "target_skill_source_path": "skills/code-review",
+            "runtime_treatment_paths": [".kilo/skills"],
+            "activation_mechanism": "kilo-command-skill",
             "target_skill_kilo_path": ".kilo/skills/code-review",
+            "target_skill_content_hash": target_hash,
             "placebo_skill_kilo_path": (".kilo/skills/" + placebo_skill)
                 if placebo_skill else None,
+            "placebo_skill_content_hash":
+                placebo_hash,
             "conditions": ["target", "baseline"],
-            "placebo_skill": None, "placebo_bundle_hash": None,
+            "placebo_skill": None,
+            "skill": "code-review",
+            "case_id": 1,
             "repetitions": [{
                 "rep": 1,
-                "canonical_seed_hash": "sha256:seed",
+                "canonical_task_seed_hash": fixture_hash,
                 "natural_task_hash": "a" * 64,
                 "natural_task_identical_across_conditions": True,
                 "condition_workspace_ids": {"target": "ws-t", "baseline": "ws-b"},
-                "guidance_mount_path": "/work/guidance/task",
                 "conditions": {"target": cond, "baseline": baseline},
                 "distinct_containers": True, "distinct_sessions": True,
-                "starting_fixture_hashes_match": True,
+                "starting_task_hashes_match": True,
+                "task_hashes_match_canonical_seed": True,
                 "workspace_paths_differ": True,
             }],
         }
@@ -1459,17 +1769,17 @@ class ExecutionEvidenceV2Tests(unittest.TestCase):
     def test_valid_v2(self):
         self.assertEqual(ve.validate_execution_evidence(self._evidence()), [])
 
-    def test_non_neutral_guidance_path_rejected(self):
-        ev = self._evidence(guidance_mount_path="/work/guidance/code-review")
-        errs = ve.validate_execution_evidence(ev)
-        self.assertTrue(any("not the neutral" in e for e in errs), errs)
-
-    def test_skill_name_in_mount_path_rejected(self):
+    def test_task_hash_includes_no_treatment_paths_fails(self):
+        # P0-B: the target's starting TASK hash must equal the canonical seed
+        # even though the target workspace carries the .kilo treatment tree;
+        # if someone hashed the treatment INTO the task hash, the evidence
+        # cannot claim identical task state.
         ev = self._evidence()
-        ev["repetitions"][0]["guidance_mount_path"] = \
-            "/work/guidance/security-review"
+        ev["repetitions"][0]["conditions"]["target"]["starting_task_hash"] = \
+            "sha256:with-treatment"
         errs = ve.validate_execution_evidence(ev)
-        self.assertTrue(any("not neutral" in e for e in errs), errs)
+        self.assertTrue(any("TASK hash" in e or "differ" in e for e in errs),
+                        errs)
 
     def test_missing_identical_task_hash_rejected(self):
         ev = self._evidence()
@@ -1483,12 +1793,11 @@ class ExecutionEvidenceV2Tests(unittest.TestCase):
         errs = ve.validate_execution_evidence(ev)
         self.assertTrue(any("distinct containers" in e for e in errs), errs)
 
-    def test_baseline_guidance_present_rejected(self):
+    def test_baseline_treatment_present_rejected(self):
         ev = self._evidence()
-        ev["repetitions"][0]["conditions"]["baseline"] \
-            ["guidance_verified_absent"] = False
+        ev["repetitions"][0]["conditions"]["baseline"]["skill_probe"] = "present"
         errs = ve.validate_execution_evidence(ev)
-        self.assertTrue(any("guidance_verified_absent" in e for e in errs), errs)
+        self.assertTrue(any("baseline: skill_probe" in e for e in errs), errs)
 
     def test_missing_condition_rejected(self):
         ev = self._evidence(conditions=["target", "baseline", "placebo"])
@@ -1498,7 +1807,13 @@ class ExecutionEvidenceV2Tests(unittest.TestCase):
     def test_placebo_requires_placebo_skill(self):
         ev = self._evidence(conditions=["target", "baseline", "placebo"])
         placebo = dict(ev["repetitions"][0]["conditions"]["target"],
-                       container_id="cp", session_id="sp")
+                       container_id="cp", session_id="sp",
+                       starting_full_hash="sha256:f5",
+                       ending_full_hash="sha256:f6",
+                       skill_command="security-review:skill",
+                       skill_kilo_path=".kilo/skills/security-review",
+                       skill_content_hash=ree.skill_tree_hash(
+                           os.path.join(ROOT, "skills", "security-review")))
         ev["repetitions"][0]["conditions"]["placebo"] = placebo
         ev["repetitions"][0]["condition_workspace_ids"]["placebo"] = "ws-p"
         errs = ve.validate_execution_evidence(ev)
@@ -1506,11 +1821,15 @@ class ExecutionEvidenceV2Tests(unittest.TestCase):
 
     def test_placebo_valid_with_skill(self):
         ev = self._evidence(conditions=["target", "baseline", "placebo"],
-                            placebo_skill="security-review",
-                            placebo_bundle_hash="sha256:p")
+                            placebo_skill="security-review")
         placebo = dict(ev["repetitions"][0]["conditions"]["target"],
                        container_id="cp", session_id="sp",
-                       skill_kilo_path=".kilo/skills/security-review")
+                       starting_full_hash="sha256:f5",
+                       ending_full_hash="sha256:f6",
+                       skill_command="security-review:skill",
+                       skill_kilo_path=".kilo/skills/security-review",
+                       skill_content_hash=ree.skill_tree_hash(
+                           os.path.join(ROOT, "skills", "security-review")))
         ev["repetitions"][0]["conditions"]["placebo"] = placebo
         ev["repetitions"][0]["condition_workspace_ids"]["placebo"] = "ws-p"
         self.assertEqual(ve.validate_execution_evidence(ev), [])
@@ -1524,32 +1843,8 @@ class ExecutionEvidenceV2Tests(unittest.TestCase):
 
 
 class ExecutionRunnerBoundaryTests(unittest.TestCase):
-    """Runner-level treatment boundary: identical natural task, neutral mount,
-    placebo plumbing."""
-
-    def test_guidance_staged_under_neutral_task_dir(self):
-        tmp = tempfile.mkdtemp()
-        try:
-            skilldir = os.path.join(tmp, "skill")
-            os.makedirs(os.path.join(skilldir, "references"))
-            open(os.path.join(skilldir, "SKILL.md"), "w").write("# S")
-            open(os.path.join(skilldir, "references", "r.md"), "w").write("r")
-            g = ree.materialize_guidance(skilldir, "code-review")
-            try:
-                # The mount root is staged as task/ so the target and placebo
-                # conditions mount byte-identically at /work/guidance/task.
-                self.assertTrue(os.path.exists(os.path.join(g, "task", "SKILL.md")))
-                self.assertTrue(os.path.exists(
-                    os.path.join(g, "task", "references", "r.md")))
-                # The canonical skill name must not appear anywhere in the
-                # staged guidance paths.
-                for root, _, names in os.walk(g):
-                    for n in names:
-                        self.assertNotIn("code-review", os.path.join(root, n))
-            finally:
-                shutil.rmtree(g, ignore_errors=True)
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
+    """Runner-level treatment boundary: Kilo discovery-tree materialization,
+    skill-command naming, and REAL activation-event parsing (not file reads)."""
 
     def test_conditions_arg_validation(self):
         self.assertEqual(ree._conditions_arg("target,baseline"),
@@ -1563,7 +1858,11 @@ class ExecutionRunnerBoundaryTests(unittest.TestCase):
         self.assertEqual(ree._conditions_arg("baseline,target,target"),
                          ["baseline", "target"])
 
-    def test_materialize_skill_for_kilo_creates_discovery_dir(self):
+    def test_skill_command_name(self):
+        self.assertEqual(ree.skill_command_name("code-review"),
+                         "code-review:skill")
+
+    def test_materialize_kilo_skill_creates_discovery_dir(self):
         tmp = tempfile.mkdtemp()
         try:
             skilldir = os.path.join(tmp, "skill")
@@ -1572,33 +1871,968 @@ class ExecutionRunnerBoundaryTests(unittest.TestCase):
             open(os.path.join(skilldir, "references", "r.md"), "w").write("r")
             workspace = os.path.join(tmp, "ws")
             os.makedirs(workspace)
-            path = ree.materialize_skill_for_kilo(skilldir, "code-review", workspace)
+            path = ree.materialize_kilo_skill(skilldir, "code-review", workspace)
+            self.assertEqual(os.path.join(workspace, ".kilo", "skills",
+                                          "code-review"), path)
             self.assertTrue(os.path.exists(os.path.join(path, "SKILL.md")))
-            self.assertTrue(os.path.exists(os.path.join(path, "references", "r.md")))
+            self.assertTrue(os.path.exists(
+                os.path.join(path, "references", "r.md")))
             # The SKILL.md body and references must be copied verbatim.
             self.assertEqual(open(os.path.join(path, "SKILL.md")).read(), "# S")
-            self.assertEqual(open(os.path.join(path, "references", "r.md")).read(), "r")
+            self.assertEqual(
+                open(os.path.join(path, "references", "r.md")).read(), "r")
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
-    def test_extract_skill_loads_detects_read(self):
-        stdout = '\n'.join([
-            '{"type":"tool_use","timestamp":1,"part":{"tool":"read",'
-            '"state":{"input":{"filePath":"/work/task/.kilo/skills/code-review/SKILL.md"}}}}',
-            '{"type":"text","text":"hello"}',
-        ])
-        loads = ree.extract_skill_loads(stdout, "code-review", "/work/task")
-        self.assertEqual(len(loads), 1)
-        self.assertIn("code-review", loads[0]["path"])
+    def test_materialize_kilo_skill_placebo_contents_reach_discovery(self):
+        # P0-C regression: the placebo SKILL.md must reach the runtime discovery
+        # location. The old bug passed a staged neutral bundle shaped
+        # <dir>/task/SKILL.md into the kilo materializer (which expects
+        # <dir>/SKILL.md), creating .kilo/skills/<name>/ WITHOUT the SKILL.md.
+        # Materializing from the canonical repository skill dir must never
+        # produce an empty discovery tree.
+        tmp = tempfile.mkdtemp()
+        try:
+            pdir = os.path.join(tmp, "placebo-skill")
+            os.makedirs(pdir)
+            placebo_body = ("---\nname: placebo-skill\ndescription: irrelevant\n"
+                            "---\n# Placebo\nDo nothing special.\n")
+            open(os.path.join(pdir, "SKILL.md"), "w").write(placebo_body)
+            workspace = os.path.join(tmp, "ws")
+            os.makedirs(workspace)
+            tree = ree.materialize_kilo_skill(pdir, "placebo-skill", workspace)
+            discovery_md = os.path.join(tree, "SKILL.md")
+            self.assertTrue(os.path.exists(discovery_md),
+                            "placebo SKILL.md missing at discovery location")
+            self.assertEqual(open(discovery_md).read(), placebo_body)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
-    def test_extract_skill_loads_ignores_other_reads(self):
-        stdout = '\n'.join([
-            '{"type":"tool_use","timestamp":1,"part":{"tool":"read",'
-            '"state":{"input":{"filePath":"/work/task/main.py"}}}}',
-            '{"type":"text","text":"hello"}',
+    def test_skill_tree_hash_deterministic_and_content_sensitive(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            skilldir = os.path.join(tmp, "skill")
+            os.makedirs(skilldir)
+            open(os.path.join(skilldir, "SKILL.md"), "w").write("# S")
+            h1 = ree.skill_tree_hash(skilldir)
+            h2 = ree.skill_tree_hash(skilldir)
+            self.assertEqual(h1, h2)
+            self.assertTrue(h1.startswith("sha256:"))
+            open(os.path.join(skilldir, "SKILL.md"), "w").write("# S changed")
+            self.assertNotEqual(h1, ree.skill_tree_hash(skilldir))
+            self.assertIsNone(ree.skill_tree_hash(
+                os.path.join(tmp, "missing")))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_skill_tree_hash_excludes_non_discovery_files(self):
+        # The frozen hash must cover EXACTLY what reaches a worker's discovery
+        # tree (SKILL.md + references/**), never the evals/ fixture snapshot.
+        tmp = tempfile.mkdtemp()
+        try:
+            skilldir = os.path.join(tmp, "skill")
+            os.makedirs(os.path.join(skilldir, "references"))
+            os.makedirs(os.path.join(skilldir, "evals"))
+            open(os.path.join(skilldir, "SKILL.md"), "w").write("# S")
+            open(os.path.join(skilldir, "references", "r.md"), "w").write("r")
+            # The evals/ tree contains the expected output / answer key and must
+            # not influence the frozen guidance hash.
+            open(os.path.join(skilldir, "evals", "evals.json"), "w").write(
+                '{"answer": "secret"}')
+            frozen = ree.skill_tree_hash(skilldir)
+            # Materializing into a workspace must produce an identical hash.
+            workspace = os.path.join(tmp, "ws")
+            os.makedirs(workspace)
+            tree = ree.materialize_kilo_skill(skilldir, "code-review", workspace)
+            self.assertEqual(
+                open(os.path.join(tree, "SKILL.md")).read(), "# S")
+            self.assertEqual(frozen, ree.skill_tree_hash(tree))
+            # Mutating the evals/ snapshot must NOT change the frozen hash.
+            open(os.path.join(skilldir, "evals", "evals.json"), "w").write(
+                '{"answer": "changed"}')
+            self.assertEqual(frozen, ree.skill_tree_hash(skilldir))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    # --- P0-A: real Kilo activation events (structure verified against the
+    # installed CLI 7.4.22 --format json output) ---
+
+    def _realistic_skill_event(self, name, status="completed", ts=1787124430157,
+                               session="ses_abc123"):
+        return json.dumps({
+            "type": "tool_use",
+            "timestamp": ts,
+            "sessionID": session,
+            "part": {
+                "id": "prt_x",
+                "sessionID": session,
+                "messageID": "msg_y",
+                "type": "tool",
+                "callID": "chatcmpl-tool-abc",
+                "tool": "skill",
+                "state": {
+                    "status": status,
+                    "input": {"name": name},
+                    "output": f'<skill_content name="{name}">\n# Skill: {name}\n'
+                              f'\n# Body\n\nBase directory for this skill: '
+                              f'/work/task/.kilo/skills/{name}\n'
+                              f'Relative paths in this skill are relative to '
+                              f'this base directory.\nNote: file list is '
+                              f'sampled.\n\n<skill_files>\n\n</skill_files>\n'
+                              f'</skill_content>',
+                    "title": f"Loaded skill: {name}",
+                    "metadata": {
+                        "name": name,
+                        "dir": f"/work/task/.kilo/skills/{name}",
+                        "truncated": False,
+                        "approval": {"source": "global",
+                                     "rule": {"permission": "*",
+                                              "pattern": "*",
+                                              "action": "allow"}}},
+                    "time": {"start": ts, "end": ts + 42},
+                },
+                "metadata": {"openrouter": {"reasoning_details": []}},
+            },
+        })
+
+    def test_extract_activation_events_detects_skill_invocation(self):
+        # A REAL Kilo `skill` tool_use event must be detected.
+        stdout = "\n".join([
+            self._realistic_skill_event("code-review"),
+            '{"type":"text","part":{"type":"text","text":"done"}}',
         ])
-        loads = ree.extract_skill_loads(stdout, "code-review", "/work/task")
-        self.assertEqual(loads, [])
+        events = ree.extract_activation_events(stdout, "code-review")
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["tool"], "skill")
+        self.assertEqual(events[0]["skill_name"], "code-review")
+        self.assertEqual(events[0]["session_id"], "ses_abc123")
+        self.assertEqual(events[0]["timestamp"], 1787124430157)
+        self.assertIn(".kilo/skills/code-review", events[0]["dir"])
+
+    def test_extract_activation_events_ignores_file_reads(self):
+        # P0-A: a normal `read` of the SKILL.md file is NOT activation.
+        stdout = "\n".join([
+            json.dumps({"type": "tool_use", "timestamp": 1,
+                        "part": {"tool": "read",
+                                 "state": {"input": {
+                                     "filePath": "/work/task/.kilo/skills/"
+                                                 "code-review/SKILL.md"}}}}),
+            '{"type":"text","part":{"type":"text","text":"ok"}}',
+        ])
+        self.assertEqual(
+            ree.extract_activation_events(stdout, "code-review"), [])
+
+    def test_extract_activation_events_requires_completed_content(self):
+        # A tool name alone, or a completed event without the skill result, is
+        # not proof that the guidance entered context.
+        stdout = "\n".join([
+            self._realistic_skill_event("code-review", status="running"),
+            json.dumps({
+                "type": "tool_use", "timestamp": 2,
+                "sessionID": "ses_no_content",
+                "part": {"type": "tool", "tool": "skill",
+                         "state": {"status": "completed",
+                                   "input": {"name": "code-review"},
+                                   "output": ""}},
+            }),
+            json.dumps({
+                "type": "tool_use", "timestamp": 3,
+                "sessionID": "ses_open_only",
+                "part": {"type": "tool", "tool": "skill",
+                         "state": {"status": "completed",
+                                   "input": {"name": "code-review"},
+                                   "output": "<skill_content name=\"code-review\">"}},
+            }),
+        ])
+        self.assertEqual(
+            ree.extract_activation_events(stdout, "code-review"), [])
+
+    def test_extract_activation_events_other_skill_not_counted(self):
+        # P0-A: another skill's invocation must not count as this skill's.
+        stdout = "\n".join([
+            self._realistic_skill_event("security-review", session="ses_abc"),
+        ])
+        self.assertEqual(
+            ree.extract_activation_events(stdout, "code-review"), [])
+
+    def test_extract_activation_events_malformed_not_counted(self):
+        # P0-A: malformed tool events (bad JSON, missing state, error status,
+        # non-skill tool) must never count.
+        stdout = "\n".join([
+            "not json at all",
+            '{"type":"tool_use"}',
+            '{"type":"tool_use","part":{"tool":"skill"}}',
+            self._realistic_skill_event("code-review", status="error",
+                                        session="ses_bad"),
+            '{"type":"tool_use","part":{"tool":"bash",'
+            '"state":{"input":{"command":"cat .kilo/skills/code-review/'
+            'SKILL.md"}}}}',
+        ])
+        self.assertEqual(
+            ree.extract_activation_events(stdout, "code-review"), [])
+
+    def test_extract_activation_events_file_presence_not_enough(self):
+        # P0-A: mere skill-file presence in the workspace never produces
+        # activation events by itself.
+        tmp = tempfile.mkdtemp()
+        try:
+            workspace = os.path.join(tmp, "ws")
+            os.makedirs(os.path.join(workspace, ".kilo", "skills", "code-review"))
+            open(os.path.join(workspace, ".kilo", "skills", "code-review",
+                              "SKILL.md"), "w").write("# present but inert")
+            self.assertEqual(
+                ree.extract_activation_events("", "code-review"), [])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+class TaskStateHashRegressionTests(unittest.TestCase):
+    """P0-B regression: evaluator treatment files must not invalidate seed
+    equality; real task mutations still change the task-state hash."""
+
+    def _make_fixture(self, tmp):
+        fx = os.path.join(tmp, "fixture")
+        os.makedirs(fx)
+        open(os.path.join(fx, "main.py"), "w").write("print('hi')\n")
+        open(os.path.join(fx, "README.md"), "w").write("# task\n")
+        return fx
+
+    def _make_skill(self, tmp, name, body):
+        sd = os.path.join(tmp, f"skill-{name}")
+        os.makedirs(sd)
+        open(os.path.join(sd, "SKILL.md"), "w").write(body)
+        return sd
+
+    def test_treatment_paths_do_not_change_task_hash(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            fx = self._make_fixture(tmp)
+            target_skill = self._make_skill(
+                tmp, "code-review", "# target guidance body\n")
+            placebo_skill = self._make_skill(
+                tmp, "security-review", "# placebo guidance body\n")
+            workspaces = {}
+            for name in ("target", "baseline", "placebo"):
+                ws = os.path.join(tmp, f"ws-{name}")
+                shutil.copytree(fx, ws)
+                workspaces[name] = ws
+            # Treatment: target and placebo receive .kilo/skills trees;
+            # baseline untouched.
+            ree.materialize_kilo_skill(target_skill, "code-review",
+                                       workspaces["target"])
+            ree.materialize_kilo_skill(placebo_skill, "security-review",
+                                       workspaces["placebo"])
+            # Task-state hashes must be equal across all three conditions.
+            task_hashes = {n: eh.hash_task_workspace(ws, ree.RUNTIME_TREATMENT_PATHS)
+                           for n, ws in workspaces.items()}
+            self.assertEqual(len(set(task_hashes.values())), 1,
+                             f"task hashes must match: {task_hashes}")
+            # Full-filesystem hashes (treatment included) MUST differ from the
+            # baseline, and the target/placebo trees differ from each other.
+            full_hashes = {n: eh.hash_workspace(ws) for n, ws in workspaces.items()}
+            self.assertNotEqual(full_hashes["target"], full_hashes["baseline"])
+            self.assertNotEqual(full_hashes["placebo"], full_hashes["baseline"])
+            self.assertNotEqual(full_hashes["target"], full_hashes["placebo"])
+            # A real task mutation changes the task hash.
+            before = task_hashes["target"]
+            open(os.path.join(workspaces["target"], "main.py"), "a").write(
+                "# mutated\n")
+            self.assertNotEqual(
+                before, eh.hash_task_workspace(workspaces["target"],
+                                               ree.RUNTIME_TREATMENT_PATHS))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_nested_kilo_fixture_content_still_hashed(self):
+        # The exclusion is conservative: only a TOP-LEVEL .kilo root is
+        # excluded; a fixture's own nested .kilo content still counts.
+        tmp = tempfile.mkdtemp()
+        try:
+            fx = os.path.join(tmp, "fx")
+            os.makedirs(os.path.join(fx, "sub", ".kilo"))
+            open(os.path.join(fx, "sub", ".kilo", "config"), "w").write("x")
+            open(os.path.join(fx, "a.txt"), "w").write("a")
+            h1 = eh.hash_task_workspace(fx, ree.RUNTIME_TREATMENT_PATHS)
+            open(os.path.join(fx, "sub", ".kilo", "config"), "w").write("y")
+            h2 = eh.hash_task_workspace(fx, ree.RUNTIME_TREATMENT_PATHS)
+            self.assertNotEqual(h1, h2)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_project_kilo_config_remains_task_state(self):
+        # Only the evaluator-owned project skill tree is excluded. A fixture's
+        # project config under .kilo is part of the task and must affect its hash.
+        tmp = tempfile.mkdtemp()
+        try:
+            fx = os.path.join(tmp, "fx")
+            os.makedirs(os.path.join(fx, ".kilo", "skills"))
+            open(os.path.join(fx, ".kilo", "config.jsonc"), "w").write(
+                '{"agent":"code"}\n')
+            h1 = eh.hash_task_workspace(fx, ree.RUNTIME_TREATMENT_PATHS)
+            open(os.path.join(fx, ".kilo", "config.jsonc"), "w").write(
+                '{"agent":"plan"}\n')
+            h2 = eh.hash_task_workspace(fx, ree.RUNTIME_TREATMENT_PATHS)
+            self.assertNotEqual(h1, h2)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+class LayerBProtocolIntegrationTests(unittest.TestCase):
+    """P1: end-to-end Layer B protocol test.
+
+    Exercises the REAL runner preparation -> condition workspace construction ->
+    guidance activation setup -> evidence construction -> validator, with only
+    the Kilo subprocess boundary mocked. Catches runner/validator
+    incompatibilities that isolated unit tests miss.
+    """
+
+    def tearDown(self):
+        reset()
+
+    def _fixture(self, tmp):
+        fx = os.path.join(tmp, "fixture")
+        os.makedirs(fx)
+        open(os.path.join(fx, "main.py"), "w").write(
+            "def buggy():\n    return 1 / 0\n")
+        open(os.path.join(fx, "README.md"), "w").write("# task\n")
+        return fx
+
+    def _skill(self, tmp, name, body):
+        sd = os.path.join(tmp, f"skill-{name}")
+        os.makedirs(sd)
+        open(os.path.join(sd, "SKILL.md"), "w").write(body)
+        return sd
+
+    def _fake_run(self, condition_stdout):
+        """Build a run_container()-shaped fake: returns canned metadata whose
+        stdout carries REALISTIC Kilo JSONL (real skill tool_use event shape)."""
+        def fake(image, model, prompt, fixture_dir, skill_command=None,
+                 skill_md_hex=None, skill_probe_path=None):
+            skill_name = None
+            if skill_command:
+                skill_name = skill_command.split(":")[0]
+            if skill_name:
+                probe = skill_probe_path.replace("/work/task", fixture_dir)
+                if os.path.exists(probe) and skill_md_hex:
+                    actual = hashlib.sha256(open(probe, "rb").read()).hexdigest()
+                    probe_state = ("present" if actual == skill_md_hex
+                                   else "hash_mismatch")
+                elif os.path.exists(probe):
+                    probe_state = "present"
+                else:
+                    probe_state = "absent"
+            else:
+                kilo_skills = os.path.join(fixture_dir, ".kilo", "skills")
+                probe_state = "absent" if not os.path.exists(kilo_skills) \
+                    else "present"
+            return {
+                "returncode": 0,
+                "stdout": condition_stdout,
+                "stderr": "",
+                "container_id": "cid-" + (skill_name or "baseline"),
+                "session_id": "ses-" + (skill_name or "baseline"),
+                "output": "worker output",
+                "skill_probe": probe_state,
+                "skill_context_probe": "present" if skill_name else "none",
+                "status": "success",
+                "reason": None,
+            }
+        return fake
+
+    def test_run_container_context_probe_parses_json_session_ids(self):
+        # The real Docker shell must parse JSONL structurally; compact-JSON
+        # regexes are brittle when Kilo emits whitespace after a colon.
+        tmp = tempfile.mkdtemp()
+        try:
+            fixture = os.path.join(tmp, "fixture")
+            os.makedirs(fixture)
+            captured = {}
+
+            def fake_subprocess_run(cmd, **kwargs):
+                captured["cmd"] = cmd
+                cidfile = cmd[cmd.index("--cidfile") + 1]
+                open(cidfile, "w").write("cid-test")
+                return unittest.mock.Mock(
+                    returncode=0,
+                    stdout=('{"type": "text", "sessionID": "ses spaced", '
+                            '"part": {"type": "text", "text": "done"}}\n'
+                            'SKILL_CONTEXT_PROBE:present\n'
+                            'SKILL_PROBE:present\n'),
+                    stderr="",
+                )
+
+            with unittest.mock.patch.object(ree.subprocess, "run",
+                                            side_effect=fake_subprocess_run):
+                meta = ree.run_container(
+                    "kilo-eval:local", "kilo/tencent/hy3:free", "task",
+                    fixture, skill_command="code-review:skill",
+                    skill_md_hex="abc",
+                    skill_probe_path="/work/task/.kilo/skills/code-review/"
+                                      "SKILL.md")
+            script = captured["cmd"][-1]
+            self.assertIn("JSON.parse", script)
+            self.assertIn('role===\"user\"', script)
+            self.assertNotIn("sed -n", script)
+            syntax = subprocess.run(["bash", "-n"], input=script,
+                                    text=True, capture_output=True)
+            self.assertEqual(syntax.returncode, 0, syntax.stderr)
+            self.assertEqual(meta["session_id"], "ses spaced")
+            self.assertEqual(meta["skill_context_probe"], "present")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    @unittest.skipUnless(shutil.which("node"), "Node is required for export probe")
+    def test_context_probe_parses_export_roles_and_rejects_assistant_echo(self):
+        # Exercise the actual Node export parser with Kilo's observed
+        # messages[].info.role shape, rather than only inspecting generated
+        # shell text.
+        tmp = tempfile.mkdtemp()
+        try:
+            export_path = os.path.join(tmp, "export.json")
+            skill_path = os.path.join(tmp, "SKILL.md")
+            body = "# Guidance\nUse the verification checklist."
+            open(skill_path, "w").write(
+                "---\nname: probe\ndescription: probe\n---\n" + body)
+
+            def run_probe(messages):
+                open(export_path, "w").write(json.dumps({"messages": messages}))
+                return subprocess.run(
+                    ["node", "-e", ree.CONTEXT_PROBE_NODE_SCRIPT,
+                     export_path, skill_path],
+                    text=True, capture_output=True, check=True).stdout
+
+            self.assertEqual(run_probe([{
+                "info": {"role": "assistant"},
+                "parts": [{"type": "text", "text": body}],
+            }]), "absent")
+            self.assertEqual(run_probe([{
+                "info": {"role": "user"},
+                "parts": [{"type": "text", "text": body}],
+            }]), "present")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def _run_full_protocol(self, tmp, conditions, target_body, placebo_body,
+                           fake_run=None):
+        """Seed -> per-condition copies -> .kilo/skills placement -> fake
+        workers -> evidence -> validator. Returns (evidence, errors)."""
+        fx = os.path.join(tmp, "fixture")
+        shutil.copytree(os.path.join(ROOT, "skills", "code-review", "evals",
+                                     "files", "case-1"), fx)
+        # Use canonical repository skill trees so the evidence source anchors are
+        # checked against the same artifacts the production runner would use.
+        target_skill = os.path.join(ROOT, "skills", "code-review")
+        placebo_skill = os.path.join(ROOT, "skills", "security-review")
+        seed, seed_hash = eh.materialize_fixture_seed(fx, "committed")
+        expected_hash = ree.HASH_PREFIX + seed_hash
+        canonical = ree.HASH_PREFIX + eh.hash_task_workspace(
+            seed, ree.RUNTIME_TREATMENT_PATHS)
+        # The pristine seed must be free of runtime treatment paths.
+        self.assertEqual(canonical, ree.HASH_PREFIX + eh.hash_workspace(seed))
+
+        target_stdout = "\n".join([
+            self._realistic_skill_event("code-review"),
+            '{"type":"text","part":{"type":"text","text":"target done"}}',
+        ])
+        placebo_stdout = "\n".join([
+            self._realistic_skill_event("security-review"),
+            '{"type":"text","part":{"type":"text","text":"placebo done"}}',
+        ])
+        baseline_stdout = ('{"type":"text","part":{"type":"text",'
+                           '"text":"baseline done"}}')
+        # Keyed by the SKILL name (what --command resolves); baseline has none.
+        stdout_by_cond = {"code-review": target_stdout,
+                          "security-review": placebo_stdout,
+                          "baseline": baseline_stdout}
+
+        def run_fn(image, model, prompt, fixture_dir, skill_command=None,
+                   skill_md_hex=None, skill_probe_path=None):
+            name = (skill_command.split(":")[0] if skill_command else "baseline")
+            if fake_run is not None:
+                return fake_run(image, model, prompt, fixture_dir,
+                                skill_command, skill_md_hex, skill_probe_path)
+            return self._fake_run(stdout_by_cond[name])(
+                image, model, prompt, fixture_dir, skill_command,
+                skill_md_hex, skill_probe_path)
+
+        rep, canonical, _ = ree.run_repetition(
+            0, conditions, "Fix the bug in main.py.", seed,
+            "code-review", target_skill,
+            "security-review" if "placebo" in conditions else None,
+            placebo_skill if "placebo" in conditions else None,
+            "kilo/tencent/hy3:free", "kilo-eval:local", run_fn)
+        evidence = {
+            "evidence_type": "execution",
+            "skill": "code-review", "case_id": 1,
+            "model": "kilo/tencent/hy3:free", "image": "kilo-eval:local",
+            "activation_mechanism": ree.ACTIVATION_MECHANISM,
+            "runtime_treatment_paths": list(ree.RUNTIME_TREATMENT_PATHS),
+            "target_skill_kilo_path": ".kilo/skills/code-review",
+            "target_skill_content_hash": ree.skill_tree_hash(target_skill),
+            "placebo_skill_kilo_path": (".kilo/skills/security-review"
+                                        if "placebo" in conditions else None),
+            "placebo_skill_content_hash": (ree.skill_tree_hash(placebo_skill)
+                                           if "placebo" in conditions else None),
+            "expected_fixture_hash": expected_hash,
+            "fixture_source_path": "skills/code-review/evals/evals.json",
+            "fixture_path": "skills/code-review/evals/files/case-1",
+            "fixture_source_hash": "sha256:" + hashlib.sha256(open(
+                os.path.join(ROOT, "skills", "code-review", "evals",
+                             "evals.json"), "rb").read()).hexdigest(),
+            "target_skill_source_path": "skills/code-review",
+            "canonical_task_seed_hash": canonical,
+            "conditions": conditions,
+            "placebo_skill": ("security-review" if "placebo" in conditions
+                              else None),
+            "repetitions": [rep],
+        }
+        return evidence, ve.validate_execution_evidence(evidence)
+
+    def _realistic_skill_event(self, name, status="completed", ts=1,
+                               session="ses_abc"):
+        return json.dumps({
+            "type": "tool_use", "timestamp": ts, "sessionID": session,
+            "part": {"type": "tool", "tool": "skill", "callID": "chatcmpl-x",
+                     "state": {"status": status,
+                               "input": {"name": name},
+                    "output": (f"<skill_content name=\"{name}\">\n"
+                               f"# {name} guidance\n"
+                               "Use the loaded guidance.\n"
+                               "</skill_content>"),
+                               "title": f"Loaded skill: {name}",
+                               "metadata": {"name": name,
+                                            "dir": f"/work/task/.kilo/skills/"
+                                                    f"{name}"},
+                               "time": {"start": ts, "end": ts + 1}}},
+        })
+
+    def test_full_protocol_valid_target_baseline_placebo(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            ev, errs = self._run_full_protocol(
+                tmp, ["target", "baseline", "placebo"],
+                "# target guidance\nDo verification.\n",
+                "# placebo guidance\nBe verbose.\n",
+                fake_run=None)
+            self.assertEqual(errs, [], f"validator errors: {errs}")
+            rep = ev["repetitions"][0]
+            starts = {n: rep["conditions"][n]["starting_task_hash"]
+                      for n in ("target", "baseline", "placebo")}
+            self.assertEqual(len(set(starts.values())), 1,
+                             f"task hashes must match: {starts}")
+            # Task hashes must equal the frozen fixture hash.
+            self.assertEqual(rep["canonical_task_seed_hash"],
+                             ev["expected_fixture_hash"])
+            # Runtime treatment recorded separately and differs as expected.
+            self.assertEqual(rep["conditions"]["target"]["activation_mechanism"],
+                             "kilo-command-skill")
+            self.assertEqual(rep["conditions"]["placebo"]["activation_mechanism"],
+                             "kilo-command-skill")
+            self.assertEqual(rep["conditions"]["baseline"]["activation_mechanism"],
+                             "none")
+            self.assertEqual(rep["conditions"]["target"]["skill_probe"],
+                             "present")
+            self.assertEqual(rep["conditions"]["placebo"]["skill_probe"],
+                             "present")
+            self.assertEqual(rep["conditions"]["baseline"]["skill_probe"],
+                             "absent")
+            self.assertNotEqual(
+                rep["conditions"]["target"]["starting_full_hash"],
+                rep["conditions"]["baseline"]["starting_full_hash"])
+            # Distinct sessions/containers represented.
+            self.assertTrue(rep["distinct_containers"])
+            self.assertTrue(rep["distinct_sessions"])
+            # Natural prompt byte-identical across conditions (single hash).
+            self.assertTrue(rep["natural_task_identical_across_conditions"])
+            # Native skill-tool activation events parsed from realistic JSONL.
+            self.assertTrue(
+                rep["conditions"]["target"]["skill_tool_invoked"])
+            self.assertEqual(
+                rep["conditions"]["target"]["activation_events"][0][
+                    "skill_name"], "code-review")
+            self.assertEqual(
+                rep["conditions"]["placebo"]["activation_events"][0][
+                    "skill_name"], "security-review")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_target_file_present_but_not_activated_rejected(self):
+        # Negative 1: the target skill merely EXISTS (tree on disk, probe
+        # present) but was never activated through the controlled mechanism.
+        tmp = tempfile.mkdtemp()
+        try:
+            ev, errs = self._run_full_protocol(
+                tmp, ["target", "baseline"],
+                "# target guidance\nDo verification.\n", "", fake_run=None)
+            t = ev["repetitions"][0]["conditions"]["target"]
+            t["activation_mechanism"] = "none"
+            t["skill_command"] = None
+            errs = ve.validate_execution_evidence(ev)
+            self.assertTrue(any("activation_mechanism" in e for e in errs),
+                            errs)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_target_context_body_missing_rejected(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            ev, _ = self._run_full_protocol(
+                tmp, ["target", "baseline"],
+                "# target guidance\nDo verification.\n", "", fake_run=None)
+            ev["repetitions"][0]["conditions"]["target"][
+                "skill_context_probe"] = "absent"
+            errs = ve.validate_execution_evidence(ev)
+            self.assertTrue(any("skill_context_probe" in e for e in errs), errs)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_placebo_missing_skill_md_rejected(self):
+        # Negative 2: the old P0-C staging bug — .kilo/skills/<placebo>/ exists
+        # but the SKILL.md never reached it. The probe must report absent and
+        # the validator must reject.
+        tmp = tempfile.mkdtemp()
+        try:
+            ev, errs = self._run_full_protocol(
+                tmp, ["target", "baseline", "placebo"],
+                "# target guidance\nDo verification.\n",
+                "# placebo guidance\nBe verbose.\n",
+                fake_run=None)
+            # Simulate the empty-discovery-tree defect: remove the placebo
+            # SKILL.md from the workspace the evidence describes.
+            ws_id = ev["repetitions"][0]["condition_workspace_ids"]["placebo"]
+            ws_path = os.path.join(ree.SHARED_TMP, ws_id)
+            os.remove(os.path.join(ws_path, ".kilo", "skills",
+                                   "security-review", "SKILL.md"))
+            p = ev["repetitions"][0]["conditions"]["placebo"]
+            p["skill_probe"] = "absent"
+            p["skill_content_hash"] = None
+            errs = ve.validate_execution_evidence(ev)
+            self.assertTrue(any("placebo: skill_probe" in e for e in errs),
+                            errs)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_baseline_leaks_target_runtime_path_rejected(self):
+        # Negative 3: the baseline workspace carries the target's .kilo/skills
+        # tree (or records it) — a treatment leak.
+        tmp = tempfile.mkdtemp()
+        try:
+            ev, errs = self._run_full_protocol(
+                tmp, ["target", "baseline"],
+                "# target guidance\nDo verification.\n", "", fake_run=None)
+            b = ev["repetitions"][0]["conditions"]["baseline"]
+            b["skill_kilo_path"] = ".kilo/skills/code-review"
+            b["skill_probe"] = "present"
+            errs = ve.validate_execution_evidence(ev)
+            self.assertTrue(any("baseline: skill_kilo_path" in e
+                                for e in errs), errs)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_task_hash_difference_before_run_rejected(self):
+        # Negative 4: a REAL fixture mutation before the run (not a treatment
+        # file) must make the evidence fail the identical-task requirement.
+        tmp = tempfile.mkdtemp()
+        try:
+            def mutate():
+                ws_id = ev["repetitions"][0]["condition_workspace_ids"][
+                    "baseline"]
+                ws = os.path.join(ree.SHARED_TMP, ws_id)
+                open(os.path.join(ws, "README.md"), "a").write("# changed\n")
+
+            ev = None
+            fx = os.path.join(tmp, "fixture")
+            shutil.copytree(os.path.join(ROOT, "skills", "code-review", "evals",
+                                         "files", "case-1"), fx)
+            target_skill = os.path.join(ROOT, "skills", "code-review")
+            seed, seed_hash = eh.materialize_fixture_seed(fx, "committed")
+            canonical = ree.HASH_PREFIX + eh.hash_task_workspace(
+                seed, ree.RUNTIME_TREATMENT_PATHS)
+            target_stdout = ("{\"type\":\"text\",\"part\":{\"type\":\"text\","
+                             "\"text\":\"target done\"}}")
+            stdout_by_cond = {"code-review": target_stdout,
+                              "baseline": target_stdout}
+
+            def run_fn(image, model, prompt, fixture_dir, skill_command=None,
+                       skill_md_hex=None, skill_probe_path=None):
+                name = (skill_command.split(":")[0] if skill_command
+                        else "baseline")
+                return self._fake_run(stdout_by_cond[name])(
+                    image, model, prompt, fixture_dir, skill_command,
+                    skill_md_hex, skill_probe_path)
+
+            rep, canonical, _ = ree.run_repetition(
+                0, ["target", "baseline"], "Fix the bug.", seed,
+                "code-review", target_skill, None, None,
+                "kilo/tencent/hy3:free", "kilo-eval:local", run_fn)
+            ev = {
+                "evidence_type": "execution",
+                "skill": "code-review", "case_id": 1,
+                "model": "kilo/tencent/hy3:free", "image": "kilo-eval:local",
+                "activation_mechanism": ree.ACTIVATION_MECHANISM,
+                "runtime_treatment_paths": list(ree.RUNTIME_TREATMENT_PATHS),
+                "target_skill_kilo_path": ".kilo/skills/code-review",
+                "target_skill_content_hash": ree.skill_tree_hash(target_skill),
+                "expected_fixture_hash": ree.HASH_PREFIX + seed_hash,
+                "fixture_source_path": "skills/code-review/evals/evals.json",
+                "fixture_path": "skills/code-review/evals/files/case-1",
+                "fixture_source_hash": "sha256:" + hashlib.sha256(open(
+                    os.path.join(ROOT, "skills", "code-review", "evals",
+                                 "evals.json"), "rb").read()).hexdigest(),
+                "target_skill_source_path": "skills/code-review",
+                "canonical_task_seed_hash": canonical,
+                "conditions": ["target", "baseline"],
+                "placebo_skill": None,
+                "repetitions": [rep],
+            }
+            mutate()
+            # Rewrite the starting_task_hash to what a broken runner would have
+            # recorded if it had hashed AFTER the mutation.
+            b = ev["repetitions"][0]["conditions"]["baseline"]
+            ws = os.path.join(ree.SHARED_TMP,
+                              ev["repetitions"][0][
+                                  "condition_workspace_ids"]["baseline"])
+            b["starting_task_hash"] = ree.HASH_PREFIX + eh.hash_task_workspace(
+                ws, ree.RUNTIME_TREATMENT_PATHS)
+            errs = ve.validate_execution_evidence(ev)
+            self.assertTrue(any("TASK hash" in e or "differ" in e
+                                for e in errs), errs)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_target_activation_event_names_other_skill_rejected(self):
+        # Negative 5: the target's recorded activation event names a DIFFERENT
+        # skill — that invocation must not count as target activation.
+        tmp = tempfile.mkdtemp()
+        try:
+            ev, errs = self._run_full_protocol(
+                tmp, ["target", "baseline"],
+                "# target guidance\nDo verification.\n", "", fake_run=None)
+            t = ev["repetitions"][0]["conditions"]["target"]
+            t["skill_tool_invoked"] = True
+            t["activation_events"] = [
+                {"tool": "skill", "skill_name": "security-review",
+                 "timestamp": 1, "session_id": "ses-x"}]
+            errs = ve.validate_execution_evidence(ev)
+            self.assertTrue(any("names skill" in e for e in errs), errs)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+class LayerAAggregateTests(unittest.TestCase):
+    """P2: Layer A aggregate confusion matrix + per-skill precision/recall."""
+
+    def _case_results(self):
+        return [
+            {"id": 1, "expected_skill": "code-review",
+             "repetitions": [
+                 {"rep": 1, "status": "success", "decision":
+                  {"selected_skill": "code-review"}},
+                 {"rep": 2, "status": "success", "decision":
+                  {"selected_skill": "security-review"}}]},
+            {"id": 2, "expected_skill": "security-review",
+             "repetitions": [
+                 {"rep": 1, "status": "success", "decision":
+                  {"selected_skill": "security-review"}},
+                 {"rep": 2, "status": "failed", "error": "kilo exited 1",
+                  "decision": None}]},
+            {"id": 3, "expected_skill": None,
+             "repetitions": [
+                 {"rep": 1, "status": "success", "decision":
+                  {"selected_skill": None}}]},
+        ]
+
+    def test_aggregate_matrix_and_metrics(self):
+        agg = rc.build_aggregate(self._case_results(),
+                                 ["code-review", "security-review"])
+        self.assertEqual(agg["observations"], 4)  # failed rep not an observation
+        self.assertEqual(agg["confusion_matrix"]["code-review"],
+                         {"code-review": 1, "security-review": 1})
+        self.assertEqual(agg["confusion_matrix"]["security-review"],
+                         {"security-review": 1})
+        self.assertEqual(agg["confusion_matrix"]["null"], {"null": 1})
+        cr = agg["per_skill"]["code-review"]
+        self.assertEqual((cr["tp"], cr["fp"], cr["fn"]), (1, 0, 1))
+        self.assertEqual(cr["precision"], 1.0)
+        self.assertEqual(cr["recall"], 0.5)
+        sr = agg["per_skill"]["security-review"]
+        self.assertEqual((sr["tp"], sr["fp"], sr["fn"]), (1, 1, 0))
+        self.assertEqual(sr["precision"], 0.5)
+        self.assertEqual(sr["recall"], 1.0)
+
+    def test_aggregate_turn_observations(self):
+        cases = [{
+            "id": 1, "case_type": "workflow-transition",
+            "expected_skill": "code-review",
+            "turns": [{"user": "a", "expected_route": "code-review"},
+                      {"user": "b", "expected_route": None}],
+            "repetitions": [{"rep": 1, "turns": [
+                {"status": "success", "expected_route": "code-review",
+                 "selected_skill": "code-review"},
+                {"status": "success", "expected_route": None,
+                 "selected_skill": None}]}],
+        }]
+        agg = rc.build_aggregate(cases, ["code-review"])
+        self.assertEqual(agg["observations"], 2)
+        self.assertEqual(agg["confusion_matrix"]["code-review"],
+                         {"code-review": 1})
+        self.assertEqual(agg["confusion_matrix"]["null"], {"null": 1})
+
+    def test_aggregate_nonworkflow_turns_follow_plain_runner_shape(self):
+        # Non-workflow cases are executed as single-prompt cases by the
+        # runner, even if malformed input happens to contain turns. Aggregate
+        # must not reinterpret their plain decisions as per-turn observations.
+        cases = [{
+            "id": 1, "case_type": "smoke", "expected_skill": "code-review",
+            "turns": [{"user": "not a workflow"}],
+            "repetitions": [{"rep": 1, "status": "success",
+                              "decision": {"selected_skill": "code-review"}}],
+        }]
+        agg = rc.build_aggregate(cases, ["code-review"])
+        self.assertEqual(agg["observations"], 1)
+        self.assertEqual(agg["confusion_matrix"],
+                         {"code-review": {"code-review": 1}})
+
+    def test_aggregate_undefined_metrics_are_null(self):
+        agg = rc.build_aggregate(
+            [{"id": 1, "expected_skill": "security-review",
+              "repetitions": [{"rep": 1, "status": "success", "decision":
+                               {"selected_skill": "code-review"}}]}],
+            ["security-review", "code-review"])
+        sr = agg["per_skill"]["security-review"]
+        self.assertEqual(sr["tp"], 0)
+        self.assertIsNone(sr["precision"])  # 0/0 is undefined, not 0
+        self.assertEqual(sr["recall"], 0.0)
+
+    def test_aggregate_deterministic(self):
+        c = self._case_results()
+        self.assertEqual(rc.build_aggregate(c, ["code-review",
+                                                "security-review"]),
+                         rc.build_aggregate(c, ["code-review",
+                                                "security-review"]))
+
+
+class HoldoutInvocationTests(unittest.TestCase):
+    """P2: first-class holdout invocation path with distinct evidence source
+    labels, and no confusion-set/holdout cross-contamination."""
+
+    def tearDown(self):
+        reset()
+
+    def _fake_run(self, selected_skill):
+        def fake(prompt, model, workdir, kilo_bin, catalog_names=None,
+                 session_id=None):
+            return {"status": "success", "error": None, "returncode": 0,
+                    "stdout": "", "stderr": "",
+                    "session_id": "ses-x" if not session_id else session_id,
+                    "decision": {"selected_skill": selected_skill,
+                                 "action": ("apply" if selected_skill else
+                                            "clarify"),
+                                 "rationale": "r"}}
+        return fake
+
+    def _run_set(self, path, args, runner, fake):
+        with unittest.mock.patch.object(runner, "run_kilo", fake):
+            import io
+            import contextlib
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                runner.run_case_set(path, args, "kilo")
+        return buf.getvalue()
+
+    def test_confusion_set_and_holdout_labeling(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            conf = os.path.join(tmp, "conf.json")
+            hold = os.path.join(tmp, "hold.json")
+            json.dump({"confusion_set": "review-family", "skills": ["code-review"],
+                       "cases": [{"id": 1, "case_type": "hard-negative",
+                                  "prompt": "p", "expected_skill": "code-review"}]},
+                      open(conf, "w"))
+            json.dump({"holdout": "review-discrim-1", "skills": ["code-review"],
+                       "cases": [{"id": 1, "case_type": "hard-negative",
+                                  "prompt": "p", "expected_skill": "code-review"}]},
+                      open(hold, "w"))
+            conf_out = os.path.join(tmp, "out-conf.json")
+            hold_out = os.path.join(tmp, "out-hold.json")
+
+            class A:
+                reps = 1
+                model = "kilo/tencent/hy3:free"
+                out = conf_out
+
+            class B:
+                reps = 1
+                model = "kilo/tencent/hy3:free"
+                out = hold_out
+
+            conf_fake = self._fake_run("code-review")
+            hold_fake = self._fake_run("code-review")
+            self._run_set(conf, A(), rc, conf_fake)
+            self._run_set(hold, B(), rc, hold_fake)
+
+            conf_ev = json.load(open(conf_out))
+            hold_ev = json.load(open(hold_out))
+            self.assertEqual(conf_ev["evidence_type"], "confusion-set")
+            self.assertEqual(conf_ev["confusion_set"], "review-family")
+            self.assertIsNone(conf_ev.get("holdout"))
+            self.assertEqual(hold_ev["evidence_type"], "holdout")
+            self.assertEqual(hold_ev["holdout"], "review-discrim-1")
+            self.assertIsNone(hold_ev.get("confusion_set"))
+            # Both carry the aggregate (Layer A metrics).
+            self.assertIn("aggregate", conf_ev)
+            self.assertIn("aggregate", hold_ev)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_unknown_case_set_file_rejected(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            bad = os.path.join(tmp, "bad.json")
+            json.dump({"cases": []}, open(bad, "w"))
+            with self.assertRaises(SystemExit):
+                rc.run_case_set(bad, None, "kilo")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+class ExpectedRouteNullTests(unittest.TestCase):
+    """P1 schema: explicit expected_route null = 'no specialized skill
+    expected'; missing route data is a schema error, never a null route."""
+
+    def tearDown(self):
+        reset()
+
+    def test_explicit_null_route_accepted_in_confusion_set(self):
+        ve.check_confusion_set(
+            os.path.join(ROOT, "evaluations", "confusion-sets",
+                         "design-change-family.json"),
+            "evaluations/confusion-sets/design-change-family.json")
+        self.assertEqual(ve.errors, [])
+
+    def test_missing_expected_route_is_schema_error(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            path = os.path.join(tmp, "cs.json")
+            json.dump({"confusion_set": "x", "cluster": "review",
+                       "skills": ["code-review", "security-review"],
+                       "cases": [{"id": 1, "case_type": "workflow-transition",
+                                  "prompt": "p",
+                                  "turns": [{"user": "do it"}]}]},
+                      open(path, "w"))
+            ve.check_confusion_set(path, "evaluations/confusion-sets/x.json")
+            self.assertTrue(any("expected_route" in e for e in ve.errors),
+                            ve.errors)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_null_route_graded_as_no_specialized_skill(self):
+        # The runner grades an explicit-null route as "the model must decline a
+        # specialized skill" (selected == null), distinctly from a missing key
+        # which is a malformed turn.
+        from run_catalog_routing_eval import matches
+        self.assertTrue(matches(None, None, []))
+        self.assertFalse(matches("code-review", None, []))
 
 
 if __name__ == "__main__":

@@ -32,21 +32,25 @@ parses and checks. The block is JSON.
     "status": "valid",
     "tier": "tier-2-strict-isolated",
     "worker_isolation_verified": true,
-    "target_guidance_present": "boundary probe confirmed /work/guidance/task/SKILL.md present",
+    "target_guidance_present": "activation probe confirmed .kilo/skills/code-review/SKILL.md present and hash-matched",
     "target_guidance_hash": "sha256:…",
-    "target_absent_in_baseline": "boundary probe confirmed /work/guidance/task/SKILL.md absent",
-    "baseline_guidance_absent": "boundary probe confirmed no guidance tree in baseline",
+    "target_absent_in_baseline": "boundary probe confirmed no .kilo/skills tree in baseline",
+    "baseline_guidance_absent": "boundary probe confirmed no discovery tree in baseline",
     "contamination": "none",
     "natural_task_identical_across_conditions": true,
     "natural_task_hash": "sha256:…",
     "routing_mechanism": null,
     "conditions": ["target", "baseline", "placebo"],
+    "activation_mechanism": "kilo-command-skill",
+    "runtime_treatment_paths": [".kilo/skills"],
     "target_skill_kilo_path": ".kilo/skills/code-review",
     "placebo_skill_kilo_path": ".kilo/skills/security-review",
-    "target_skill_loaded": true,
-    "placebo_skill_loaded": true,
-    "skill_loads": [
-      {"path": ".kilo/skills/code-review/SKILL.md", "timestamp": "…"}
+    "target_skill_activated": true,
+    "placebo_skill_activated": true,
+    "target_skill_context_probe": "present",
+    "placebo_skill_context_probe": "present",
+    "activation_events": [
+      {"tool": "skill", "skill_name": "code-review", "timestamp": "…", "session_id": "…"}
     ]
   },
   "runs": {
@@ -151,29 +155,58 @@ per independent seed copy**.
 
 Each repetition MUST prove:
 
-- **Independent starting state.** The runner derives one pristine seed, then
-  makes one independent copy per condition and records `starting_fixture_hash`
-  for each. The validator requires all `starting_fixture_hash` values to equal
-  `canonical_seed_hash`. The condition workers therefore begin from
-  byte-identical state and can never share a mutable fixture.
+- **Independent starting state (TASK state).** The runner derives one pristine
+  seed, then makes one independent copy per condition and records
+  `starting_task_hash` for each. TASK-state hashes EXCLUDE the evaluator
+  runtime treatment paths (`runtime_treatment_paths`, e.g. `.kilo/skills`) — the
+  target/placebo discovery trees are intentionally different from the baseline,
+  so hashing them together and requiring equality would fail by construction.
+  The validator requires all `starting_task_hash` values to equal the frozen
+  `canonical_task_seed_hash` / `expected_fixture_hash`. The full-filesystem
+  hashes (`starting_full_hash` / `ending_full_hash`) are recorded SEPARATELY so
+  the treatment difference is visible without invalidating task equality.
+  The condition workers therefore begin from byte-identical task state and can
+  never share a mutable fixture.
 - **Distinct execution.** `conditions.target.container_id` ≠
   `conditions.baseline.container_id` (and ≠ `conditions.placebo.container_id`
   when a placebo is present), and likewise for `session_id`. This is verified
   per-repetition via `distinct_containers` / `distinct_sessions`.
-- **Guidance boundary (probed inside the container).**
-  `conditions.target.guidance_verified` is `true` only if an in-container probe
-  found the mounted skill guidance at `/work/guidance/task/SKILL.md`;
-  `conditions.baseline.guidance_verified_absent` is `true` only if the probe
-  confirmed its *absence* (baseline has no guidance mounted and the probe must
-  return `absent`). A bare text claim is not accepted — `guidance_probe` must be
-  `present`/`absent`/missing as verified inside the container.
+- **Controlled post-activation (not routing).** Layer B does NOT test whether
+  Kilo's router chooses to activate the guidance. The evaluator ACTIVATES the
+  target and placebo guidance through the same deterministic mechanism:
+  `kilo run --command <skill>:skill`, which resolves against the discovery
+  tree `conditions.<name>.skill_kilo_path` (`.kilo/skills/<name>/`) inside the
+  worker workspace and injects the skill body into context at session start.
+  An unresolvable command makes kilo exit non-zero, so a successful run
+  (returncode 0) is machine-verifiable proof the skill was discovered and
+  injected. `conditions.<name>.activation_mechanism` is
+  `"kilo-command-skill"` for target/placebo and `"none"` for baseline.
+- **Source anchoring.** Execution evidence records the canonical
+  `fixture_source_path`, `fixture_path`, `fixture_source_hash`, and
+  `target_skill_source_path`; the validator recomputes these against the current
+  repository artifacts. Placebo guidance hashes are likewise checked against
+  the current canonical placebo skill tree.
+- **Activation boundary (probed inside the container).**
+  `conditions.target.skill_probe` is `"present"` only if an in-container probe
+  found `.kilo/skills/<name>/SKILL.md` present AND content-hash-matched;
+  `conditions.baseline.skill_probe` is `"absent"` only if the probe confirmed
+  no `.kilo/skills` tree at all. Target and placebo also require
+  `skill_context_probe: "present"`: the runner exports the completed Kilo
+  session inside the container and checks that the full guidance body (after
+  frontmatter) appears in the serialized user-context message. Mere file
+  presence is never activation.
+  When the model ALSO issues a native `skill` tool call, the parsed
+  `activation_events` (real completed `tool_use` events with
+  `part.tool == "skill"`, matching `state.input.name`, and a
+  `<skill_content>` result) are recorded as supplementary evidence; an event
+  naming a different skill does not count.
 - **Failure is not evidence.** If the Docker/Kilo invocation returned non-zero, the
   container never started, the model output was empty/unparseable, or no session id
   was produced, the condition's `run_status="failed"` and the validator
   **rejects** the file. `returncode` must be `0` for all conditions.
-- **Task-state mutation recorded.** `conditions.<name>.ending_fixture_hash`
-  proves what each worker changed relative to `starting_fixture_hash`
-  (they must differ for productive conditions). Optional filesystem snapshots
+- **Task-state mutation recorded.** `conditions.<name>.ending_task_hash`
+  proves what each worker changed relative to `starting_task_hash`.
+  Optional filesystem snapshots
   (`conditions.<name>.filesystem_snapshot_before/after`) capture the concrete
   diff. The `natural_task_identical_across_conditions` flag confirms the task
   text was byte-identical across conditions.
@@ -211,13 +244,15 @@ Tier 1 fast-developer mode with `protocol_status: limited`.
 - `worker_isolation_verified` — boolean; how (boundary probe). A `valid` run
   requires it `true`.
 - `target_guidance_present` — evidence (manifest/log/probe) that the target
-  worker's guidance was loaded at the neutral path. **Required for execution
+  worker's guidance was ACTIVATED (discovery tree present + hash-matched +
+  skill command resolved). **Required for execution
   runs**; must be `null` for routing runs.
-- `target_guidance_hash` — the frozen hash of the guidance bundle the target
-  condition received. **Required for execution runs.**
+- `target_guidance_hash` — the frozen hash of the guidance tree the target
+  condition received at its discovery location. **Required for execution runs.**
 - `target_absent_in_baseline` — evidence that the baseline did **not** receive
   the target skill's identity or text. **Required for execution runs.**
-- `baseline_guidance_absent` — evidence the baseline mounted no guidance tree.
+- `baseline_guidance_absent` — evidence the baseline contained no discovery
+  tree (`.kilo/skills` absent).
 - `contamination` — `none` or a description.
 - `natural_task_identical_across_conditions` — `true` only when the runner
   verified the worker-visible prompt hash is identical across all conditions.

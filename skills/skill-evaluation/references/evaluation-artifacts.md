@@ -166,7 +166,20 @@ repository level, not inside a single skill:
   case prompt must avoid naming the expected skill.
 - `evaluations/holdout/<name>.json` — holdout cases stored outside skill
   directories so ordinary edits do not consume them. Holdout results measure
-  generalization, not development-case performance.
+  generalization, not development-case performance. Run them with
+  `scripts/run_catalog_routing_eval.py --holdout
+  evaluations/holdout/<name>.json --out ...`; the runner records
+  `evidence_type: "holdout"` and never writes them into development benchmark
+  outputs.
+
+Workflow-transition and harness-native cases carry per-turn `expected_route`
+values. `expected_route` is REQUIRED on every turn: a skill name from the
+case-set's `skills` list, or explicit `null` meaning **"no specialized skill
+expected"** (ordinary unspecialized work — e.g. generic implementation — must
+not be encoded as any skill; `implementation-planning` explicitly stops before
+implementation). A missing `expected_route` key is a schema error, never
+treated as `null`, and is graded distinctly from an explicit null route (the
+model must decline a specialized skill — return a null selection).
 
 Counterfactual cases must live in a confusion-set file (never inside a skill's
 own eval pack), because the paired case must not be visible in the same context.
@@ -182,26 +195,53 @@ unknown/malformed files as hard errors.
 
 Each execution repetition MUST prove:
 
-- **Independent starting state.** One pristine seed, then one independent copy
-  per condition. All `starting_fixture_hash` values must equal
-  `canonical_seed_hash`.
+- **Independent starting state (TASK state).** One pristine seed, then one
+  independent copy per condition. All `starting_task_hash` values must equal
+  `canonical_task_seed_hash` / `expected_fixture_hash`. TASK-state hashes
+  exclude the evaluator runtime treatment paths (recorded in
+  `runtime_treatment_paths`, e.g. `.kilo/skills`) so the target/placebo discovery
+  trees cannot invalidate seed equality; full-filesystem hashes are recorded
+  separately (`starting_full_hash` / `ending_full_hash`).
 - **Distinct execution.** Distinct container IDs and session IDs per condition.
-- **Guidance boundary (probed inside the container).** `target.guidance_verified`
-  is `true` only if an in-container probe found
-  `/work/guidance/task/SKILL.md`; `baseline.guidance_verified_absent` is `true`
-  only if the probe confirmed its *absence*.
+- **Controlled post-activation.** Layer B does NOT test whether the router
+  activates the guidance. The evaluator activates the target/placebo guidance
+  through `kilo run --command <skill>:skill` over the discovery tree
+  `conditions.<name>.skill_kilo_path`; `conditions.<name>.activation_mechanism`
+  is `"kilo-command-skill"` (target/placebo) or `"none"` (baseline).
+- **Activation boundary (probed inside the container).**
+  `conditions.<name>.skill_probe` is `"present"` only if an in-container probe
+  found `.kilo/skills/<name>/SKILL.md` present AND content-hash-matched
+  (target/placebo); `"absent"` only if the baseline has no `.kilo/skills` tree.
+  Target and placebo also require `skill_context_probe: "present"`: the runner
+  exports the completed Kilo session inside the container and checks that the
+  full guidance body (after frontmatter) appears in the serialized user-context
+  message.
+  When the model also issues a native `skill` tool call, the real `tool_use`
+  events are recorded as `activation_events`; a normal file `read` is not
+  activation.
 - **Failed runs are rejected.** A non-zero return code, missing container, or
   empty output is `run_status="failed"` and invalidates the evidence file.
 - **Identical natural task.** `natural_task_hash` is identical across all
   conditions; `natural_task_identical_across_conditions` must be `true`. The
   worker-visible prompt never names the skill, condition, or evaluation.
-- **Task-state mutation recorded.** `ending_fixture_hash` plus a filesystem
+- **Task-state mutation recorded.** `ending_task_hash` plus a filesystem
   snapshot prove what each worker actually changed.
+- **Source anchoring.** Execution evidence records the canonical fixture/evals
+  paths and source hash, plus the target skill source path; the validator
+  recomputes those values from the current repository. A placebo hash must also
+  match the current canonical placebo discovery tree.
 
-Catalog-discriminability evidence (`evidence_type: "catalog-routing"`) is
-produced by `scripts/run_catalog_routing_eval.py` and carries the confusion matrix
-(intended-vs-selected) per case. It is a proxy only — it does not replace an
-actual harness-selection log at Layer C.
+Catalog-discriminability evidence (`evidence_type: "catalog-routing"`,
+`"confusion-set"`, or `"holdout"`) is
+produced by `scripts/run_catalog_routing_eval.py` and carries, per case set, an
+`aggregate` block with the full intended-vs-selected confusion matrix and
+per-skill precision/recall (counting rule: one observation per successful model
+decision; workflow-transition turns each contribute one observation; explicit
+null selections are the literal `"null"` class; precision/recall are `null` —
+not 0 — when the denominator is zero). Case-set evidence is additionally bound
+to its canonical `case_set_path` and `case_set_hash`, including the source skill
+list and case metadata. It is a proxy only — it does not replace an actual
+harness-selection log at Layer C.
 
 ## Recording a run
 

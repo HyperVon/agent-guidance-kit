@@ -53,46 +53,65 @@ container. The isolation tier determines the protocol status that is achievable:
     the conditions were not independent (contamination).
   - **Independent seed copies.** For each repetition the runner derives **one
     pristine seed** from the fixture, then makes **one independent copy per
-    condition** and verifies all copies hash-identically *before* the run. The
-    condition workers never share a mutable fixture: each writes only to its own
-    copy mounted at `/work/task`.
-  - **Guidance-only mount for the target condition.** Mount *only* `SKILL.md` +
-    `references/` read-only at the **neutral** path `/work/guidance/task`.
-    **Never mount the whole skill directory** — that would leak the `evals/`
-    fixture snapshot (including the expected output) into the target worker.
-    The path is always `task/` regardless of the skill, so it never encodes the
-    canonical skill name, the condition, a case id, or the evaluation purpose.
-    The placebo condition mounts a different (irrelevant) skill's guidance at
-    the same neutral path.
- - **Generator fixtures are evaluator-only.** The generator (`setup.sh`) is run under a
-   sanitized environment and its **source is stripped** from the seed the worker sees, so
-   the worker never reads the answer key / construction logic.
- - **No guidance for the baseline.** The baseline container receives the same task
-   fixture and the same natural task, but **no guidance mount at all** — it must not see
-   the target `SKILL.md` body, its `references/`, or the skill name in a guidance path.
- - **No host secrets.** The image contains no `~/.gitconfig`, no `~/.ssh`, no
-   `GH_TOKEN`/`GITHUB_TOKEN`, and no mounted Kilo auth store. Models are reached through
-   **anonymous Kilo Gateway access** (`kilo/tencent/hy3:free`) — absence of
-   `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` does **not** mean there is no provider. `kilo
-   run` inside the container needs `--auto` (permission auto-approval) to execute rather
-   than auto-reject tools. The **Kilo CLI version is pinned** in `Dockerfile.eval`
-   (`ARG KILO_CLI_VERSION`) so rebuilding never silently changes the worker runtime.
- - **Deterministic, non-attributable git identity.** `HOME=/home/eval` with
-   `user.name "Eval Worker"` / `user.email "eval-worker@example.invalid"` baked into the
-   image, so any git work the worker does cannot leak the host author.
-  - **Boundary probe inside the container.** After the run, a probe checks
-    `/work/guidance/task/SKILL.md` **presence** (target/placebo) / **absence**
-    (baseline). The runner records `guidance_verified` /
-    `guidance_verified_absent` from this probe; a bare text claim is not accepted.
+    condition** and verifies all copies hash-identically *before* the run —
+    as TASK-state hashes that EXCLUDE the evaluator runtime treatment paths
+    (`.kilo/skills`). The condition workers never share a mutable fixture: each writes
+    only to its own copy mounted at `/work/task`. Full-filesystem hashes
+    (treatment included) are recorded separately.
+  - **Controlled post-activation for the target condition.** Layer B is a
+    POST-ACTIVATION experiment: it answers "once guidance is active, does it
+    improve task execution?" and must NOT depend on whether Kilo's router
+    chooses to activate the guidance (that is routing — Layer A/C). The runner
+    therefore ACTIVATES the target guidance deterministically: it copies
+    `SKILL.md` + `references/` into
+    `.kilo/skills/<name>/` inside the worker's workspace (the path Kilo scans
+    at session start for project-level skills) and runs
+    `kilo run --command "<name>:skill"`, which resolves that skill command and
+    injects the guidance body into context at session start. An unresolvable
+    skill command makes `kilo run` exit non-zero, so a successful run (RC=0) is
+    machine-verifiable proof that the discovery tree existed and the command
+    resolved. The runner then exports the completed session and requires the
+    full skill body (after frontmatter) to be present in the serialized
+    user-context message. **Never copy the whole skill directory**: doing so would
+    leak the `evals/` fixture snapshot (including the expected output) into the
+    worker.
+    The placebo condition activates a different (irrelevant) skill's guidance
+    through the EXACT SAME mechanism.
+  - **Generator fixtures are evaluator-only.** The generator (`setup.sh`) is run under a
+    sanitized environment and its **source is stripped** from the seed the worker sees, so
+    the worker never reads the answer key / construction logic.
+  - **No guidance for the baseline.** The baseline container receives the same task
+    fixture and the same natural task, but **no `.kilo/skills` discovery tree and no
+    `--command`** — it must not see the target `SKILL.md` body, its `references/`, or the
+    skill name in a guidance path.
+  - **No host secrets.** The image contains no `~/.gitconfig`, no `~/.ssh`, no
+    `GH_TOKEN`/`GITHUB_TOKEN`, and no mounted Kilo auth store. Models are reached through
+    **anonymous Kilo Gateway access** (`kilo/tencent/hy3:free`) — absence of
+    `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` does **not** mean there is no provider. `kilo
+    run` inside the container needs `--auto` (permission auto-approval) to execute rather
+    than auto-reject tools. The **Kilo CLI version is pinned** in `Dockerfile.eval`
+    (`ARG KILO_CLI_VERSION`) so rebuilding never silently changes the worker runtime.
+  - **Deterministic, non-attributable git identity.** `HOME=/home/eval` with
+    `user.name "Eval Worker"` / `user.email "eval-worker@example.invalid"` baked into the
+    image, so any git work the worker does cannot leak the host author.
+  - **Activation boundary probe inside the container.** After the run, a probe checks
+    `.kilo/skills/<name>/SKILL.md` **presence + content-hash match** (target/placebo) /
+    **absence of any `.kilo/skills` tree** (baseline). The runner records
+    `skill_probe` (`present`/`absent`/`hash_mismatch`) and
+    `skill_context_probe` (`present`/`none`) from these probes; a bare text
+    claim is not accepted. When the model ALSO issues a native `skill` tool call,
+    the runner parses those real completed `tool_use` events as
+    `activation_events` (supplementary evidence; a normal file `read` is NOT
+    activation).
   - **Failure is not evidence.** A Docker/Kilo invocation that returns non-zero, never
     starts a container, produces empty/unparseable model output, or yields no session id is
     recorded `run_status="failed"`; the validator **rejects** the whole evidence file.
   - **Boundary probe before scoring.** Run `scripts/docker_isolation_preflight.py`
     (`--image kilo-eval:local`). All boundary checks must pass: isolated home, deterministic git
     identity, no ssh dir, no token env, no host `.gitconfig`/path leak, no mounted Kilo
-    auth, **target skill guidance absent in the baseline mount** AND **present, readable,
-    hash-matched, and with references in the target/placebo mount** at the real
-    `/work/guidance/task/SKILL.md` (neutral) path. Any failure invalidates the run.
+    auth, **target skill discovery tree absent in the baseline workspace** AND **present,
+    readable, hash-matched, and with references in the target/placebo workspace** at the
+    real `.kilo/skills/<name>/SKILL.md` discovery path. Any failure invalidates the run.
 
 ## Boundary probe
 

@@ -126,19 +126,21 @@ pilots):
 - **Layer B — Docker execution-efficacy.** `Dockerfile.eval` builds `kilo-eval:local`
   (Node 22, `@kilocode/cli`, deterministic eval git identity, **no** host
   `~/.gitconfig`/`~/.ssh`/tokens, **no** mounted Kilo auth). `scripts/run_execution_eval.py`
-   runs fresh containers: the `target` condition mounts *guidance only*
+   runs fresh containers: the `target` condition places *guidance only*
    (`SKILL.md` + `references/`, never the `evals/` fixture snapshot) at
-   /work/guidance/task; baseline mounts **nothing**. Smoke on case 5
+   `.kilo/skills/<name>/` and activates it with `kilo run --command
+   <name>:skill`; baseline has no `.kilo/skills` tree. The runner exports the
+   completed session and verifies the full body entered context. Smoke on case 5
    (n=1, infrastructure only): two **distinct fresh containers** confirmed; both
-   started from the identical frozen seed (starting fixture hashes matched the
-   frozen `output_hash`); target and baseline outputs captured. This is an
-   **infrastructure smoke, not an efficacy claim** (n≥3 + an irrelevant-guidance
-   placebo are still required before any efficacy conclusion).
+   started from the identical frozen task seed; target and baseline outputs
+   captured. This is an **infrastructure smoke, not an efficacy claim** (n≥3 +
+   an irrelevant-guidance placebo are still required before any efficacy
+   conclusion).
   - **Boundary probe green.** `scripts/docker_isolation_preflight.py` passes all 23
     checks (isolated home, deterministic git identity, no ssh/token/host-config host
     path leak, no Kilo auth mount, **target-skill guidance absent in baseline AND present,
     readable, hash-matched, with references in the target mount** at the real
-   `/work/guidance/task/SKILL.md` path).
+    `/work/task/.kilo/skills/<name>/SKILL.md` path).
  - **Model access is anonymous + free + pinned (cost gate, not a methodology rule).** The
    model `kilo/tencent/hy3:free` is reached through Kilo Gateway with no API key mounted;
    absence of `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` does **not** mean no provider. The model
@@ -187,9 +189,10 @@ the corrected fixture/guidance hash semantics. Exact results:
   selected under a target-absent catalog) is rejected.
 - **Execution smoke** (`run_execution_eval.py --skill code-review --case-id 5
    --reps 1`): two **distinct fresh containers**; target and baseline both
-  started from the identical **frozen** seed — `canonical_seed_hash`
-  (`sha256:694cc87e…`) equals the frozen fixture `output_hash`/`content_hash`.
-  `guidance_bundle_hash` was recorded and is now required by the validator.
+  started from the identical **frozen task** seed — `canonical_task_seed_hash`
+  equals the frozen fixture `output_hash`/`content_hash`; runtime treatment is
+  recorded separately under `.kilo/skills` with distinct full-filesystem hashes.
+  The target/placebo context probes prove the activated body reached the session.
   **n=1 infrastructure smoke — not an efficacy claim.**
 - **`validate_evaluations.py --check-evidence`** — **PASSED** on the actual
   current-head smoke files (no errors / no warnings).

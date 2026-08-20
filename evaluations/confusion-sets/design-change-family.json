@@ -107,11 +107,11 @@
         },
         {
           "user": "Okay, implement the first approved phase.",
-          "expected_route": "implementation-planning"
+          "expected_route": null
         }
       ],
       "expected_skill": "architecture-review",
-      "notes": "Workflow ownership must move from review to planning; the agent must not stay in the review skill."
+      "notes": "Workflow ownership must move from review to planning; the agent must not stay in the review skill. The final turn is ordinary implementation: no skill in the set owns generic implementation (implementation-planning explicitly stops before editing code), so expected_route null means 'no specialized skill expected'."
     },
     {
       "id": 13,

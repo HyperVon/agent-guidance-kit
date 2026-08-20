@@ -49,8 +49,8 @@
       "case_type": "counterfactual",
       "counterfactual_pair": "restructure-1",
       "prompt": "We've decided to restructure these modules. Work out the safest sequence of changes, the intermediate states, and the verification steps.",
-      "expected_skill": "review-feedback-resolution",
-      "notes": "Pair B: HOW to execute an already-approved direction. One intent change flips the owner."
+      "expected_skill": "implementation-planning",
+      "notes": "Pair B: HOW to execute an already-approved direction. implementation-planning owns turning an approved direction into an execution-ready plan (sequence, intermediate states, verification); review-feedback-resolution only receives and disposes incoming review findings."
     },
     {
       "id": 6,
@@ -122,8 +122,8 @@
       "id": 14,
       "case_type": "hard-negative",
       "prompt": "I accepted the three findings from the review. Make the minimal fixes for exactly those, and tell me which checks you actually ran.",
-      "expected_skill": "implementation-planning",
-      "notes": "Implementation/change workflow with verification discipline; not a fresh review and not feedback dispositioning."
+      "expected_skill": "review-feedback-resolution",
+      "notes": "The user has accepted specific review findings and authorized their scoped application with verification: review-feedback-resolution owns receiving findings, dispositioning them, and applying accepted fixes when authorized. implementation-planning stops before editing code and is not a feedback-application workflow."
     },
     {
       "id": 15,

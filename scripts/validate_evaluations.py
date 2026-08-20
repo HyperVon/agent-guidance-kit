@@ -14,6 +14,7 @@ Checks:
 Run from the repo root:  python3 scripts/validate_evaluations.py
 """
 import glob
+import hashlib
 import json
 import os
 import re
@@ -22,6 +23,15 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from eval_hashing import (HASH_PREFIX, canonical_hash, source_hash_of,
                           verify_generator_deterministic)
+
+try:
+    import run_execution_eval as execution_runner
+except ImportError:  # pragma: no cover - direct library import fallback
+    execution_runner = None
+try:
+    import run_catalog_routing_eval as catalog_runner
+except ImportError:  # pragma: no cover - direct library import fallback
+    catalog_runner = None
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EVALS_DIR = os.path.join(ROOT, "docs", "evaluations")
@@ -206,6 +216,24 @@ def check_case(f, rel, c):
                     err(f"{tag}: routing expectation missing '{key}'")
             if r.get("target_skill") != skill_of(f):
                 err(f"{tag}: routing.target_skill must equal the skill name")
+            if not isinstance(r.get("experiment"), str) or not r["experiment"].strip():
+                err(f"{tag}: routing.experiment must be a non-empty string")
+            for oracle_name in ("target_present", "target_absent"):
+                oracle = r.get(oracle_name)
+                if not isinstance(oracle, dict):
+                    continue
+                if "expected_selected_skill" not in oracle:
+                    err(f"{tag}: routing.{oracle_name} missing "
+                        "expected_selected_skill")
+                elif oracle["expected_selected_skill"] is not None and \
+                        not isinstance(oracle["expected_selected_skill"], str):
+                    err(f"{tag}: routing.{oracle_name}.expected_selected_skill "
+                        "must be a skill name or null")
+                fallbacks = oracle.get("allowed_fallbacks", [])
+                if not isinstance(fallbacks, list) or any(
+                        not isinstance(x, str) for x in fallbacks):
+                    err(f"{tag}: routing.{oracle_name}.allowed_fallbacks "
+                        "must be a list of skill names")
             if c.get("kind") == "neighboring" and "allowed_behavior" not in r:
                 err(f"{tag}: neighboring routing expectation needs allowed_behavior")
     else:
@@ -242,6 +270,11 @@ def check_case(f, rel, c):
 
     # Multi-turn cases: ordered turns; each turn carries the user text and the
     # expected route; the whole case must not leak expectations into prompts.
+    # ``expected_route`` is REQUIRED per turn: a skill name, or explicit null
+    # meaning "no specialized skill expected" (ordinary unspecialized work must
+    # not be encoded as any skill, including implementation-planning, which
+    # explicitly stops before implementation). Missing route data is a schema
+    # error, never silently treated as null.
     turns = c.get("turns")
     if turns is not None:
         if not isinstance(turns, list) or not turns:
@@ -251,8 +284,13 @@ def check_case(f, rel, c):
                 if not isinstance(t, dict) or not isinstance(t.get("user"), str) \
                         or not t["user"].strip():
                     err(f"{tag}: turn {i} missing non-empty 'user' text")
-                if "expected_route" in t and not isinstance(t.get("expected_route"), str):
-                    err(f"{tag}: turn {i} expected_route must be a skill name")
+                if "expected_route" not in t:
+                    err(f"{tag}: turn {i} missing 'expected_route' "
+                        f"(null means 'no specialized skill expected')")
+                elif t["expected_route"] is not None and \
+                        not isinstance(t["expected_route"], str):
+                    err(f"{tag}: turn {i} expected_route must be a skill name "
+                        f"or null")
             if c.get("case_type") not in ("workflow-transition", "harness-native"):
                 err(f"{tag}: multi-turn case must set case_type workflow-transition "
                     f"or harness-native")
@@ -650,9 +688,6 @@ def check_exec_result_case(base, cs, skill, case_index, cid):
 # --------------------------------------------------------------------------
 # Evidence-file validation (local .eval-evidence/*.json from the runners)
 # --------------------------------------------------------------------------
-# Neutral worker-visible guidance path: must not encode the skill name, the
-# condition, a case id, or the evaluation purpose.
-NEUTRAL_GUIDANCE_PATH = "/work/guidance/task"
 # Worker-visible text that must never appear in an execution run's prompt.
 # "target" is excluded because it is a common English word; the conditions are
 # proven independent by the identical-task-hash invariant, not by forbidding a
@@ -661,20 +696,123 @@ LEAKY_PROMPT_TOKENS = ("baseline", "placebo", "eval", "evaluation",
                        "experiment", "condition")
 
 
+def _execution_source_anchor(evidence, errs):
+    """Resolve the current execution case and its frozen source hashes."""
+    skill = evidence.get("skill")
+    case_id = evidence.get("case_id")
+    if not isinstance(skill, str) or not skill:
+        errs.append("execution evidence missing skill")
+        return None
+    if not isinstance(case_id, int):
+        errs.append("execution evidence missing integer case_id")
+        return None
+    evals_path = os.path.join(ROOT, "skills", skill, "evals", "evals.json")
+    if not os.path.isfile(evals_path):
+        errs.append(f"execution evidence skill evals not found: {skill}")
+        return None
+    try:
+        source = json.load(open(evals_path, encoding="utf-8"))
+    except (OSError, TypeError, ValueError) as exc:
+        errs.append(f"execution source evals unreadable: {exc}")
+        return None
+    case = next((c for c in source.get("evals", [])
+                 if c.get("id") == case_id), None)
+    if case is None:
+        errs.append("execution evidence case_id is not present in the current "
+                    "skill evals")
+        return None
+    if "execution" not in case.get("evaluation_modes", []):
+        errs.append("execution evidence case is not an execution case in the "
+                    "current skill evals")
+        return None
+    fx = case.get("fixture") or {}
+    expected = (fx.get("output_hash") if fx.get("type") == "generator"
+                else fx.get("content_hash"))
+    evals_rel = os.path.relpath(evals_path, ROOT)
+    skill_rel = os.path.dirname(os.path.dirname(evals_rel))
+    fixture_rel = os.path.normpath(os.path.join(
+        skill_rel, fx.get("path", "")))
+    source_hash = HASH_PREFIX + hashlib.sha256(
+        open(evals_path, "rb").read()).hexdigest()
+    if evidence.get("fixture_source_path") != evals_rel:
+        errs.append("execution evidence fixture_source_path does not match "
+                    "the current skill evals path")
+    if evidence.get("fixture_path") != fixture_rel:
+        errs.append("execution evidence fixture_path does not match the current "
+                    "fixture path")
+    if evidence.get("fixture_source_hash") != source_hash:
+        errs.append("execution evidence fixture_source_hash does not match the "
+                    "current evals.json")
+    if expected and evidence.get("expected_fixture_hash") != expected:
+        errs.append("execution evidence expected_fixture_hash does not match "
+                    "the current frozen fixture hash")
+    expected_skill_path = os.path.join("skills", skill)
+    if evidence.get("target_skill_source_path") != expected_skill_path:
+        errs.append("execution evidence target_skill_source_path does not match "
+                    "the target skill")
+    if execution_runner is not None:
+        current_skill_hash = execution_runner.skill_tree_hash(
+            os.path.join(ROOT, "skills", skill))
+        if evidence.get("target_skill_content_hash") != current_skill_hash:
+            errs.append("execution evidence target_skill_content_hash does not "
+                        "match the current target skill discovery tree")
+    return {"skill": skill, "case_id": case_id, "case": case,
+            "fixture": fx, "expected_fixture_hash": expected,
+            "evals_path": evals_path, "evals_rel": evals_rel,
+            "fixture_rel": fixture_rel, "source_hash": source_hash}
+
+
+def _placebo_source_anchor(evidence, anchor, errs):
+    """Check that a placebo hash refers to the current canonical skill tree."""
+    placebo = evidence.get("placebo_skill")
+    if not isinstance(placebo, str) or not placebo:
+        return
+    if placebo == anchor["skill"]:
+        errs.append("execution evidence placebo_skill must differ from skill")
+        return
+    placebo_path = os.path.join(ROOT, "skills", placebo)
+    if not os.path.isfile(os.path.join(placebo_path, "SKILL.md")):
+        errs.append(f"execution evidence placebo skill not found: {placebo}")
+        return
+    if execution_runner is not None:
+        current_hash = execution_runner.skill_tree_hash(placebo_path)
+        if evidence.get("placebo_skill_content_hash") != current_hash:
+            errs.append("execution evidence placebo_skill_content_hash does not "
+                        "match the current placebo skill discovery tree")
+
+
 def validate_execution_evidence(evidence):
     """Validate a Docker execution-evidence file from run_execution_eval.py.
 
     Local-only check (the .eval-evidence/ dir is gitignored). Confirms the
     condition workers were genuinely independent, started from identical
-    pristine copies, received the byte-identical natural task (never a prompt
-    naming the skill/condition/evaluation), and that a failed run cannot
-    masquerade as valid evidence. Returns a list of error strings (empty ==
-    valid).
+    pristine TASK-state copies, received the byte-identical natural task (never
+    a prompt naming the skill/condition/evaluation), and that the intended
+    guidance treatment actually entered context through the controlled
+    activation mechanism. A failed run can never masquerade as valid evidence.
+    Returns a list of error strings (empty == valid).
+
+    Activation model (Layer B is POST-activation): the evaluator activates the
+    target/placebo guidance deterministically via ``kilo run --command
+    <skill>:skill``, which resolves against the ``.kilo/skills/<skill>/SKILL.md``
+    discovery tree in the worker workspace and injects the skill body into
+    context at session start; an unresolvable command makes kilo exit non-zero
+    ("Command not found"), so a successful run (returncode 0) proves the skill
+    was discovered and injected. The baseline runs without ``--command`` and
+    must have no ``.kilo/skills`` tree. Native ``skill`` tool calls are recorded
+    as supplementary ``activation_events``; mere file presence is never
+    activation. Task-state hashes (``starting_task_hash``) EXCLUDE the
+    evaluator runtime treatment paths (``.kilo/skills``), so the target/placebo
+    treatment trees cannot invalidate seed equality; the full-filesystem hashes
+    are recorded separately.
     """
     errs = []
     et = evidence.get("evidence_type")
     if et != "execution":
         errs.append(f"expected evidence_type 'execution', got {et!r}")
+    source_anchor = _execution_source_anchor(evidence, errs)
+    if source_anchor is not None:
+        _placebo_source_anchor(evidence, source_anchor, errs)
     reps = evidence.get("repetitions") or []
     if not reps:
         errs.append("execution evidence has no repetitions")
@@ -686,32 +824,58 @@ def validate_execution_evidence(evidence):
         return errs
     for extra in set(conds) - {"target", "baseline", "placebo"}:
         errs.append(f"unknown condition {extra!r} in evidence")
-    seed = evidence.get("canonical_seed_hash")
+    seed = evidence.get("canonical_task_seed_hash")
     expected = evidence.get("expected_fixture_hash")
     # The executed task must be the EXACT frozen fixture, not merely a consistent
-    # (but wrong) one. The runtime canonical seed must equal the frozen hash.
+    # (but wrong) one. The runtime canonical task seed must equal the frozen hash.
     if "expected_fixture_hash" not in evidence:
         errs.append("execution evidence missing expected_fixture_hash "
                     "(frozen fixture hash not anchored)")
-    if not (evidence.get("guidance_bundle_hash")):
-        errs.append("execution evidence missing guidance_bundle_hash "
-                    "(injected guidance bundle not frozen)")
-    mount = evidence.get("guidance_mount_path")
-    if mount != NEUTRAL_GUIDANCE_PATH:
-        errs.append(f"guidance mount path {mount!r} is not the neutral "
-                    f"{NEUTRAL_GUIDANCE_PATH!r} (skill/condition name must not "
-                    f"leak into the worker-visible path)")
+    # The runtime treatment must be recorded separately from the task hash, and
+    # the treatment paths excluded from the task hash must be explicit.
+    runtime_paths = evidence.get("runtime_treatment_paths")
+    if not isinstance(runtime_paths, list) or not runtime_paths:
+        errs.append("execution evidence missing runtime_treatment_paths "
+                    "(task-state hash exclusion list not recorded)")
+    else:
+        if ".kilo/skills" not in runtime_paths:
+            errs.append("execution evidence runtime_treatment_paths must include "
+                        "'.kilo/skills' (the evaluator-owned discovery tree)")
+        if ".kilo" in runtime_paths:
+            errs.append("execution evidence must not exclude the entire '.kilo' "
+                        "root from task hashing")
+    if evidence.get("activation_mechanism") != "kilo-command-skill":
+        errs.append("execution evidence missing activation_mechanism "
+                    "'kilo-command-skill' (controlled post-activation model)")
+    if not evidence.get("target_skill_kilo_path"):
+        errs.append("execution evidence missing target_skill_kilo_path "
+                    "(target skill not placed for Kilo discovery)")
+    if not evidence.get("target_skill_content_hash"):
+        errs.append("execution evidence missing target_skill_content_hash "
+                    "(frozen target guidance tree not anchored)")
+    if "placebo" in conds:
+        if not evidence.get("placebo_skill"):
+            errs.append("placebo condition present but placebo_skill not "
+                        "recorded")
+        if not evidence.get("placebo_skill_kilo_path"):
+            errs.append("execution evidence missing placebo_skill_kilo_path "
+                        "(placebo skill not placed for Kilo discovery)")
+        if not evidence.get("placebo_skill_content_hash"):
+            errs.append("execution evidence missing placebo_skill_content_hash "
+                        "(frozen placebo guidance tree not anchored)")
+    if not seed:
+        errs.append("execution evidence missing canonical_task_seed_hash")
     if seed and expected and seed != expected:
-        errs.append(f"canonical seed hash {seed!r} does not match the frozen "
-                    f"expected_fixture_hash {expected!r}")
-    # Per-repetition anchor: the worker's starting fixture must be the frozen one.
+        errs.append(f"canonical task seed hash {seed!r} does not match the "
+                    f"frozen expected_fixture_hash {expected!r}")
+    # Per-repetition anchor: the worker's starting TASK state must be the frozen
+        # one. Treatment trees (``.kilo/skills``) are excluded from these hashes and are
+    # verified separately below.
     for r in reps:
         tag = f"rep{r.get('rep')}"
-        if expected and r.get("canonical_seed_hash") != expected:
-            errs.append(f"{tag}: repetition canonical_seed_hash does not match "
-                        f"the frozen expected_fixture_hash")
-        if r.get("guidance_mount_path") not in (None, NEUTRAL_GUIDANCE_PATH):
-            errs.append(f"{tag}: guidance_mount_path not neutral")
+        if expected and r.get("canonical_task_seed_hash") != expected:
+            errs.append(f"{tag}: repetition canonical_task_seed_hash does not "
+                        f"match the frozen expected_fixture_hash")
         # The natural task must be byte-identical across conditions. When the
         # runner records the task hash per repetition, all conditions must share
         # it; if the runner leaks condition/identity tokens into a prompt, the
@@ -733,7 +897,9 @@ def validate_execution_evidence(evidence):
             cmeta = cmap.get(name) or {}
             ctag = f"{tag} {name}"
             for key in ("container_id", "session_id", "run_status", "returncode",
-                        "starting_fixture_hash", "ending_fixture_hash"):
+                        "starting_task_hash", "ending_task_hash",
+                        "starting_full_hash", "ending_full_hash",
+                        "skill_context_probe"):
                 if key not in cmeta:
                     errs.append(f"{ctag}: missing {key}")
             if cmeta.get("run_status") != "success":
@@ -742,72 +908,129 @@ def validate_execution_evidence(evidence):
             if cmeta.get("returncode") != 0:
                 errs.append(f"{ctag}: returncode={cmeta.get('returncode')!r}")
             if not (cmeta.get("output") or "").strip() \
-                    and not cmeta.get("ending_fixture_hash"):
+                    and not cmeta.get("ending_task_hash"):
                 errs.append(f"{ctag}: no model output and no task-state evidence")
-            if seed and cmeta.get("starting_fixture_hash") != seed:
-                errs.append(f"{ctag}: starting fixture hash does not match "
-                            f"canonical seed hash")
-        # Guidance boundary, per condition.
+            if seed and cmeta.get("starting_task_hash") != seed:
+                errs.append(f"{ctag}: starting TASK hash does not match "
+                            f"canonical task seed hash (task state differs "
+                            f"across conditions or from the frozen fixture)")
+        # Activation boundary, per condition. Layer B is a POST-ACTIVATION
+        # experiment: the evaluator must have ACTIVATED the target/placebo
+        # guidance through the controlled skill-command mechanism, and the
+        # baseline must have no treatment at all. The discovery-path probe
+        # (presence + content hash) and the command resolution (returncode 0)
+        # are the machine-verifiable activation evidence; native skill tool
+        # calls are recorded as supplementary events.
         t = cmap.get("target") or {}
-        if t.get("guidance_verified") is not True:
-            errs.append(f"{tag} target: guidance_verified != true "
-                        f"(boundary probe did not confirm guidance present)")
-        b = cmap.get("baseline") or {}
-        if b.get("guidance_verified_absent") is not True:
-            errs.append(f"{tag} baseline: guidance_verified_absent != true "
-                        f"(boundary probe found guidance present)")
-        if "placebo" in conds:
-            p = cmap.get("placebo") or {}
-            if p.get("guidance_verified") is not True:
-                errs.append(f"{tag} placebo: guidance_verified != true "
-                            f"(boundary probe did not confirm guidance present)")
-            if not evidence.get("placebo_skill"):
-                errs.append("placebo condition present but placebo_skill not "
-                            "recorded")
-
-        # Skill discovery/loading evidence (Layer B activation proof).
-        # Mere filesystem presence is not activation; Kilo must be able to
-        # discover the skill through its normal scan and the agent must have
-        # loaded it into context.
-        if not evidence.get("target_skill_kilo_path"):
-            errs.append("execution evidence missing target_skill_kilo_path "
-                        "(target skill not placed for Kilo discovery)")
-        if "placebo" in conds and not evidence.get("placebo_skill_kilo_path"):
-            errs.append("execution evidence missing placebo_skill_kilo_path "
-                        "(placebo skill not placed for Kilo discovery)")
-        t = cmap.get("target") or {}
+        if t.get("activation_mechanism") != "kilo-command-skill":
+            errs.append(f"{tag} target: activation_mechanism != "
+                        f"'kilo-command-skill' (target guidance was not "
+                        f"activated through the controlled mechanism)")
         if t.get("skill_kilo_path") != evidence.get("target_skill_kilo_path"):
             errs.append(f"{tag} target: skill_kilo_path does not match "
                         f"target_skill_kilo_path (target skill not discoverable "
                         f"in worker workspace)")
-        if not t.get("skill_loaded"):
-            errs.append(f"{tag} target: skill_loaded != true "
-                        f"(agent did not read the target SKILL.md from "
-                        f".kilo/skills/; guidance may not be active)")
+        if t.get("skill_command") != f"{evidence.get('skill')}:skill":
+            errs.append(f"{tag} target: skill_command {t.get('skill_command')!r} "
+                        f"!= '<skill>:skill' (command must resolve the skill)")
+        if t.get("skill_content_hash") != evidence.get("target_skill_content_hash"):
+            errs.append(f"{tag} target: skill_content_hash does not match the "
+                        f"frozen target guidance tree hash")
+        if t.get("skill_probe") != "present":
+            errs.append(f"{tag} target: skill_probe != 'present' "
+                            f"(discovery path SKILL.md absent or content-hash "
+                            f"mismatch inside the container)")
+        if t.get("skill_context_probe") != "present":
+            errs.append(f"{tag} target: skill_context_probe != 'present' "
+                        f"(the exported Kilo session did not prove that the "
+                        f"full guidance body entered context)")
+        if t.get("skill_tool_invoked"):
+            events = t.get("activation_events") or []
+            if not events:
+                errs.append(f"{tag} target: skill_tool_invoked but no "
+                            f"activation_events recorded")
+            for e in events:
+                if e.get("skill_name") != evidence.get("skill"):
+                    errs.append(f"{tag} target: activation event names skill "
+                                f"{e.get('skill_name')!r}, not the target "
+                            f"skill {evidence.get('skill')!r}")
+        elif t.get("activation_events"):
+            errs.append(f"{tag} target: activation_events present while "
+                        f"skill_tool_invoked is false")
         b = cmap.get("baseline") or {}
+        if b.get("activation_mechanism") != "none":
+            errs.append(f"{tag} baseline: activation_mechanism != 'none' "
+                        f"(baseline must not have activated guidance)")
         if b.get("skill_kilo_path"):
             errs.append(f"{tag} baseline: skill_kilo_path is set "
                         f"(baseline must not receive the target skill)")
+        if b.get("skill_probe") != "absent":
+            errs.append(f"{tag} baseline: skill_probe != 'absent' "
+                            f"(baseline leaked a .kilo/skills treatment tree)")
+        if b.get("skill_context_probe") != "none":
+            errs.append(f"{tag} baseline: skill_context_probe != 'none' "
+                        f"(baseline must not export activated guidance)")
+        if b.get("skill_tool_invoked"):
+            errs.append(f"{tag} baseline: skill_tool_invoked is true "
+                        f"(baseline must have no skill activation)")
+        if b.get("activation_events"):
+            errs.append(f"{tag} baseline: activation_events present "
+                        f"(baseline must have no skill activation)")
         if "placebo" in conds:
             p = cmap.get("placebo") or {}
+            if p.get("activation_mechanism") != "kilo-command-skill":
+                errs.append(f"{tag} placebo: activation_mechanism != "
+                            f"'kilo-command-skill' (placebo guidance must be "
+                            f"activated through the SAME mechanism as target)")
             if p.get("skill_kilo_path") != evidence.get("placebo_skill_kilo_path"):
                 errs.append(f"{tag} placebo: skill_kilo_path does not match "
                             f"placebo_skill_kilo_path")
-            if not p.get("skill_loaded"):
-                errs.append(f"{tag} placebo: skill_loaded != true "
-                            f"(agent did not read the placebo SKILL.md)")
+            if p.get("skill_command") != f"{evidence.get('placebo_skill')}:skill":
+                errs.append(f"{tag} placebo: skill_command "
+                            f"{p.get('skill_command')!r} != "
+                            f"'<placebo-skill>:skill'")
+            if p.get("skill_content_hash") != evidence.get(
+                    "placebo_skill_content_hash"):
+                errs.append(f"{tag} placebo: skill_content_hash does not match "
+                            f"the frozen placebo guidance tree hash")
+            if p.get("skill_probe") != "present":
+                errs.append(f"{tag} placebo: skill_probe != 'present' "
+                            f"(discovery path SKILL.md absent or content-hash "
+                            f"mismatch inside the container)")
+            if p.get("skill_context_probe") != "present":
+                errs.append(f"{tag} placebo: skill_context_probe != 'present' "
+                            f"(the exported Kilo session did not prove that "
+                            f"the full placebo body entered context)")
+            if p.get("skill_tool_invoked"):
+                events = p.get("activation_events") or []
+                if not events:
+                    errs.append(f"{tag} placebo: skill_tool_invoked but no "
+                                f"activation_events recorded")
+                for e in events:
+                    if e.get("skill_name") != evidence.get("placebo_skill"):
+                        errs.append(f"{tag} placebo: activation event names "
+                                    f"skill {e.get('skill_name')!r}, not the "
+                                    f"placebo skill "
+                                    f"{evidence.get('placebo_skill')!r}")
+            elif p.get("activation_events"):
+                errs.append(f"{tag} placebo: activation_events present while "
+                            f"skill_tool_invoked is false")
 
         # Cross-condition isolation.
         cids = [cmap[n].get("container_id") for n in conds]
         sids = [cmap[n].get("session_id") for n in conds]
-        starts = [cmap[n].get("starting_fixture_hash") for n in conds]
+        starts = [cmap[n].get("starting_task_hash") for n in conds]
         if not (all(cids) and len(set(cids)) == len(cids)):
             errs.append(f"{tag}: conditions not in distinct containers")
         if not (all(sids) and len(set(sids)) == len(sids)):
             errs.append(f"{tag}: conditions not in distinct sessions")
         if not (starts and len(set(starts)) == 1):
-            errs.append(f"{tag}: condition starting fixture hashes differ "
-                        f"(not identical seed)")
+            errs.append(f"{tag}: condition starting TASK hashes differ "
+                        f"(not identical task seed)")
+        full_starts = [cmap[n].get("starting_full_hash") for n in conds]
+        if not (all(full_starts) and len(set(full_starts)) == len(conds)):
+            errs.append(f"{tag}: condition starting FULL hashes do not differ "
+                        f"as expected for separate runtime treatments")
         wids = (r.get("condition_workspace_ids") or {}).values()
         if not wids or len(set(wids)) != len(conds):
             errs.append(f"{tag}: condition workspace ids not distinct "
@@ -831,6 +1054,62 @@ def validate_catalog_routing_evidence(evidence):
     if "target_present" not in conds or "target_absent" not in conds:
         errs.append("catalog-routing evidence missing one or both conditions")
         return errs
+
+    skill = evidence.get("skill")
+    case_id = evidence.get("case_id")
+    evals_path = os.path.join(ROOT, "skills", str(skill), "evals",
+                              "evals.json")
+    source_case = None
+    if not isinstance(skill, str) or not skill:
+        errs.append("catalog-routing evidence missing skill")
+    elif not isinstance(case_id, int):
+        errs.append("catalog-routing evidence missing integer case_id")
+    elif not os.path.exists(evals_path):
+        errs.append(f"catalog-routing evidence skill evals not found: {skill}")
+    else:
+        try:
+            source = json.load(open(evals_path))
+            source_case = next((c for c in source.get("evals", [])
+                                if c.get("id") == case_id), None)
+        except (OSError, TypeError, ValueError) as exc:
+            errs.append(f"catalog-routing source evals unreadable: {exc}")
+    if source_case is None and isinstance(case_id, int):
+        errs.append("catalog-routing evidence case_id is not present in the "
+                    "current skill evals")
+
+    expected_by_condition = {}
+    fallbacks_by_condition = {}
+    target_skill = skill
+    if source_case is not None:
+        routing = source_case.get("routing") or {}
+        target_skill = routing.get("target_skill") or skill
+        for name in ("target_present", "target_absent"):
+            oracle = routing.get(name) or {}
+            expected_by_condition[name] = oracle.get("expected_selected_skill")
+            fallbacks_by_condition[name] = oracle.get("allowed_fallbacks") or []
+            if name not in routing:
+                errs.append(f"catalog-routing source case missing {name} oracle")
+        if target_skill != skill:
+            errs.append("catalog-routing evidence skill does not match the "
+                        "source routing target_skill")
+
+    all_skills = {os.path.basename(os.path.dirname(p)) for p in glob.glob(
+        os.path.join(ROOT, "skills", "*", "SKILL.md"))}
+    catalogs = {
+        "target_present": all_skills,
+        "target_absent": all_skills - {target_skill},
+    }
+    catalog_hashes = {}
+    prompt_hashes = {}
+    if catalog_runner is not None and source_case is not None:
+        prompt = source_case.get("prompt", "")
+        for name, absent in (("target_present", None),
+                             ("target_absent", target_skill)):
+            rows = catalog_runner.build_catalog(absent)
+            text = catalog_runner.render_catalog(rows)
+            catalog_hashes[name] = hashlib.sha256(text.encode()).hexdigest()
+            prompt_hashes[name] = hashlib.sha256(
+                catalog_runner.build_prompt(text, prompt).encode()).hexdigest()
     valid_actions = ("apply", "clarify")
     for name, cond in conds.items():
         reps = cond.get("repetitions") or []
@@ -839,6 +1118,14 @@ def validate_catalog_routing_evidence(evidence):
             continue
         for r in reps:
             rep_tag = f"{name} rep{r.get('rep')}"
+            if name in catalog_hashes and r.get("catalog_hash") != \
+                    catalog_hashes[name]:
+                errs.append(f"{rep_tag}: catalog_hash does not match the "
+                            f"current {name} catalog")
+            if name in prompt_hashes and r.get("prompt_hash") != \
+                    prompt_hashes[name]:
+                errs.append(f"{rep_tag}: prompt_hash does not match the "
+                            "current case and catalog")
             status = r.get("status")
             if status != "success":
                 # A failed model invocation must NOT be recorded as a pass.
@@ -855,12 +1142,280 @@ def validate_catalog_routing_evidence(evidence):
                 errs.append(f"{rep_tag}: invalid action {decision.get('action')!r}")
             sel = decision.get("selected_skill")
             act = decision.get("action")
+            if sel is not None and sel not in catalogs.get(name, set()):
+                errs.append(f"{rep_tag}: selected_skill {sel!r} is not in the "
+                            f"{name} catalog")
             if sel is None and act == "apply":
                 errs.append(f"{rep_tag}: null selected_skill with action 'apply'")
             if sel is not None and act == "clarify":
                 errs.append(f"{rep_tag}: non-null selected_skill with 'clarify'")
             if not isinstance(r.get("match"), bool):
                 errs.append(f"{rep_tag}: match not boolean")
+            if name in expected_by_condition:
+                expected = expected_by_condition[name]
+                fallbacks = fallbacks_by_condition[name]
+                expected_match = ((sel == expected or sel in fallbacks)
+                                  if expected is not None
+                                  else (sel is None or sel in fallbacks))
+                if r.get("match") is not expected_match:
+                    errs.append(f"{rep_tag}: match does not match the current "
+                                f"{name} oracle")
+    return errs
+
+
+def _recompute_case_set_aggregate(cases, skills):
+    """Recompute case-set metrics from captured successful decisions."""
+    observations = []
+    workflow_types = ("workflow-transition", "harness-native")
+    for case in cases:
+        if not isinstance(case, dict):
+            continue
+        turns = case.get("turns")
+        is_workflow = bool(turns) and case.get("case_type") in workflow_types
+        if is_workflow:
+            for rep in case.get("repetitions", []):
+                if not isinstance(rep, dict):
+                    continue
+                for turn in rep.get("turns", []):
+                    if not isinstance(turn, dict):
+                        continue
+                    if turn.get("status") != "success":
+                        continue
+                    intended = turn.get("expected_route")
+                    selected = turn.get("selected_skill")
+                    observations.append((
+                        intended if intended is not None else "null",
+                        selected if selected is not None else "null",
+                    ))
+        else:
+            for rep in case.get("repetitions", []):
+                if not isinstance(rep, dict):
+                    continue
+                if rep.get("status") != "success":
+                    continue
+                decision = rep.get("decision") or {}
+                intended = case.get("expected_skill")
+                selected = decision.get("selected_skill")
+                observations.append((
+                    intended if intended is not None else "null",
+                    selected if selected is not None else "null",
+                ))
+
+    matrix = {}
+    for intended, selected in observations:
+        row = matrix.setdefault(intended, {})
+        row[selected] = row.get(selected, 0) + 1
+
+    per_skill = {}
+    for skill in skills:
+        tp = sum(1 for i, s in observations if i == skill and s == skill)
+        fp = sum(1 for i, s in observations if i != skill and s == skill)
+        fn = sum(1 for i, s in observations if i == skill and s != skill)
+        per_skill[skill] = {
+            "tp": tp,
+            "fp": fp,
+            "fn": fn,
+            "precision": (tp / (tp + fp)) if tp + fp else None,
+            "recall": (tp / (tp + fn)) if tp + fn else None,
+        }
+    return {
+        "rule": ("one observation per successful model decision; "
+                 "workflow-transition/harness-native turns each contribute one "
+                 "observation; explicit null selections are the literal "
+                 "'null' class; precision/recall are null (not 0) when the "
+                 "denominator is zero"),
+        "observations": len(observations),
+        "confusion_matrix": matrix,
+        "per_skill": per_skill,
+    }
+
+
+def _case_set_source_anchor(evidence, errs):
+    """Resolve case-set evidence to the canonical checked-in source file."""
+    et = evidence.get("evidence_type")
+    source_name_key = "confusion_set" if et == "confusion-set" else "holdout"
+    source_dir = ("evaluations/confusion-sets" if et == "confusion-set"
+                  else "evaluations/holdout")
+    source_name = evidence.get(source_name_key)
+    path = evidence.get("case_set_path")
+    if not isinstance(source_name, str) or not source_name:
+        errs.append(f"case-set evidence missing {source_name_key} source name")
+        return None
+    expected_path = os.path.join(source_dir, f"{source_name}.json")
+    if path != expected_path:
+        errs.append("case-set evidence case_set_path does not match the "
+                    "canonical source name")
+        return None
+    source_path = os.path.join(ROOT, path)
+    if not os.path.isfile(source_path):
+        errs.append(f"case-set evidence source file not found: {path}")
+        return None
+    try:
+        source = json.load(open(source_path, encoding="utf-8"))
+    except (OSError, TypeError, ValueError) as exc:
+        errs.append(f"case-set source unreadable: {exc}")
+        return None
+    canonical = json.dumps(source, sort_keys=True, separators=(",", ":"),
+                           ensure_ascii=False).encode()
+    source_hash = HASH_PREFIX + hashlib.sha256(canonical).hexdigest()
+    if evidence.get("case_set_hash") != source_hash:
+        errs.append("case-set evidence case_set_hash does not match the "
+                    "current canonical source")
+    if source.get(source_name_key) != source_name:
+        errs.append(f"case-set source {source_name_key} does not match evidence")
+    if evidence.get("skills") != source.get("skills"):
+        errs.append("case-set evidence skills do not match the canonical source")
+    source_cases = source.get("cases") or []
+    recorded_cases = evidence.get("cases") or []
+    if len(recorded_cases) != len(source_cases):
+        errs.append("case-set evidence case count does not match the canonical "
+                    "source")
+    for index, source_case in enumerate(source_cases):
+        if index >= len(recorded_cases):
+            break
+        recorded = recorded_cases[index]
+        if not isinstance(recorded, dict):
+            continue
+        for key in ("id", "case_type", "expected_skill"):
+            if recorded.get(key) != source_case.get(key):
+                errs.append(f"case {recorded.get('id')}: {key} does not match "
+                            "the canonical source")
+        if recorded.get("turns") != source_case.get("turns"):
+            errs.append(f"case {recorded.get('id')}: turns do not match the "
+                        "canonical source")
+    return source
+
+
+def validate_case_set_routing_evidence(evidence):
+    """Validate confusion-set/holdout evidence emitted by ``run_case_set``.
+
+    Case-set runs use a top-level ``cases``/``aggregate`` shape rather than
+    the legacy target-present/target-absent ``conditions`` shape. Keep the two
+    schemas explicit so a successful case-set run cannot be rejected as an
+    unrelated legacy artifact or silently skipped by the evidence gate.
+    """
+    errs = []
+    et = evidence.get("evidence_type")
+    if et not in ("confusion-set", "holdout"):
+        errs.append(f"expected case-set evidence type, got {et!r}")
+    _case_set_source_anchor(evidence, errs)
+    skills = evidence.get("skills")
+    if not isinstance(skills, list) or not all(isinstance(s, str) for s in skills):
+        errs.append("case-set evidence missing a valid skills list")
+        skills = []
+    cases = evidence.get("cases")
+    if not isinstance(cases, list) or not cases:
+        errs.append("case-set evidence missing non-empty cases")
+        return errs
+    aggregate = evidence.get("aggregate")
+    if not isinstance(aggregate, dict):
+        errs.append("case-set evidence missing aggregate")
+    else:
+        for key in ("observations", "confusion_matrix", "per_skill"):
+            if key not in aggregate:
+                errs.append(f"case-set aggregate missing {key}")
+        expected_aggregate = _recompute_case_set_aggregate(
+            cases, skills)
+        if aggregate != expected_aggregate:
+            errs.append("case-set aggregate does not match captured cases")
+
+    valid_actions = ("apply", "clarify")
+    workflow_types = ("workflow-transition", "harness-native")
+    for case in cases:
+        if not isinstance(case, dict):
+            errs.append("case-set evidence contains a non-object case")
+            continue
+        cid = case.get("id")
+        tag = f"case {cid}"
+        case_type = case.get("case_type")
+        turns = case.get("turns")
+        is_workflow = bool(turns) and case_type in workflow_types
+        reps = case.get("repetitions")
+        if not isinstance(reps, list) or not reps:
+            errs.append(f"{tag}: no repetitions captured")
+            continue
+
+        if turns and not is_workflow:
+            errs.append(f"{tag}: turns are only valid for workflow-transition "
+                        "or harness-native cases")
+            continue
+
+        for rep in reps:
+            if not isinstance(rep, dict):
+                errs.append(f"{tag}: repetition is not an object")
+                continue
+            rep_tag = f"{tag} rep{rep.get('rep')}"
+            if is_workflow:
+                turn_results = rep.get("turns")
+                if not isinstance(turn_results, list) or not turn_results:
+                    errs.append(f"{rep_tag}: no turn results captured")
+                    continue
+                for turn in turn_results:
+                    if not isinstance(turn, dict):
+                        errs.append(f"{rep_tag}: turn is not an object")
+                        continue
+                    turn_tag = f"{rep_tag} turn{turn.get('turn')}"
+                    if turn.get("status") != "success":
+                        if turn.get("pass") is True:
+                            errs.append(f"{turn_tag}: failed turn recorded as "
+                                        "pass=True")
+                        continue
+                    if turn.get("expected_route_declared") is not True:
+                        errs.append(f"{turn_tag}: expected route was not "
+                                    "explicitly declared")
+                    if "selected_skill" not in turn:
+                        errs.append(f"{turn_tag}: missing selected_skill")
+                    selected = turn.get("selected_skill")
+                    if selected is not None and selected not in skills:
+                        errs.append(f"{turn_tag}: selected_skill {selected!r} "
+                                    "not in catalog skills")
+                    if turn.get("action") not in valid_actions:
+                        errs.append(f"{turn_tag}: invalid action "
+                                    f"{turn.get('action')!r}")
+                    if not isinstance(turn.get("pass"), bool):
+                        errs.append(f"{turn_tag}: pass not boolean")
+                    expected = turn.get("expected_route")
+                    expected_pass = (selected == expected
+                                     if expected is not None
+                                     else selected is None)
+                    if turn.get("pass") is not expected_pass:
+                        errs.append(f"{turn_tag}: pass does not match "
+                                    "expected_route and selected_skill")
+            else:
+                status = rep.get("status")
+                if status != "success":
+                    if rep.get("match") is True:
+                        errs.append(f"{rep_tag}: failed model invocation "
+                                    "recorded as match=True (false pass)")
+                    continue
+                decision = rep.get("decision") or {}
+                if "selected_skill" not in decision:
+                    errs.append(f"{rep_tag}: success but decision missing "
+                                "'selected_skill'")
+                    continue
+                if decision.get("action") not in valid_actions:
+                    errs.append(f"{rep_tag}: invalid action "
+                                f"{decision.get('action')!r}")
+                selected = decision.get("selected_skill")
+                action = decision.get("action")
+                if selected is not None and selected not in skills:
+                    errs.append(f"{rep_tag}: selected_skill {selected!r} not in "
+                                "catalog skills")
+                if selected is None and action == "apply":
+                    errs.append(f"{rep_tag}: null selected_skill with action "
+                                "'apply'")
+                if selected is not None and action == "clarify":
+                    errs.append(f"{rep_tag}: non-null selected_skill with "
+                                "'clarify'")
+                if not isinstance(rep.get("match"), bool):
+                    errs.append(f"{rep_tag}: match not boolean")
+                expected = case.get("expected_skill")
+                expected_match = (selected == expected
+                                  if expected is not None
+                                  else selected is None)
+                if rep.get("match") is not expected_match:
+                    errs.append(f"{rep_tag}: match does not match expected_skill "
+                                "and selected_skill")
     return errs
 
 
@@ -888,6 +1443,11 @@ def check_evidence_dir(ev_dir=None):
         basename = os.path.basename(f)
         if et == "execution":
             for e in validate_execution_evidence(data):
+                err(f"{rel}: {e}")
+        elif et in ("confusion-set", "holdout"):
+            # Case-set evidence has a top-level cases/aggregate schema. The
+            # source label distinguishes development data from holdout output.
+            for e in validate_case_set_routing_evidence(data):
                 err(f"{rel}: {e}")
         elif et == "catalog-routing":
             for e in validate_catalog_routing_evidence(data):
@@ -1051,16 +1611,27 @@ def check_confusion_set(path, rel):
             if re.search(rf"\b{re.escape(exp.lower())}\b", low):
                 err(f"{tag}: prompt contains the expected skill name "
                     f"{exp!r} (keyword leak)")
-        for t in c.get("turns", []):
+        turns = c.get("turns", [])
+        if turns and ctype not in ("workflow-transition", "harness-native"):
+            err(f"{tag}: turns are only valid for workflow-transition or "
+                "harness-native cases")
+        for t in turns:
             if not isinstance(t, dict) or not isinstance(t.get("user"), str) \
                     or not t["user"].strip():
                 err(f"{tag}: turn missing non-empty 'user' text")
-            if "expected_route" in t and not isinstance(t.get("expected_route"), str):
-                err(f"{tag}: turn expected_route must be a skill name")
-            route = t.get("expected_route")
-            if route is not None and route not in skills:
-                err(f"{tag}: turn expected_route {route!r} not in the "
-                    f"confusion set's skills")
+            # ``expected_route`` is REQUIRED: a skill name in the set, or
+            # explicit null meaning "no specialized skill expected". Missing
+            # route data is a schema error, never silently treated as null.
+            if "expected_route" not in t:
+                err(f"{tag}: turn missing 'expected_route' "
+                    f"(null means 'no specialized skill expected')")
+            else:
+                route = t["expected_route"]
+                if route is not None and not isinstance(route, str):
+                    err(f"{tag}: turn expected_route must be a skill name or null")
+                elif route is not None and route not in skills:
+                    err(f"{tag}: turn expected_route {route!r} not in the "
+                        f"confusion set's skills")
         if ctype == "workflow-transition" and not c.get("turns"):
             err(f"{tag}: workflow-transition case must carry ordered 'turns'")
         if c.get("notes") is not None and not isinstance(c.get("notes"), str):
@@ -1121,16 +1692,27 @@ def check_holdout(path, rel):
             if re.search(rf"\b{re.escape(exp.lower())}\b", low):
                 err(f"{tag}: prompt contains the expected skill name "
                     f"{exp!r} (keyword leak)")
-        for t in c.get("turns", []):
+        turns = c.get("turns", [])
+        if turns and ctype not in ("workflow-transition", "harness-native"):
+            err(f"{tag}: turns are only valid for workflow-transition or "
+                "harness-native cases")
+        for t in turns:
             if not isinstance(t, dict) or not isinstance(t.get("user"), str) \
                     or not t["user"].strip():
                 err(f"{tag}: turn missing non-empty 'user' text")
-            if "expected_route" in t and not isinstance(t.get("expected_route"), str):
-                err(f"{tag}: turn expected_route must be a skill name")
-            route = t.get("expected_route")
-            if route is not None and route not in skills:
-                err(f"{tag}: turn expected_route {route!r} not in the "
-                    f"holdout's skills")
+            # ``expected_route`` is REQUIRED: a skill name in the set, or
+            # explicit null meaning "no specialized skill expected". Missing
+            # route data is a schema error, never silently treated as null.
+            if "expected_route" not in t:
+                err(f"{tag}: turn missing 'expected_route' "
+                    f"(null means 'no specialized skill expected')")
+            else:
+                route = t["expected_route"]
+                if route is not None and not isinstance(route, str):
+                    err(f"{tag}: turn expected_route must be a skill name or null")
+                elif route is not None and route not in skills:
+                    err(f"{tag}: turn expected_route {route!r} not in the "
+                        f"holdout's skills")
 
 
 def check_confusion_sets_and_holdouts():

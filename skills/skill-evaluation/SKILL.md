@@ -56,14 +56,22 @@ about one is never evidence about another.
    produces. Catalog accuracy never substitutes for a captured harness-selection
    log at Tier 3.
 2. **Execution efficacy (Layer B)** — once a skill is legitimately active, does its
-   guidance beat the harness default? Run as **fresh, independent conditions**
+   guidance beat the harness default? This is a POST-ACTIVATION experiment: it
+   does NOT test whether the router decides to activate the guidance (that is
+   routing). Run as **fresh, independent conditions**
    (`target`, `baseline`, optional `placebo`), each from its own copy of one
-   pristine seed: the `target` condition mounts *guidance only* (`SKILL.md` +
-   `references/`) at the neutral path `/work/guidance/task`; `baseline` mounts
-   **no** guidance; `placebo` mounts **irrelevant** guidance at the same neutral
-   path. The worker-visible prompt is the natural task only — byte-identical
-   across conditions. Free models are reached through anonymous Kilo Gateway
-   access (`kilo/tencent/hy3:free`); no API key or auth is mounted.
+   pristine seed: the `target` condition ACTIVATES the target guidance through
+   a deterministic, evaluator-controlled runtime mechanism — the skill's
+   `SKILL.md` (+ `references/`) is placed at the Kilo project-level discovery
+   location `.kilo/skills/<name>/` in the worker workspace and loaded via
+   `kilo run --command "<name>:skill"`, which injects the guidance body into
+   context at session start. The runner verifies command resolution and
+   exports the completed session inside the container to prove the full body
+   entered the user context; `baseline` gets **no** discovery tree and **no**
+   `--command`; `placebo` activates **irrelevant** guidance through the EXACT
+   SAME mechanism. The worker-visible prompt is the natural task only —
+   byte-identical across conditions. Free models are reached through anonymous
+   Kilo Gateway access (`kilo/tencent/hy3:free`); no API key or auth is mounted.
    Verify the worker runtime version per run: record `kilo --version` (or the
    image's pinned CLI) from each worker container and require identical versions
    across all conditions of a comparison. A worker that installs, upgrades, or
@@ -169,17 +177,21 @@ more assertions by loading unnecessary guidance is not automatically better.
    isolation-failure troubleshooting.
 3. Run each case with genuinely independent evaluation workers — one per
    condition (`target`, `baseline`, optional `placebo`) — each a fresh
-   subagent/session. The `target` condition actually loads the target guidance
-   (mounted at the neutral path `/work/guidance/task`); `baseline` is initialized
-   without any target guidance; `placebo` mounts irrelevant guidance at the same
-   neutral path. Keep prompts, inputs, tools, network access, model settings,
+   subagent/session. The `target` condition ACTIVATES the target guidance
+   through the evaluator-controlled mechanism (skill discovery tree at
+   `.kilo/skills/<name>/` + `kilo run --command "<name>:skill"`); `baseline` is
+   initialized without any target guidance; `placebo` activates irrelevant
+   guidance through the exact same mechanism. Keep prompts, inputs, tools,
+   network access, model settings,
    and output locations equivalent. Give every worker the **same natural task
    prompt** — byte-identical across conditions — not an evaluation wrapper: do
    not tell them they are workers, name the case, mention `target`/`baseline`/
    `placebo`, disclose that a comparison is happening, or reveal the expected
    behavior. Use neutral worker-visible directory and file names; do not encode
    the skill name, condition, case ID, or evaluation purpose in a path, filename,
-   or wrapper text. A baseline is **not** an instruction to the same agent to
+   or wrapper text (the `.kilo/skills/<name>/` discovery path is the activation
+   location, not a worker-visible condition label, and the baseline contains no
+   such tree). A baseline is **not** an instruction to the same agent to
    ignore, forget, or pretend not to have seen the skill. Reusing a transcript,
    context, memory, hidden skill projection, or worker for both conditions is
    contamination and makes the comparison invalid.
@@ -191,11 +203,12 @@ more assertions by loading unnecessary guidance is not automatically better.
    contaminated and do not score it.
    When the harness uses discovered `AGENTS.md` guidance, make the condition
    boundary explicit with two variants that use only neutral names. The
-   `target` variant may say to read `task/SKILL.md`; the baseline variant must
+   `target` variant may say to read the activation discovery file; the baseline
+   variant must
    contain no reference to that file or to missing guidance at all. Do not tell
    the baseline to check whether a guidance file exists: that leaks the
    condition. The `target` workspace contains the target guidance copied to the
-   neutral path; the `baseline` contains no guidance tree. Keep the common
+   discovery location; the `baseline` contains no guidance tree. Keep the common
    preflight (`pwd` and local-file inventory) in both variants.
 4. Verify the condition boundary rather than trusting the worker's claim:
    record worker/session identifiers, the loaded-guidance manifest or equivalent

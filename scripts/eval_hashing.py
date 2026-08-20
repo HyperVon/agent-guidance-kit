@@ -68,7 +68,27 @@ def _sha256_of(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _files_recursive(path):
+def _is_excluded(rel, exclude):
+    """Whether a workspace-relative path is under an excluded path prefix.
+
+    Exclusions are workspace-relative and may be nested (for example,
+    ``.kilo/skills``). They are never matched against a nested directory with
+    the same name elsewhere in the fixture.
+    """
+    if not exclude:
+        return False
+    rel_parts = rel.replace(os.sep, "/").split("/")
+    for raw_prefix in exclude:
+        prefix = str(raw_prefix).replace(os.sep, "/").strip("/")
+        if not prefix or prefix == ".":
+            continue
+        prefix_parts = prefix.split("/")
+        if rel_parts[:len(prefix_parts)] == prefix_parts:
+            return True
+    return False
+
+
+def _files_recursive(path, exclude=()):
     files = []
     for root, _, names in os.walk(path):
         for n in names:
@@ -76,20 +96,22 @@ def _files_recursive(path):
             rel = os.path.relpath(full, path)
             if rel.split(os.sep)[0] == ".git":
                 continue
+            if _is_excluded(rel, exclude):
+                continue
             files.append(rel)
     return sorted(files)
 
 
-def committed_hash(path: str) -> str:
+def committed_hash(path: str, exclude=()) -> str:
     h = hashlib.sha256()
-    for rel in _files_recursive(path):
+    for rel in _files_recursive(path, exclude=exclude):
         full = os.path.join(path, rel)
         fh = _sha256_of(open(full, "rb").read())
         h.update((rel + ":" + fh).encode())
     return h.hexdigest()
 
 
-def _generator_output_hash(output_dir: str) -> str:
+def _generator_output_hash(output_dir: str, exclude=()) -> str:
     """Hash a generated fixture directory in a host-independent, deterministic way.
 
     For git repositories the hash covers the FULL working-tree + index state, not
@@ -100,6 +122,12 @@ def _generator_output_hash(output_dir: str) -> str:
     paths, and host identity.
 
     For non-git fixtures it falls back to a recursive content hash of the output.
+
+    ``exclude`` is a tuple of workspace-relative runtime paths (e.g.
+    ``(".kilo/skills",)``) that are omitted from the file-content portion — used by
+    :func:`hash_task_workspace` so evaluator treatment trees never enter the
+    task-state hash. Git metadata (TREE/BRANCH/INDEX/diffs) is still captured
+    as-is; treatment files are untracked, so they never appear there either.
     """
     git_dir = os.path.join(output_dir, ".git")
     if os.path.isdir(git_dir):
@@ -126,7 +154,7 @@ def _generator_output_hash(output_dir: str) -> str:
             # File contents: every on-disk file (tracked + untracked), excluding
             # .git internals. Deterministically captures untracked files, uncommitted
             # modifications, and staged-but-dirty content.
-            for rel in _files_recursive(output_dir):
+            for rel in _files_recursive(output_dir, exclude=exclude):
                 # .origin.git is a bare upstream created by git init --bare;
                 # its config contains platform-specific keys (e.g. macOS
                 # precomposeunicode) that vary across git versions/filesystems
@@ -140,7 +168,7 @@ def _generator_output_hash(output_dir: str) -> str:
         except subprocess.CalledProcessError:
             pass
     # Fallback: hash the generated files directly.
-    return committed_hash(output_dir)
+    return committed_hash(output_dir, exclude=exclude)
 
 
 def run_generator(fixture_dir: str, source: str = "setup.sh",
@@ -186,13 +214,49 @@ def hash_workspace(path: str) -> str:
     """Deterministic content hash of a (possibly git) workspace.
 
     Uses the git-aware hasher for git repositories and a plain recursive file
-    hash otherwise. This is what the execution runner uses to prove a target and
-    a baseline worker started from byte-identical copies and to record the
-    pre/post task-state mutation.
+    hash otherwise. This hashes EVERYTHING under ``path`` — including any
+    evaluator-added runtime/treatment artifacts (e.g. ``.kilo/skills/``).
+    It is the FULL-FILESYSTEM hash, used to prove the raw condition copies are
+    structurally different where treatment differs; it is NOT the task-state
+    hash (see :func:`hash_task_workspace`).
     """
     if os.path.isdir(os.path.join(path, ".git")):
         return _generator_output_hash(path)
     return committed_hash(path)
+
+
+def hash_task_workspace(path: str,
+                        exclude_runtime_paths=(".kilo/skills",)) -> str:
+    """Deterministic hash of the TASK STATE of a workspace, excluding
+    evaluator/harness-controlled runtime treatment paths.
+
+    Layer B separates two kinds of state:
+
+    * **task state** — the actual thing the worker works on (source, docs,
+      tests, fixture content, git state). This MUST be byte-identical across
+      the target/baseline/placebo conditions and equal to the frozen fixture
+      hash.
+    * **runtime treatment state** — what the evaluator adds to deliver the
+      treatment (``.kilo/skills/`` skill discovery trees, injected guidance,
+      condition-control metadata). This is INTENTIONALLY different between
+      target and placebo (and absent in baseline).
+
+    Hashing those together and then requiring equality would fail by
+    construction, because the treatment state differs. This hasher therefore
+    excludes the explicit runtime paths the evaluator controls (default:
+    ``.kilo/skills``, the Kilo project skill-discovery tree) while hashing
+    everything else, so real task mutations still change the hash.
+
+    ``exclude_runtime_paths`` entries are workspace-relative path prefixes (e.g.
+    ``".kilo/skills"``); both git and non-git workspaces honor them. The
+    exclusion is deliberately NOT a global ".kilo" rule: other project config
+    under the root ``.kilo`` directory, and nested ``.kilo`` content elsewhere,
+    are still hashed.
+    """
+    exclude = tuple(p for p in exclude_runtime_paths if p)
+    if os.path.isdir(os.path.join(path, ".git")):
+        return _generator_output_hash(path, exclude=exclude)
+    return committed_hash(path, exclude=exclude)
 
 
 def materialize_fixture_seed(fixture_dir: str, ftype: str,

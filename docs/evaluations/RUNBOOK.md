@@ -53,7 +53,12 @@ Three case tiers live in the repository:
   skill.
 - **`evaluations/holdout/<name>.json`** — holdout cases stored outside skill
   directories so ordinary edits do not consume them; used for generalization
-  testing.
+  testing. Run them with the same runner as confusion sets:
+  `python3 scripts/run_catalog_routing_eval.py --holdout
+  evaluations/holdout/<name>.json --out .eval-evidence/holdout-<name>.json`.
+  The runner records `evidence_type: "holdout"` (distinct from
+  `"confusion-set"`), and holdout results are written only to `--out` — they
+  never update development benchmark data.
 
 Each per-skill case declares `evaluation_modes`: a subset of
 `["routing", "execution"]`.
@@ -135,7 +140,11 @@ a harness-routing measurement. `scripts/run_catalog_routing_eval.py`:
 3. Call the model once (no harness, no tools, no repo) and capture the
    structured `{"selected_skill": ...}` decision.
 4. Compare against the expected skill, building a confusion matrix
-   (intended-vs-selected) and a per-skill precision/recall table.
+   (intended-vs-selected) and a per-skill precision/recall table — recorded in
+   the evidence's `aggregate` block. Counting rule: one observation per
+   successful model decision; workflow-transition turns each contribute one
+   observation; explicit null selections are the literal `"null"` class;
+   precision/recall are `null` (not 0) when the denominator is zero.
 5. Record the full matrix. A skill that routes correctly in isolation but is
    frequently confused with a neighbor by Layer A is a candidate for a
    description fix — but that fix is only validated by Layer C, not by Layer A
@@ -170,12 +179,10 @@ Goal: measure the skill's marginal value once it is legitimately active.
     `isolation-protocol.md` and `scripts/run_execution_eval.py`). For each
     repetition the runner derives **one pristine seed** from the fixture, then
     makes **one independent copy per condition** and verifies all copies
-    hash-identically *before* the run. The `target` worker receives the target
-    **guidance only** (`SKILL.md` + `references/`) mounted read-only at the
-    **neutral** path `/work/guidance/task`; the `baseline` worker mounts **no
-    guidance**; the `placebo` worker mounts **irrelevant** guidance at the same
-    neutral path. **Never mount the whole skill directory**: doing so leaks the
-    `evals/` fixture snapshot (including the expected output) into the worker.
+    hash-identically *before* the run — as TASK-state hashes that EXCLUDE the
+    evaluator runtime treatment paths (`.kilo/skills`), so the target/placebo
+    treatment trees cannot invalidate seed equality (full-filesystem hashes are
+    recorded separately).
      The task workspace is mounted once, read-write, at `/work/task` (the
      worker's cwd); it is a *separate* copy per condition, so no worker can
      mutate another's state.
@@ -183,19 +190,37 @@ Goal: measure the skill's marginal value once it is legitimately active.
        under a sanitized environment (`eval_hashing.run_generator`) and its source is
        then **stripped** from the seed the worker sees. The worker must never read
        the generator source / answer key.
-     - **Layer B activation uses Kilo's real skill-discovery mechanism.** Merely
-       mounting a `SKILL.md` at an arbitrary neutral path does not cause Kilo to
-       load the skill into the worker's context. The runner places the target
-       skill's `SKILL.md` and `references/` under `.kilo/skills/<name>/` inside
-       the worker's workspace, which is the path Kilo scans at session start to
-       discover project-level skills. The placebo receives the same treatment with
-       an irrelevant skill. The baseline receives no `.kilo/skills/` directory.
-       Activation is proven by two independent signals: (1) a filesystem boundary
-       probe confirms the guidance path is present/absent as expected, and (2) the
-       runner parses the Kilo JSONL output for `read` tool calls against the
-       `.kilo/skills/<name>/SKILL.md` path, recording `skill_loaded: true` and
-       the load events. The validator rejects evidence where the target skill was
-       not discovered or not loaded.
+     - **Layer B is a POST-ACTIVATION experiment.** It answers "once guidance is
+       active, does it improve task execution?" — it does NOT test whether Kilo's
+       router chooses to activate the guidance (that is routing: Layer A/C).
+       The evaluator therefore ACTIVATES the target and placebo guidance through
+       the SAME deterministic mechanism: the runner places the skill's `SKILL.md`
+       (+ `references/`) under `.kilo/skills/<name>/` inside the worker's
+       workspace (the path Kilo scans at session start to discover project-level
+       skills) and runs `kilo run --command "<skill>:skill"`, which resolves that
+       command and injects the skill body into the worker context at session
+       start. An unresolvable skill command makes `kilo run` exit non-zero
+       ("Command not found"). The runner additionally exports the completed
+       session inside the container and checks that the full body (after
+       frontmatter) is present in the serialized user-context message. A
+       successful command, hash-matched discovery probe, and
+       `skill_context_probe: present` together prove that the intended guidance
+       entered context.
+       The placebo receives the same treatment with an irrelevant skill; the
+       baseline receives no `.kilo/skills/` directory and no `--command`.
+       Activation is proven per condition by: (1) the recorded resolved
+       skill-command name, (2) an in-container boundary probe confirming the
+       discovery path `SKILL.md` is present AND content-hash-matched
+       (target/placebo) / the absence of any `.kilo/skills` tree (baseline),
+       (3) the frozen `skill_content_hash` of the discovery tree, (4) the
+       `skill_context_probe`, and (5) — when the model ALSO issues a native
+       `skill` tool call — the parsed `activation_events` (real completed
+       `tool_use` events with `part.tool == "skill"`, matching
+       `state.input.name`, and a `<skill_content>` result; not arbitrary file
+       reads). The validator rejects evidence where the target/placebo
+       guidance was not activated through this mechanism.
+       There is NO separate neutral guidance mount: an un-activated guidance
+       copy on disk would conflate "guidance active" with "guidance present".
   2. Use the free model through **anonymous Kilo Gateway access** (e.g.
     `kilo/tencent/hy3:free`); no API key or host auth is mounted into the
     container. `kilo run` inside the container needs `--auto` (permission
@@ -226,8 +251,8 @@ Goal: measure the skill's marginal value once it is legitimately active.
     id is produced, the repetition is marked `run_status="failed"` and the validator
     **rejects** the whole evidence file. A broken, contaminated, or failed run can
     never masquerade as trustworthy evidence. A boundary probe inside the container
-    confirms guidance presence (target/placebo) / absence (baseline) at the neutral
-    `/work/guidance/task/SKILL.md` path.
+    confirms the activation discovery path `SKILL.md` is present and hash-matched
+    (target/placebo) / that no `.kilo/skills` tree exists (baseline).
   5. **The natural task is byte-identical across all conditions.** The worker-visible
     prompt is the natural user request only — it must not name the skill, the
     condition, the case ID, or the evaluation. The runner records a
@@ -238,11 +263,14 @@ Goal: measure the skill's marginal value once it is legitimately active.
 
 **Placebo control is first-class.** For a strong efficacy claim, run three
 conditions: `target` (real guidance), `baseline` (no guidance), and `placebo`
-(irrelevant, similarly-sized guidance at the same neutral path). If target beats
-baseline but placebo also beats baseline, the benchmark may merely reward extra
-procedural prompting. Target guidance should outperform placebo on
-skill-specific assertions. The placebo is required for strong efficacy claims
-unless a documented reason makes it unnecessary.
+(irrelevant, similarly-sized guidance). The placebo is activated through the
+EXACT SAME mechanism as the target (`--command <placebo>:skill` over its own
+`.kilo/skills/<placebo>/` tree), so the comparison controls for "extra
+procedural guidance" without depending on the router choosing to load
+irrelevant guidance. If target beats baseline but placebo also beats baseline,
+the benchmark may merely reward extra procedural prompting. Target guidance
+should outperform placebo on skill-specific assertions. The placebo is required
+for strong efficacy claims unless a documented reason makes it unnecessary.
 
 ## 5. Isolation
 
@@ -494,14 +522,17 @@ For a protocol-valid run today:
    harness exposes selection evidence. Catalog accuracy never substitutes for a
    captured harness-selection log.
 3. **Execution cases:** fresh Docker containers from **independent seed copies** (one
-   per condition — `target` gets neutral-path guidance at `/work/guidance/task`,
-   `baseline` gets none, optional `placebo` gets irrelevant guidance at the same path),
+   per condition — `target` gets the target skill's `SKILL.md` at its Kilo
+   discovery location `.kilo/skills/<name>/` ACTIVATED via `kilo run --command
+   <name>:skill`, `baseline` gets none, optional `placebo` gets irrelevant
+   guidance activated through the same mechanism),
    anonymous free model, `--auto` so the worker executes, distinct container/session
    IDs, identical natural-task hash across conditions, and per-rep starting/ending
-   fixture hashes recorded.
+   TASK-state hashes (excluding `.kilo`) plus separate full-filesystem hashes
+   recorded.
 4. Neutral names; no condition labels visible to workers; run
    `scripts/docker_isolation_preflight.py` before scoring (must pass all boundary
-   checks, including the real `/work/guidance/task/SKILL.md` presence/absence probes).
+   checks, including the discovery-path presence/absence/hash probes).
 5. Fresh containers; equivalent settings; at least 3 repetitions for any confirmed
    efficacy claim.
  6. A repetition whose Docker/Kilo run failed is recorded `run_status="failed"` and

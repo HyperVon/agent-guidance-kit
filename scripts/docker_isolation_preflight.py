@@ -3,24 +3,26 @@
 
 Starts worker containers and asserts, from INSIDE the container, that:
 
-    baseline condition (no guidance mounted):
+    baseline condition (no guidance):
     * isolated HOME (/home/eval) with the deterministic eval git identity;
     * no ~/.ssh, no host ~/.gitconfig, no GH_TOKEN/GITHUB_TOKEN;
     * no host path leak (e.g. /Users/<user>);
     * no mounted Kilo auth store;
-    * guidance ABSENT at the neutral mount path /work/guidance/task/SKILL.md;
+    * no ``.kilo/skills`` discovery tree in the workspace (no treatment);
     * the mounted fixture actually arrived (/work/task/MARKER);
     * no sibling workspace leakage.
 
-  GUIDED condition (guidance mounted at the neutral /work/guidance/task):
-    * guidance PRESENT and readable at /work/guidance/task/SKILL.md;
+  GUIDED condition (skill placed at Kilo's project-level discovery location):
+    * ``.kilo/skills/<skill>/SKILL.md`` PRESENT and readable in the workspace;
     * its sha256 matches the evaluator-computed SKILL.md hash;
-    * references/ is available when the skill ships one;
+    * ``references/`` is available when the skill ships one;
     * the mounted fixture arrived (/work/task/MARKER).
 
-The neutral mount path deliberately does not encode the skill name, the
-condition, a case id, or the evaluation purpose — the worker-visible prompt is
-the natural task only.
+Layer B activates guidance through ``kilo run --command <skill>:skill``, which
+resolves against this discovery tree; mere file presence is NOT activation, but
+the tree must exist and be byte-identical to the frozen skill for the command
+to resolve. The baseline workspace must contain no evaluator-owned
+``.kilo/skills`` tree.
 
 This is the automated gate that must pass before any target/baseline execution
 run is trusted.
@@ -31,6 +33,7 @@ Usage:
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -41,9 +44,8 @@ from eval_hashing import source_hash_of
 
 SHARED_TMP = os.path.join(ROOT, ".docker-tmp")
 
-GUIDANCE_MOUNT = "/work/guidance/task/SKILL.md"
-GUIDANCE_DIR = "/work/guidance/task"
 FIXTURE_MOUNT = "/work/task"
+KILO_DISCOVERY_DIR = "/work/task/.kilo/skills"
 
 
 def probe_script(target_skill, expected_hash, guidance_present, refs_expected):
@@ -109,47 +111,50 @@ else
   check "no_sibling_leak" true
 fi
     """.replace("__FIXTURE_MOUNT__", FIXTURE_MOUNT) + (
-        # Target-only checks (guidance mounted)
+        # Guided-only checks (skill placed at the Kilo discovery location).
+        # Presence alone is NOT activation (activation happens via
+        # `kilo run --command <skill>:skill`), but the discovery tree must be
+        # present and byte-identical to the frozen skill for that command to
+        # resolve and inject the guidance.
         r"""
-GUIDANCE_PATH="__GUIDANCE_MOUNT__"
-if [ -e "$GUIDANCE_PATH" ]; then
-  check "guidance_present" true
-  if [ -r "$GUIDANCE_PATH" ]; then
-    check "guidance_readable" true
+SKILL_MD="__KILO_DISCOVERY_DIR__/__TARGET_SKILL__/SKILL.md"
+if [ -e "$SKILL_MD" ]; then
+  check "skill_discovery_present" true
+  if [ -r "$SKILL_MD" ]; then
+    check "skill_discovery_readable" true
   else
-    check "guidance_readable" false
+    check "skill_discovery_readable" false
   fi
-  ACTUAL=$(sha256sum "$GUIDANCE_PATH" | cut -d' ' -f1)
+  ACTUAL=$(sha256sum "$SKILL_MD" | cut -d' ' -f1)
   if [ "$ACTUAL" = "__EXPECTED_HASH__" ]; then
-    check "guidance_hash_match" true
+    check "skill_discovery_hash_match" true
   else
-    check "guidance_hash_match" false
+    check "skill_discovery_hash_match" false
   fi
-   if [ -d "__GUIDANCE_DIR__/references" ]; then
-     check "references_present_if_required" true
-   elif [ "__REFS_REQUIRED__" = "true" ]; then
-     check "references_present_if_required" false
-   else
-     check "references_present_if_required" true
-   fi
- else
-   check "guidance_present" false
-   check "guidance_readable" false
-   check "guidance_hash_match" false
- fi
-""".replace("__GUIDANCE_MOUNT__", GUIDANCE_MOUNT)
-   .replace("__GUIDANCE_DIR__", GUIDANCE_DIR)
+  if [ -d "__KILO_DISCOVERY_DIR__/__TARGET_SKILL__/references" ]; then
+    check "references_present_if_required" true
+  elif [ "__REFS_REQUIRED__" = "true" ]; then
+    check "references_present_if_required" false
+  else
+    check "references_present_if_required" true
+  fi
+else
+  check "skill_discovery_present" false
+  check "skill_discovery_readable" false
+  check "skill_discovery_hash_match" false
+fi
+""".replace("__KILO_DISCOVERY_DIR__", KILO_DISCOVERY_DIR)
    .replace("__EXPECTED_HASH__", expected_hash)
     .replace("__REFS_REQUIRED__", "true" if refs_expected else "false")
         if guidance_present else
-        # Baseline-only check
+        # Baseline-only check: no discovery tree may exist at all.
         r"""
-if [ -e "__GUIDANCE_MOUNT__" ]; then
+if [ -e "__KILO_DISCOVERY_DIR__" ]; then
   check "target_skill_absent" false
 else
   check "target_skill_absent" true
 fi
-""".replace("__GUIDANCE_MOUNT__", GUIDANCE_MOUNT)
+""".replace("__KILO_DISCOVERY_DIR__", KILO_DISCOVERY_DIR)
     ) + r"""
 echo "["
 sed -e '$!s/$/,/' "$report"
@@ -158,14 +163,12 @@ echo "]"
     return script.replace("__TARGET_SKILL__", target_skill)
 
 
-def run_probe(image, target_skill, guidance_dir, fixture_dir, expected_hash,
+def run_probe(image, target_skill, fixture_dir, expected_hash,
               guidance_present, refs_expected):
     script = probe_script(target_skill, expected_hash, guidance_present,
                           refs_expected)
     cmd = ["docker", "run", "--rm", "--entrypoint", "bash",
            "-v", f"{fixture_dir}:{FIXTURE_MOUNT}:ro"]
-    if guidance_dir:
-        cmd += ["-v", f"{guidance_dir}:{GUIDANCE_DIR}:ro"]
     cmd += [image, "-c", script]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
     out = proc.stdout
@@ -199,26 +202,27 @@ def main():
     expected_hash = source_hash_of(skill_md) if os.path.exists(skill_md) else ""
     has_refs = os.path.isdir(os.path.join(skill_dir, "references"))
 
-    # Baseline probe: fixture only, no guidance.
+    # Baseline probe: fixture only, no .kilo/skills tree.
     print("=== baseline probe (no guidance) ===")
-    base_report = run_probe(args.image, args.target_skill, None, fixture,
+    base_report = run_probe(args.image, args.target_skill, fixture,
                             expected_hash, guidance_present=False,
                             refs_expected=has_refs)
-    # Guided probe: fixture + guidance mounted at the NEUTRAL path
-    # (/work/guidance/task), staged as task/ exactly like the runner does.
-    print("=== GUIDED probe (guidance mounted) ===")
-    guidance_dir = None
+
+    # Guided probe: stage the skill at Kilo's project-level discovery location
+    # INSIDE the fixture (this is where the runner places it per condition).
+    # The runner also activates it via `kilo run --command <skill>:skill`;
+    # activation resolution is verified by the runner evidence, this probe
+    # verifies the discovery tree boundary.
+    print("=== GUIDED probe (skill at .kilo/skills/<name>/) ===")
     if os.path.exists(skill_md):
-        guidance_dir = tempfile.mkdtemp(prefix="kilo-guidance-", dir=SHARED_TMP)
-        import shutil
-        task = os.path.join(guidance_dir, "task")
-        os.makedirs(task)
-        shutil.copy(skill_md, os.path.join(task, "SKILL.md"))
+        discovery = os.path.join(fixture, ".kilo", "skills", args.target_skill)
+        os.makedirs(discovery, exist_ok=True)
+        shutil.copy(skill_md, os.path.join(discovery, "SKILL.md"))
         refs = os.path.join(skill_dir, "references")
         if has_refs:
-            shutil.copytree(refs, os.path.join(task, "references"))
-    target_report = run_probe(args.image, args.target_skill, guidance_dir,
-                              fixture, expected_hash, guidance_present=True,
+            shutil.copytree(refs, os.path.join(discovery, "references"))
+    target_report = run_probe(args.image, args.target_skill, fixture,
+                              expected_hash, guidance_present=True,
                               refs_expected=has_refs)
 
     failures = []
