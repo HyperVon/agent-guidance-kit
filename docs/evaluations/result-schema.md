@@ -30,6 +30,13 @@ provider, container runtime, or discovery directory. Use `method:
 adapter metadata. See [the adapter contract](harness-adapter.md) for the
 request/response boundary.
 
+Raw neutral evidence records the evaluator-owned runtime paths and, for every
+condition, a workspace receipt returned by the adapter. The receipt is read
+from a random file inside the requested workspace and checked against the
+evaluator's expected hash, so distinct worker/session IDs alone cannot prove
+workspace isolation. Guided conditions in a comparison must also report the
+same `activation_mechanism`.
+
 The following is a compact regression result shape. A qualification result uses
 `target`/`baseline` conditions; a smoke may use only `target`.
 

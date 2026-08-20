@@ -1500,9 +1500,18 @@ def validate_generic_execution_evidence(evidence):
         starts = []
         workers = []
         sessions = []
+        activation_mechanisms = []
         workspaces = (repetition.get("condition_workspace_ids") or {}).values()
         if len(set(workspaces)) != len(conditions):
             errs.append(f"{tag}: condition workspace ids are not distinct")
+        receipt_hashes = repetition.get("condition_workspace_receipt_hashes")
+        if (not isinstance(receipt_hashes, dict) or
+                set(receipt_hashes) != set(conditions)):
+            errs.append(f"{tag}: condition workspace receipt hashes are incomplete")
+            receipt_hashes = {}
+        if (repetition.get("workspace_receipt_path") !=
+                getattr(harness_runner, "WORKSPACE_RECEIPT_PATH", None)):
+            errs.append(f"{tag}: workspace receipt path is not the neutral receipt path")
         for name in conditions:
             cmeta = cmap.get(name) or {}
             ctag = f"{tag} {name}"
@@ -1512,9 +1521,13 @@ def validate_generic_execution_evidence(evidence):
                         "starting_task_hash", "ending_task_hash",
                         "starting_full_hash", "ending_full_hash",
                         "guidance_probe", "guidance_context_probe",
-                        "guidance_path", "guidance_content_hash"):
+                        "guidance_path", "guidance_content_hash",
+                        "workspace_receipt", "workspace_receipt_path",
+                        "workspace_receipt_hash"):
                 if key not in cmeta:
                     errs.append(f"{ctag}: missing {key}")
+            _validate_workspace_receipt(
+                cmeta, receipt_hashes.get(name), ctag, errs)
             if cmeta.get("run_status") != "success" or cmeta.get("returncode") != 0:
                 errs.append(f"{ctag}: failed condition is not evidence")
             if not (cmeta.get("output") or "").strip():
@@ -1554,6 +1567,8 @@ def validate_generic_execution_evidence(evidence):
                     errs.append(f"{ctag}: guidance path does not match the neutral runtime path")
                 if not isinstance(cmeta.get("activation_mechanism"), str) or not cmeta.get("activation_mechanism"):
                     errs.append(f"{ctag}: activation_mechanism is missing")
+                else:
+                    activation_mechanisms.append(cmeta["activation_mechanism"])
             else:
                 if cmeta.get("guidance_probe") not in {"absent", None}:
                     errs.append(f"{ctag}: baseline guidance probe must be absent")
@@ -1569,6 +1584,8 @@ def validate_generic_execution_evidence(evidence):
             errs.append(f"{tag}: conditions do not have distinct session_ids")
         if len(set(starts)) != 1:
             errs.append(f"{tag}: condition starting task hashes differ")
+        if len(set(activation_mechanisms)) > 1:
+            errs.append(f"{tag}: guided conditions use different activation_mechanisms")
     return errs
 
 
@@ -1633,6 +1650,24 @@ def _execution_source_anchor_generic(evidence, errs):
             "fixture": fixture, "expected_fixture_hash": expected,
             "evals_path": evals_path, "evals_rel": evals_rel,
             "fixture_rel": fixture_rel, "source_hash": source_hash}
+
+
+def _validate_workspace_receipt(cmeta, expected_hash, ctag, errs):
+    """Require the adapter to return the random receipt from this workspace."""
+
+    expected_path = (harness_runner.WORKSPACE_RECEIPT_PATH
+                     if harness_runner is not None else None)
+    if cmeta.get("workspace_receipt_path") != expected_path:
+        errs.append(f"{ctag}: workspace receipt path is not the neutral receipt path")
+    receipt = cmeta.get("workspace_receipt")
+    if not isinstance(receipt, str) or not receipt:
+        errs.append(f"{ctag}: adapter did not return a workspace receipt")
+        return
+    if cmeta.get("workspace_receipt_hash") != expected_hash:
+        errs.append(f"{ctag}: workspace receipt hash is not bound to its condition")
+    actual_hash = HASH_PREFIX + hashlib.sha256(receipt.encode()).hexdigest()
+    if actual_hash != expected_hash:
+        errs.append(f"{ctag}: workspace receipt does not match the evaluator receipt")
 
 
 def validate_execution_evidence(evidence):
@@ -2257,6 +2292,15 @@ def validate_generic_regression_evidence(evidence):
         workspace_ids = (repetition.get("condition_workspace_ids") or {}).values()
         if len(set(workspace_ids)) != 2:
             errs.append(f"{tag}: candidate/reference workspace ids are not distinct")
+        receipt_hashes = repetition.get("condition_workspace_receipt_hashes")
+        if (not isinstance(receipt_hashes, dict) or
+                set(receipt_hashes) != {"candidate", "reference"}):
+            errs.append(f"{tag}: condition workspace receipt hashes are incomplete")
+            receipt_hashes = {}
+        if (repetition.get("workspace_receipt_path") !=
+                getattr(harness_runner, "WORKSPACE_RECEIPT_PATH", None)):
+            errs.append(f"{tag}: workspace receipt path is not the neutral receipt path")
+        activation_mechanisms = []
         for name in ("candidate", "reference"):
             cmeta = cmap.get(name) or {}
             ctag = f"{tag} {name}"
@@ -2266,9 +2310,13 @@ def validate_generic_regression_evidence(evidence):
                         "starting_task_hash", "ending_task_hash",
                         "starting_full_hash", "ending_full_hash",
                         "guidance_probe", "guidance_context_probe",
-                        "guidance_path", "guidance_content_hash"):
+                        "guidance_path", "guidance_content_hash",
+                        "workspace_receipt", "workspace_receipt_path",
+                        "workspace_receipt_hash"):
                 if key not in cmeta:
                     errs.append(f"{ctag}: missing {key}")
+            _validate_workspace_receipt(
+                cmeta, receipt_hashes.get(name), ctag, errs)
             if cmeta.get("run_status") != "success" or cmeta.get("returncode") != 0:
                 errs.append(f"{ctag}: failed condition is not evidence")
             if not (cmeta.get("output") or "").strip():
@@ -2302,8 +2350,12 @@ def validate_generic_regression_evidence(evidence):
                 errs.append(f"{ctag}: guidance context probe did not confirm activation")
             if not isinstance(cmeta.get("activation_mechanism"), str) or not cmeta.get("activation_mechanism"):
                 errs.append(f"{ctag}: activation_mechanism must be recorded by the adapter")
+            else:
+                activation_mechanisms.append(cmeta["activation_mechanism"])
         if len(set(starts)) != 1:
             errs.append(f"{tag}: candidate/reference starting task hashes differ")
+        if len(set(activation_mechanisms)) > 1:
+            errs.append(f"{tag}: candidate/reference use different activation_mechanisms")
     return errs
 
 

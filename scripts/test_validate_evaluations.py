@@ -1000,6 +1000,8 @@ class HarnessAdapterTests(unittest.TestCase):
             "guidance_probe": "present",
             "guidance_context_probe": "present",
             "activation_mechanism": "adapter-defined",
+            "workspace_receipt_path": eha.WORKSPACE_RECEIPT_PATH,
+            "workspace_receipt": "receipt-token",
         }
         completed = subprocess.CompletedProcess(
             ["adapter"], 0, json.dumps(response), "")
@@ -1011,6 +1013,41 @@ class HarnessAdapterTests(unittest.TestCase):
         self.assertEqual(actual["guidance_context_probe"], "present")
         self.assertEqual(actual["adapter_metadata"]["protocol"],
                          eha.ADAPTER_PROTOCOL)
+
+    def test_command_adapter_timeout_normalizes_partial_bytes(self):
+        timeout = subprocess.TimeoutExpired(
+            ["adapter"], 1, output=b"partial output", stderr=b"partial error")
+        with unittest.mock.patch.object(eha.subprocess, "run",
+                                        side_effect=timeout):
+            actual = eha.CommandHarnessAdapter("adapter").run({})
+        self.assertEqual(actual["run_status"], "failed")
+        self.assertEqual(actual["stdout"], "partial output")
+        self.assertEqual(actual["stderr"], "partial error")
+        json.dumps(actual)
+
+    def test_neutral_harness_rejects_symlinked_inputs(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            outside = os.path.join(tmp, "outside.txt")
+            open(outside, "w").write("outside\n")
+            skill = os.path.join(tmp, "skill")
+            os.makedirs(os.path.join(skill, "references"))
+            open(os.path.join(skill, "SKILL.md"), "w").write("# guidance\n")
+            os.symlink(outside, os.path.join(skill, "references", "outside.md"))
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                eha.skill_tree_hash(skill)
+            workspace = os.path.join(tmp, "workspace")
+            os.makedirs(workspace)
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                eha.materialize_guidance(skill, workspace)
+
+            fixture = os.path.join(tmp, "fixture")
+            os.makedirs(fixture)
+            os.symlink(outside, os.path.join(fixture, "README.md"))
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                eha.copy_seed(fixture)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
     def test_neutral_runner_materializes_guidance_without_harness_path(self):
         tmp = tempfile.mkdtemp()
@@ -1025,6 +1062,9 @@ class HarnessAdapterTests(unittest.TestCase):
             class FakeAdapter:
                 def run(self, request):
                     guided = request["guidance"] is not None
+                    receipt = open(os.path.join(
+                        request["workspace"],
+                        request["workspace_receipt_path"]), encoding="utf-8").read()
                     return {
                         "run_status": "success",
                         "returncode": 0,
@@ -1034,6 +1074,8 @@ class HarnessAdapterTests(unittest.TestCase):
                         "guidance_probe": "present" if guided else "absent",
                         "guidance_context_probe": "present" if guided else "none",
                         "activation_mechanism": "fake-adapter" if guided else "none",
+                        "workspace_receipt_path": request["workspace_receipt_path"],
+                        "workspace_receipt": receipt,
                     }
 
             repetition, _, workspaces = eha.run_condition_repetition(
@@ -1042,6 +1084,19 @@ class HarnessAdapterTests(unittest.TestCase):
                  "baseline": None},
                 "test-model", FakeAdapter(), protocol="qualification", case_id=1)
             self.assertTrue(repetition["starting_task_hashes_match"])
+            self.assertEqual(
+                repetition["workspace_receipt_path"],
+                eha.WORKSPACE_RECEIPT_PATH)
+            for name, condition in repetition["conditions"].items():
+                self.assertEqual(condition["workspace_receipt_path"],
+                                 eha.WORKSPACE_RECEIPT_PATH)
+                self.assertEqual(
+                    condition["workspace_receipt_hash"],
+                    repetition["condition_workspace_receipt_hashes"][name])
+                self.assertEqual(
+                    condition["workspace_receipt_hash"],
+                    "sha256:" + hashlib.sha256(
+                        condition["workspace_receipt"].encode()).hexdigest())
             self.assertEqual(
                 repetition["conditions"]["target"]["guidance_path"],
                 eha.RUNTIME_TREATMENT_PATHS[0])
@@ -1078,6 +1133,9 @@ class HarnessAdapterTests(unittest.TestCase):
 
                 def run(self, request):
                     guidance = request["guidance"]
+                    receipt = open(os.path.join(
+                        request["workspace"],
+                        request["workspace_receipt_path"]), encoding="utf-8").read()
                     return {
                         "run_status": "success",
                         "returncode": 0,
@@ -1089,6 +1147,8 @@ class HarnessAdapterTests(unittest.TestCase):
                         "activation_mechanism": "fake-adapter",
                         "guidance_path": guidance["guidance_path"],
                         "guidance_content_hash": guidance["guidance_content_hash"],
+                        "workspace_receipt_path": request["workspace_receipt_path"],
+                        "workspace_receipt": receipt,
                     }
 
             args = argparse.Namespace(skill="code-review", case_id=5,
@@ -1103,7 +1163,7 @@ class HarnessAdapterTests(unittest.TestCase):
             if reference_root:
                 shutil.rmtree(reference_root, ignore_errors=True)
 
-    def test_neutral_regression_evidence_does_not_require_kilo_fields(self):
+    def _neutral_regression_evidence_fixture(self):
         skill = "code-review"
         evals_path = os.path.join(ROOT, "skills", skill, "evals", "evals.json")
         source = json.load(open(evals_path, encoding="utf-8"))
@@ -1124,6 +1184,7 @@ class HarnessAdapterTests(unittest.TestCase):
         repetition_id = "rep-neutral"
 
         def condition(name, worker, session, content_hash):
+            receipt = "receipt-" + name
             return {
                 "repetition_id": repetition_id,
                 "worker_id": worker,
@@ -1140,6 +1201,10 @@ class HarnessAdapterTests(unittest.TestCase):
                 "activation_mechanism": "adapter-defined",
                 "guidance_path": eha.RUNTIME_TREATMENT_PATHS[0],
                 "guidance_content_hash": content_hash,
+                "workspace_receipt_path": eha.WORKSPACE_RECEIPT_PATH,
+                "workspace_receipt": receipt,
+                "workspace_receipt_hash": "sha256:" + hashlib.sha256(
+                    receipt.encode()).hexdigest(),
             }
 
         evidence = {
@@ -1169,21 +1234,48 @@ class HarnessAdapterTests(unittest.TestCase):
                 "natural_task_hash": prompt_hash,
                 "natural_task_identical_across_conditions": True,
                 "condition_workspace_ids": {"candidate": "w1", "reference": "w2"},
+                "condition_workspace_receipt_hashes": {
+                    "candidate": "sha256:" + hashlib.sha256(
+                        b"receipt-candidate").hexdigest(),
+                    "reference": "sha256:" + hashlib.sha256(
+                        b"receipt-reference").hexdigest(),
+                },
+                "workspace_receipt_path": eha.WORKSPACE_RECEIPT_PATH,
                 "conditions": {
                     "candidate": condition("candidate", "w1", "s1", candidate_hash),
                     "reference": condition("reference", "w2", "s2", reference_hash),
                 },
             }],
         }
+        return evidence
+
+    def test_neutral_regression_evidence_does_not_require_kilo_fields(self):
+        evidence = self._neutral_regression_evidence_fixture()
         self.assertEqual(ve.validate_generic_regression_evidence(evidence), [])
         evidence["candidate_skill_content_hash"] = "sha256:" + "0" * 64
         errors = ve.validate_generic_regression_evidence(evidence)
         self.assertTrue(any("materialized Git revision" in error for error in errors), errors)
-        evidence["candidate_skill_content_hash"] = candidate_hash
+        evidence["candidate_skill_content_hash"] = evidence["reference_skill_content_hash"]
         evidence["repetitions"][0]["conditions"]["candidate"][
             "guidance_context_probe"] = "absent"
         self.assertTrue(any("context probe" in error
                             for error in ve.validate_generic_regression_evidence(evidence)))
+
+    def test_neutral_regression_requires_bound_workspace_receipts(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        evidence["repetitions"][0]["conditions"]["reference"][
+            "workspace_receipt"] = "receipt-candidate"
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("workspace receipt does not match" in error
+                            for error in errors), errors)
+
+    def test_neutral_regression_requires_one_activation_mechanism(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        evidence["repetitions"][0]["conditions"]["reference"][
+            "activation_mechanism"] = "different-adapter"
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("different activation_mechanisms" in error
+                            for error in errors), errors)
 
     def test_neutral_regression_rejects_unanchored_metadata(self):
         skill = "code-review"

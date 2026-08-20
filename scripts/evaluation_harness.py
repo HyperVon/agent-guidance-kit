@@ -29,7 +29,9 @@ from eval_hashing import HASH_PREFIX, hash_task_workspace, hash_workspace
 
 
 ADAPTER_PROTOCOL = "agent-guidance-kit.harness-adapter/v1"
-RUNTIME_TREATMENT_PATHS = (".evaluation-runtime/guidance",)
+WORKSPACE_RECEIPT_PATH = ".evaluation-runtime/workspace-receipt"
+RUNTIME_TREATMENT_PATHS = (".evaluation-runtime/guidance",
+                           WORKSPACE_RECEIPT_PATH)
 DEFAULT_TIMEOUT_SECONDS = 1200
 
 
@@ -46,11 +48,26 @@ def make_temp_dir(prefix: str) -> str:
     return path
 
 
+def _reject_symlinks(root: str, label: str) -> None:
+    """Reject symlinks before a worker-visible tree is copied or hashed."""
+
+    if os.path.islink(root):
+        raise ValueError(f"{label} must not be a symlink: {root}")
+    for current, directories, files in os.walk(root, followlinks=False):
+        for name in [*directories, *files]:
+            path = os.path.join(current, name)
+            if os.path.islink(path):
+                relative = os.path.relpath(path, root)
+                raise ValueError(
+                    f"{label} must not contain symlinks: {relative}")
+
+
 def copy_seed(source: str) -> str:
     """Copy a pristine fixture to an independent writable condition workspace."""
 
+    _reject_symlinks(source, "fixture seed")
     destination = make_temp_dir("harness-workspace-")
-    shutil.copytree(source, destination, symlinks=True, dirs_exist_ok=True)
+    shutil.copytree(source, destination, dirs_exist_ok=True)
     for root, directories, files in os.walk(destination, followlinks=False):
         for name in [*directories, *files]:
             path = os.path.join(root, name)
@@ -71,6 +88,7 @@ def skill_tree_hash(skill_dir: str) -> str | None:
 
     if not os.path.isdir(skill_dir):
         return None
+    _reject_symlinks(skill_dir, "skill guidance source")
     skill_md = os.path.join(skill_dir, "SKILL.md")
     if not os.path.isfile(skill_md):
         return None
@@ -80,12 +98,12 @@ def skill_tree_hash(skill_dir: str) -> str | None:
         for root, _, names in os.walk(references):
             for name in names:
                 path = os.path.join(root, name)
-                if not os.path.islink(path):
-                    relative_paths.append(os.path.relpath(path, skill_dir))
+                relative_paths.append(os.path.relpath(path, skill_dir))
     digest = hashlib.sha256()
     for relative in sorted(relative_paths):
         path = os.path.join(skill_dir, relative)
-        content_hash = hashlib.sha256(open(path, "rb").read()).hexdigest()
+        with open(path, "rb") as handle:
+            content_hash = hashlib.sha256(handle.read()).hexdigest()
         digest.update(f"{relative}:{content_hash}\n".encode())
     return HASH_PREFIX + digest.hexdigest()
 
@@ -97,6 +115,7 @@ def materialize_guidance(source_skill_dir: str, workspace: str) -> str:
     mechanism.  The path intentionally has no harness-specific meaning.
     """
 
+    _reject_symlinks(source_skill_dir, "skill guidance source")
     destination = os.path.join(workspace, RUNTIME_TREATMENT_PATHS[0])
     os.makedirs(destination, exist_ok=True)
     skill_md = os.path.join(source_skill_dir, "SKILL.md")
@@ -108,6 +127,22 @@ def materialize_guidance(source_skill_dir: str, workspace: str) -> str:
         shutil.copytree(references, os.path.join(destination, "references"),
                         dirs_exist_ok=True)
     return destination
+
+
+def _write_workspace_receipt(workspace: str) -> dict[str, str]:
+    """Create a random receipt that only the requested workspace can provide."""
+
+    path = os.path.join(workspace, WORKSPACE_RECEIPT_PATH)
+    if os.path.lexists(path):
+        raise ValueError(f"workspace receipt path already exists: {path}")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    token = uuid.uuid4().hex
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(token)
+    return {
+        "path": WORKSPACE_RECEIPT_PATH,
+        "hash": HASH_PREFIX + hashlib.sha256(token.encode()).hexdigest(),
+    }
 
 
 def snapshot_workspace(workspace: str) -> dict:
@@ -151,12 +186,24 @@ def snapshot_workspace(workspace: str) -> dict:
     return {"vcs": "files", "listing": files}
 
 
+def _as_text(value) -> str:
+    """Normalize subprocess streams, including partial timeout byte output."""
+
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    if isinstance(value, str):
+        return value
+    return str(value)
+
+
 def _failure(returncode: int | None, reason: str, *, stdout: str = "",
              stderr: str = "") -> dict:
     return {
         "returncode": returncode,
-        "stdout": stdout,
-        "stderr": stderr,
+        "stdout": _as_text(stdout),
+        "stderr": _as_text(stderr),
         "output": "",
         "worker_id": None,
         "container_id": None,
@@ -172,9 +219,10 @@ class CommandHarnessAdapter:
 
     Request input is one JSON object.  The adapter must return one JSON object
     with at least ``run_status``, ``session_id``, ``worker_id`` (or
-    ``container_id``), ``returncode``, ``output``, ``guidance_probe``, and
-    ``guidance_context_probe``.  Extra harness-specific metadata is preserved
-    under ``adapter_metadata`` and never interpreted by the protocol validator.
+    ``container_id``), ``returncode``, ``output``, ``guidance_probe``,
+    ``guidance_context_probe``, ``workspace_receipt_path``, and
+    ``workspace_receipt``.  Extra harness-specific metadata is preserved under
+    ``adapter_metadata`` and never interpreted by the protocol validator.
     """
 
     def __init__(self, command: str | list[str], *, name: str = "external",
@@ -205,12 +253,13 @@ class CommandHarnessAdapter:
             )
         except subprocess.TimeoutExpired as exc:
             return _failure(None, "harness adapter timed out",
-                            stdout=exc.stdout or "", stderr=exc.stderr or "")
+                            stdout=exc.stdout or exc.output or "",
+                            stderr=exc.stderr or "")
         except OSError as exc:
             return _failure(None, f"harness adapter invocation failed: {exc}")
 
-        stdout = process.stdout or ""
-        stderr = process.stderr or ""
+        stdout = _as_text(process.stdout)
+        stderr = _as_text(process.stderr)
         if process.returncode != 0:
             return _failure(process.returncode, "harness adapter exited non-zero",
                             stdout=stdout, stderr=stderr)
@@ -226,13 +275,14 @@ class CommandHarnessAdapter:
                             stdout=stdout, stderr=stderr)
 
         normalized = dict(response)
-        normalized["stdout"] = normalized.get("stdout", stdout)
-        normalized["stderr"] = normalized.get("stderr", stderr)
+        normalized["stdout"] = _as_text(normalized.get("stdout", stdout))
+        normalized["stderr"] = _as_text(normalized.get("stderr", stderr))
         normalized["returncode"] = normalized.get("returncode", process.returncode)
         normalized["run_status"] = normalized.get(
             "run_status", normalized.get("status"))
         normalized["status"] = normalized["run_status"]
-        normalized["output"] = normalized.get("output", normalized.get("text", ""))
+        normalized["output"] = _as_text(
+            normalized.get("output", normalized.get("text", "")))
         normalized["worker_id"] = normalized.get(
             "worker_id", normalized.get("container_id"))
         normalized["guidance_probe"] = normalized.get(
@@ -270,6 +320,9 @@ def run_condition_repetition(
             f"pristine seed contains evaluator runtime treatment paths: {collisions}")
 
     workspaces = {name: copy_seed(seed_dir) for name in conditions}
+    workspace_receipts = {
+        name: _write_workspace_receipt(workspaces[name]) for name in conditions
+    }
     guidance = {}
     for name in conditions:
         spec = activation_specs.get(name)
@@ -301,6 +354,7 @@ def run_condition_repetition(
             "natural_task": natural_task,
             "natural_task_hash": hashlib.sha256(natural_task.encode()).hexdigest(),
             "workspace": workspaces[name],
+            "workspace_receipt_path": WORKSPACE_RECEIPT_PATH,
             "model": model,
             "guidance": guidance.get(name),
         }
@@ -330,6 +384,9 @@ def run_condition_repetition(
             "guidance_content_hash": (meta.get("guidance_content_hash") or
                                        (guidance.get(name) or {}).get(
                                            "guidance_content_hash")),
+            "workspace_receipt": meta.get("workspace_receipt"),
+            "workspace_receipt_path": meta.get("workspace_receipt_path"),
+            "workspace_receipt_hash": workspace_receipts[name]["hash"],
             "filesystem_snapshot_before": snapshot_before,
             "filesystem_snapshot_after": snapshot_after,
         })
@@ -344,6 +401,9 @@ def run_condition_repetition(
         "natural_task_identical_across_conditions": True,
         "condition_workspace_ids": {
             name: os.path.basename(workspaces[name]) for name in conditions},
+        "condition_workspace_receipt_hashes": {
+            name: workspace_receipts[name]["hash"] for name in conditions},
+        "workspace_receipt_path": WORKSPACE_RECEIPT_PATH,
         "conditions": condition_evidence,
         "distinct_workers": len({condition_evidence[name].get("worker_id")
                                   for name in conditions}) == len(conditions),

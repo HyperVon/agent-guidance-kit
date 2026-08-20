@@ -224,8 +224,9 @@ The default implementation is the JSON harness adapter described in
 smoke, qualification, or explicitly requested confirmation. The evaluator
 creates independent condition workspaces and verifies task hashes; the adapter
 starts the worker, activates guidance through the harness's normal mechanism,
-and returns `worker_id`, `session_id`, `guidance_probe`, and
-`guidance_context_probe`. A local adapter without OS containment is
+and returns `worker_id`, `session_id`, `guidance_probe`,
+`guidance_context_probe`, and the workspace receipt read from the requested
+workspace. A local adapter without OS containment is
 `protocol_status: limited`; only an adapter that proves an OS-level boundary
 may claim `valid`.
 
