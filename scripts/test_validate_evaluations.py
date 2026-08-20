@@ -740,6 +740,14 @@ class CatalogRoutingDecisionTests(unittest.TestCase):
                 self.assertEqual(r["status"], "failed")
                 self.assertIn("not in supplied catalog", r["error"])
 
+    def test_non_string_selected_skill_is_rejected(self):
+        for value in ([], {}):
+            with self.subTest(value=value):
+                raw = json.dumps({"selected_skill": value, "action": "clarify"})
+                r = rc.extract_decision(raw, self._cat(["code-review"]))
+                self.assertEqual(r["status"], "failed")
+                self.assertIn("string or null", r["error"])
+
     def test_null_apply_rejected(self):
         r = rc.extract_decision('{"selected_skill": null, "action": "apply"}',
                                 self._cat(["code-review"]))
@@ -862,6 +870,34 @@ class GeneratorHashSemanticsTests(unittest.TestCase):
             self.assertNotEqual(h1, eh.hash_workspace(root))
             self._git(origin, "update-ref", "refs/heads/feature", feature_sha)
             self._git(origin, "symbolic-ref", "HEAD", "refs/heads/feature")
+            self.assertNotEqual(h1, eh.hash_workspace(root))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_detached_bare_remote_head_target_changes_hash(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            root, origin, main_sha, feature_sha = self._git_fixture(tmp)
+            h1 = eh.hash_workspace(root)
+            self._git(origin, "update-ref", "--no-deref", "HEAD", feature_sha)
+            h2 = eh.hash_workspace(root)
+            self.assertNotEqual(h1, h2)
+            self._git(origin, "update-ref", "--no-deref", "HEAD", main_sha)
+            self.assertNotEqual(h2, eh.hash_workspace(root))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_configured_bare_remote_name_is_discovered(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            root, origin, main_sha, _feature_sha = self._git_fixture(tmp)
+            named_origin = os.path.join(root, "origin")
+            os.rename(origin, named_origin)
+            self._git(root, "remote", "set-url", "origin", "./origin")
+            h1 = eh.hash_workspace(root)
+            self._git(named_origin, "config", "core.precomposeUnicode", "true")
+            self.assertEqual(h1, eh.hash_workspace(root))
+            self._git(named_origin, "update-ref", "refs/heads/feature", main_sha)
             self.assertNotEqual(h1, eh.hash_workspace(root))
         finally:
             shutil.rmtree(tmp, ignore_errors=True)

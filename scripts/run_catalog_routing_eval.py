@@ -200,6 +200,10 @@ def extract_decision(text, catalog_names=None):
     if action not in ("apply", "clarify"):
         return {"status": "failed",
                 "error": f"invalid action {action!r}", "decision": None}
+    if sel is not None and not isinstance(sel, str):
+        return {"status": "failed",
+                "error": "selected_skill must be a string or null",
+                "decision": None}
     # The selected skill must be one of the skills actually presented in the
     # catalog for this condition (a target-absent catalog omits the target).
     if sel is not None and catalog_names is not None and sel not in catalog_names:

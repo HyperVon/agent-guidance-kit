@@ -112,18 +112,29 @@ def _normalize_fixture_remote_url(url, workspace):
     if not raw:
         return raw
 
+    local_path = _fixture_local_remote_path(raw, workspace)
+    if local_path is None:
+        return raw
+    relative = os.path.relpath(
+        local_path, os.path.realpath(workspace),
+    ).replace(os.sep, "/")
+    return "fixture://" + relative
+
+
+def _fixture_local_remote_path(raw, workspace):
+    """Resolve a local remote URL only when it stays inside the fixture."""
     is_windows_path = len(raw) > 1 and raw[1] == ":" and raw[0].isalpha()
     parsed = urlsplit("") if is_windows_path else urlsplit(raw)
     if parsed.scheme and parsed.scheme != "file":
-        return raw
+        return None
     if parsed.scheme == "file":
         if parsed.netloc not in ("", "localhost"):
-            return raw
+            return None
         candidate = unquote(parsed.path)
     else:
         # Preserve scp-style external URLs such as git@github.com:org/repo.git.
         if "@" in raw and ":" in raw and not os.path.isabs(raw):
-            return raw
+            return None
         candidate = raw
 
     if os.path.isabs(candidate):
@@ -133,11 +144,10 @@ def _normalize_fixture_remote_url(url, workspace):
     workspace_abs = os.path.realpath(workspace)
     try:
         if os.path.commonpath((absolute, workspace_abs)) != workspace_abs:
-            return raw
+            return None
     except ValueError:
-        return raw
-    relative = os.path.relpath(absolute, workspace_abs).replace(os.sep, "/")
-    return "fixture://" + relative
+        return None
+    return absolute
 
 
 def _bare_repo_semantic_manifest(path, workspace):
@@ -146,6 +156,11 @@ def _bare_repo_semantic_manifest(path, workspace):
         return None
     relative = _normalized_relpath(path, workspace)
     head = _git_output(["symbolic-ref", "--quiet", "HEAD"], git_dir=path)
+    head_lines = ["HEAD=" + head] if head else ["HEAD=(detached)"]
+    if head is None:
+        head_object = _git_output(["rev-parse", "--verify", "HEAD"],
+                                  git_dir=path)
+        head_lines.append("HEAD_OBJECT=" + (head_object or "(unborn)"))
     refs = _git_output(
         ["for-each-ref", "--format=%(refname) %(objectname)"], git_dir=path,
     )
@@ -153,7 +168,7 @@ def _bare_repo_semantic_manifest(path, workspace):
                        if line.strip())
     return "\n".join([
         "BARE_REMOTE:" + relative,
-        "HEAD=" + (head or "(detached)"),
+        *head_lines,
         "REFS:",
         *ref_lines,
     ])
@@ -163,14 +178,31 @@ def _discover_bare_repositories(workspace):
     """Find fixture-local bare repositories without traversing their internals."""
     workspace = os.path.realpath(workspace)
     working_git = os.path.realpath(os.path.join(workspace, ".git"))
+    configured = set()
+    remotes = _git_output(
+        ["config", "--local", "--get-regexp", r"^remote\..+\.url$"],
+        cwd=workspace,
+    )
+    for line in (remotes or "").splitlines():
+        parts = line.split(None, 1)
+        if len(parts) == 2:
+            local_path = _fixture_local_remote_path(parts[1], workspace)
+            if local_path is not None:
+                configured.add(os.path.realpath(local_path))
     found = []
     for root, dirs, _ in os.walk(workspace, topdown=True):
         kept = []
         for name in dirs:
             candidate = os.path.join(root, name)
-            if os.path.realpath(candidate) == working_git:
+            candidate_real = os.path.realpath(candidate)
+            if candidate_real == working_git:
                 continue
-            if name != ".origin.git" and not name.endswith(".git"):
+            is_bare_candidate = (
+                candidate_real in configured
+                or name == ".origin.git"
+                or name.endswith(".git")
+            )
+            if not is_bare_candidate:
                 kept.append(name)
                 continue
             if _bare_repo_semantic_manifest(candidate, workspace) is None:
