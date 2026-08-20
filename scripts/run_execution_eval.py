@@ -139,6 +139,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -461,6 +462,21 @@ def _snapshot(workspace):
 def _copy_seed(src):
     dst = _mkdtemp(prefix="kilo-workspace-")
     shutil.copytree(src, dst, symlinks=True, dirs_exist_ok=True)
+    # The bind mount hides the image's /work/task ownership. Make only this
+    # disposable worker copy writable so the non-root container user can apply
+    # task changes; the canonical fixture and source skill remain untouched.
+    for root, dirs, files in os.walk(dst, followlinks=False):
+        for name in [*dirs, *files]:
+            path = os.path.join(root, name)
+            if os.path.islink(path):
+                continue
+            try:
+                mode = os.stat(path, follow_symlinks=False).st_mode
+                os.chmod(path, mode | stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH)
+            except OSError:
+                pass
+    os.chmod(dst, os.stat(dst).st_mode |
+             stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH)
     return dst
 
 

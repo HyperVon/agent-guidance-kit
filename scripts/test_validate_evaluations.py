@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -1920,6 +1921,24 @@ class ExecutionRunnerBoundaryTests(unittest.TestCase):
             ree.validate_materialized_seed_hash(
                 "sha256:actual", "sha256:frozen")
         ree.validate_materialized_seed_hash("sha256:frozen", "sha256:frozen")
+
+    def test_worker_seed_copy_is_writable_through_bind_mount(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            source = os.path.join(tmp, "source")
+            os.makedirs(source)
+            source_file = os.path.join(source, "README.md")
+            open(source_file, "w").write("# task\n")
+            os.chmod(source_file, 0o444)
+            worker = ree._copy_seed(source)
+            worker_file = os.path.join(worker, "README.md")
+            self.assertEqual(os.stat(worker_file).st_mode & stat.S_IWOTH,
+                             stat.S_IWOTH)
+            self.assertEqual(os.stat(worker).st_mode & stat.S_IWOTH,
+                             stat.S_IWOTH)
+        finally:
+            shutil.rmtree(ree.SHARED_TMP, ignore_errors=True)
+            shutil.rmtree(tmp, ignore_errors=True)
 
     def test_runner_refuses_command_placeholders_before_worker(self):
         tmp = tempfile.mkdtemp()
