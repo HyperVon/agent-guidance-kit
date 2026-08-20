@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -27,7 +28,8 @@ from eval_hashing import (HASH_PREFIX, canonical_hash, source_hash_of,
 from evaluation_protocols import (ALLOWED_ASSERTION_SCOPES, PROTOCOL_NAMES,
                                   REGRESSION_STATUSES, get_protocol,
                                   is_safe_skill_name, legacy_protocol_name,
-                                  protocol_name, validate_declaration)
+                                  protocol_name, resolve_path_within,
+                                  validate_declaration)
 
 try:
     import run_execution_eval as execution_runner
@@ -41,6 +43,10 @@ try:
     import run_catalog_routing_eval as catalog_runner
 except ImportError:  # pragma: no cover - direct library import fallback
     catalog_runner = None
+try:
+    import run_skill_regression_eval as regression_runner
+except ImportError:  # pragma: no cover - direct library import fallback
+    regression_runner = None
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EVALS_DIR = os.path.join(ROOT, "docs", "evaluations")
@@ -65,6 +71,20 @@ def _git_commit_exists(value):
     except (OSError, subprocess.CalledProcessError):
         return False
     return True
+
+
+def _skill_hash_at_revision(revision, skill):
+    """Materialize one revision's skill tree and return its guidance hash."""
+
+    if regression_runner is None or harness_runner is None:
+        raise ValueError("Git regression hashing helpers are unavailable")
+    root, _resolved = regression_runner.materialize_skill_revision(
+        revision, skill)
+    try:
+        return harness_runner.skill_tree_hash(
+            os.path.join(root, "skills", skill))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
 
 # Case classification: the design intent of a case, independent of its
 # ``kind``. ``smoke`` cases are obvious sanity checks (keep them cheap, do not
@@ -387,7 +407,11 @@ def check_fixture(f, rel, c, tag):
     if not p:
         err(f"{tag}: ready fixture missing path")
         return
-    fpath = os.path.join(os.path.dirname(os.path.dirname(f)), p)
+    skill_root = os.path.dirname(os.path.dirname(f))
+    fpath = resolve_path_within(skill_root, p)
+    if fpath is None:
+        err(f"{tag}: fixture path must remain under the skill directory: {p}")
+        return
     if not os.path.exists(fpath):
         err(f"{tag}: fixture path missing: {p}")
         return
@@ -400,7 +424,10 @@ def check_fixture(f, rel, c, tag):
         return
     if ftype == "generator":
         src = fx.get("source", "setup.sh")
-        src_path = os.path.join(fpath, src)
+        src_path = resolve_path_within(fpath, src)
+        if src_path is None:
+            err(f"{tag}: generator source path must remain under the fixture: {src}")
+            return
         if not fx.get("source_hash", "").startswith(HASH_PREFIX):
             err(f"{tag}: generator missing source_hash")
         if not fx.get("output_hash", "").startswith(HASH_PREFIX):
@@ -1207,6 +1234,14 @@ def check_exec_result_case(base, cs, skill, case_index, cid, *, strict=False,
         fa_text = _assertion_text(fa)
         if fa_text not in graded_texts:
             err(f"{base} case {cid}: frozen assertion missing from graded result: {str(fa_text)[:60]}")
+    if strict and frozen:
+        seen_graded = set()
+        for graded_text in graded_texts:
+            if graded_text in seen_graded:
+                err(f"{base} case {cid}: duplicate assertion in graded result: {str(graded_text)[:60]}")
+            seen_graded.add(graded_text)
+            if graded_text not in frozen_by_text:
+                err(f"{base} case {cid}: assertion is not declared by the authoritative case: {str(graded_text)[:60]}")
     condition_names = tuple(required_conditions)
     scored_assertions = []
     for a in assertions:
@@ -2163,6 +2198,22 @@ def validate_generic_regression_evidence(evidence):
     for key in ("candidate_revision", "reference_revision"):
         if not _git_commit_exists(evidence.get(key)):
             errs.append(f"regression evidence {key} must be an existing Git commit SHA")
+    revision_hashes = {}
+    for revision_key, hash_key in (
+            ("candidate_revision", "candidate_skill_content_hash"),
+            ("reference_revision", "reference_skill_content_hash")):
+        revision = evidence.get(revision_key)
+        if not _git_commit_exists(revision):
+            continue
+        if revision not in revision_hashes:
+            try:
+                revision_hashes[revision] = _skill_hash_at_revision(
+                    revision, skill)
+            except Exception as exc:  # fail closed with anchored evidence error
+                errs.append(f"regression evidence {revision_key} could not hash the Git revision: {exc}")
+                revision_hashes[revision] = None
+        if revision_hashes[revision] != evidence.get(hash_key):
+            errs.append(f"regression evidence {hash_key} does not match the materialized Git revision")
     conditions = evidence.get("conditions")
     if conditions != ["candidate", "reference"]:
         errs.append("regression evidence conditions must be ['candidate', 'reference']")

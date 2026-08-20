@@ -898,6 +898,18 @@ class ResultFailureTests(unittest.TestCase):
         ve.check_one_result("r.md", res, {"code-review"}, case_index)
         self.assertEqual(ve.errors, [], ve.errors)
 
+        res["cases"][0]["assertions"].append({
+            "assertion": "invented shared assertion",
+            "scope": "shared-outcome",
+            "target": {"pass": True, "evidence": "invented target evidence"},
+            "baseline": {"pass": False, "evidence": "invented baseline evidence"},
+        })
+        reset()
+        ve.check_one_result("r.md", res, {"code-review"}, case_index)
+        self.assertTrue(any("not declared by the authoritative case" in e
+                            for e in ve.errors), ve.errors)
+        res["cases"][0]["assertions"].pop()
+
         # A dishonest result that lets the contract-only failure make the
         # baseline lose must be rejected by the validator.
         res["cases"][0]["outcome"] = {
@@ -1105,8 +1117,9 @@ class HarnessAdapterTests(unittest.TestCase):
         source_hash = "sha256:" + hashlib.sha256(
             open(evals_path, "rb").read()).hexdigest()
         prompt_hash = hashlib.sha256(case["prompt"].encode()).hexdigest()
-        candidate_hash = "sha256:" + "1" * 64
-        reference_hash = "sha256:" + "2" * 64
+        candidate_hash = eha.skill_tree_hash(
+            os.path.join(ROOT, "skills", skill))
+        reference_hash = candidate_hash
         resolved_revision = rsre.resolve_revision("HEAD")
         repetition_id = "rep-neutral"
 
@@ -1163,6 +1176,10 @@ class HarnessAdapterTests(unittest.TestCase):
             }],
         }
         self.assertEqual(ve.validate_generic_regression_evidence(evidence), [])
+        evidence["candidate_skill_content_hash"] = "sha256:" + "0" * 64
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("materialized Git revision" in error for error in errors), errors)
+        evidence["candidate_skill_content_hash"] = candidate_hash
         evidence["repetitions"][0]["conditions"]["candidate"][
             "guidance_context_probe"] = "absent"
         self.assertTrue(any("context probe" in error
@@ -1739,7 +1756,9 @@ class GeneratorTests(unittest.TestCase):
         # Item 4: a changed generator source without an updated source_hash fails.
         tmp = tempfile.mkdtemp()
         try:
-            fxdir = os.path.join(tmp, "files")
+            skill_root = os.path.join(tmp, "skill")
+            fxdir = os.path.join(skill_root, "files")
+            os.makedirs(os.path.join(skill_root, "evals"))
             os.makedirs(fxdir)
             open(os.path.join(fxdir, "setup.sh"), "w").write(
                 "#!/usr/bin/env bash\nset -e\necho hi > a.txt\n")
@@ -1748,10 +1767,28 @@ class GeneratorTests(unittest.TestCase):
                   "output_hash": "sha256:" + "0" * 64,
                   "content_hash": "sha256:" + "0" * 64}
             c = {"id": 1, "evaluation_modes": ["routing"], "fixture": fx}
-            ve.check_fixture("x/evals.json", "x/evals.json", c, "x case 1")
+            fx["path"] = "files"
+            ve.check_fixture(os.path.join(skill_root, "evals", "evals.json"),
+                             "skill/evals/evals.json", c, "x case 1")
             self.assertTrue(any("source_hash mismatch" in e for e in ve.errors))
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_fixture_path_cannot_escape_skill_root(self):
+        fx = {
+            "status": "ready",
+            "type": "committed",
+            "path": "../../outside-fixture",
+            "content_hash": "sha256:" + "0" * 64,
+        }
+        ve.check_fixture(
+            os.path.join(ROOT, "skills", "code-review", "evals", "evals.json"),
+            "skills/code-review/evals/evals.json",
+            {"id": 1, "evaluation_modes": ["execution"], "fixture": fx},
+            "code-review case 1",
+        )
+        self.assertTrue(any("must remain under the skill directory" in error
+                            for error in ve.errors), ve.errors)
 
     def test_generator_git_hash_includes_untracked(self):
         # Item 3: the content hash must cover the full working tree (untracked files
@@ -1792,17 +1829,21 @@ class GeneratorTests(unittest.TestCase):
     def test_catalog_md_leak_in_fixture(self):
         tmp = tempfile.mkdtemp()
         try:
-            os.makedirs(os.path.join(tmp, "files"))
-            open(os.path.join(tmp, "files", "catalog.md"), "w").write("leak")
-            open(os.path.join(tmp, "files", "x.txt"), "w").write("ok")
+            skill_root = os.path.join(tmp, "skill")
+            files = os.path.join(skill_root, "files")
+            os.makedirs(os.path.join(skill_root, "evals"))
+            os.makedirs(files)
+            open(os.path.join(files, "catalog.md"), "w").write("leak")
+            open(os.path.join(files, "x.txt"), "w").write("ok")
             c = base_case(1, "matching", ["routing", "execution"],
                           routing_context=routing_ctx(),
                           routing=routing_exp(),
                           execution=exec_exp(),
                           fixture={"status": "ready", "type": "committed",
-                                   "path": os.path.join(tmp, "files"),
+                                   "path": "files",
                                    "content_hash": "sha256:" + "0" * 64})
-            ve.check_case(fake_path(), "x/evals.json", c)
+            ve.check_case(os.path.join(skill_root, "evals", "evals.json"),
+                          "skill/evals/evals.json", c)
             self.assertTrue(any("catalog.md" in e for e in ve.errors))
         finally:
             shutil.rmtree(tmp, ignore_errors=True)

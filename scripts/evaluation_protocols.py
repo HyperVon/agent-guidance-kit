@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import ntpath
+import os
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,24 @@ def is_safe_skill_name(value: object) -> bool:
         and "\\" not in value
         and not ntpath.splitdrive(value)[0]
     )
+
+
+def resolve_path_within(root: str, relative: object) -> str | None:
+    """Resolve a path only when it remains under the supplied root."""
+
+    if not isinstance(relative, str) or not relative or "\x00" in relative:
+        return None
+    if (os.path.isabs(relative) or ntpath.isabs(relative)
+            or ntpath.splitdrive(relative)[0]):
+        return None
+    root_real = os.path.realpath(root)
+    candidate = os.path.realpath(os.path.join(root_real, relative))
+    try:
+        if os.path.commonpath((root_real, candidate)) != root_real:
+            return None
+    except ValueError:
+        return None
+    return candidate
 
 
 def get_protocol(name: str | None) -> Protocol | None:

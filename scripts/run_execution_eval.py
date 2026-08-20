@@ -154,7 +154,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from eval_hashing import (hash_workspace, hash_task_workspace,
                            materialize_fixture_seed, HASH_PREFIX)
-from evaluation_protocols import PROTOCOL_NAMES, validate_declaration
+from evaluation_protocols import (PROTOCOL_NAMES, is_safe_skill_name,
+                                  resolve_path_within, validate_declaration)
 
 IMAGE = "kilo-eval:local"
 # The evaluation runs on a pinned, anonymous FREE model by default. This is a
@@ -973,6 +974,13 @@ def main():
             print(message, file=sys.stderr)
         sys.exit(2)
 
+    if not is_safe_skill_name(args.skill):
+        print(f"invalid skill name: {args.skill!r}", file=sys.stderr)
+        sys.exit(2)
+    if args.placebo_skill and not is_safe_skill_name(args.placebo_skill):
+        print(f"invalid placebo skill name: {args.placebo_skill!r}", file=sys.stderr)
+        sys.exit(2)
+
     if "placebo" in args.conditions and not args.placebo_skill:
         print("--placebo-skill <skill> is required when 'placebo' is in "
               "--conditions (an irrelevant, similarly-sized guidance source)",
@@ -993,9 +1001,15 @@ def main():
 
     fx = case["fixture"]
     ftype = fx.get("type")
-    fx_src = os.path.join(skill_dir, fx["path"])
+    fx_src = resolve_path_within(skill_dir, fx.get("path"))
+    if fx_src is None:
+        print("fixture path must remain under the skill directory", file=sys.stderr)
+        sys.exit(2)
     source = fx.get("source", "setup.sh")
     invocation = fx.get("invocation", "bash setup.sh")
+    if ftype == "generator" and resolve_path_within(fx_src, source) is None:
+        print("generator source path must remain under the fixture", file=sys.stderr)
+        sys.exit(2)
 
     if not os.path.isfile(os.path.join(skill_dir, "SKILL.md")):
         print(f"target skill dir missing SKILL.md: {skill_dir}", file=sys.stderr)

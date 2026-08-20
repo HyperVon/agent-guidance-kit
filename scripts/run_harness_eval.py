@@ -35,6 +35,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import evaluation_harness
 from eval_hashing import HASH_PREFIX, materialize_fixture_seed
 from evaluation_protocols import (PROTOCOL_NAMES, is_safe_skill_name,
+                                  resolve_path_within,
                                   validate_declaration)
 
 
@@ -54,7 +55,12 @@ def _load_case(skill: str, case_id: int) -> tuple[dict, str, str, str, str]:
     fixture = case.get("fixture") or {}
     if fixture.get("status") != "ready":
         raise ValueError("execution requires a frozen ready fixture")
-    fixture_dir = os.path.join(skill_dir, fixture["path"])
+    fixture_dir = resolve_path_within(skill_dir, fixture.get("path"))
+    if fixture_dir is None:
+        raise ValueError("fixture path must remain under the skill directory")
+    if fixture.get("type") == "generator" and resolve_path_within(
+            fixture_dir, fixture.get("source", "setup.sh")) is None:
+        raise ValueError("generator source path must remain under the fixture")
     return (
         case,
         evals_path,
