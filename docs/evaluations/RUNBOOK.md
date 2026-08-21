@@ -58,9 +58,10 @@ python3 scripts/run_harness_eval.py \
 ```
 
 The adapter command receives one JSON request on stdin and returns one JSON
-response on stdout. It must use the same activation mechanism for candidate and
-reference and must not rewrite guidance before context. The runner never
-silently escalates to placebo or n=3.
+response on stdout. It must apply the same activation policy to candidate and
+reference and must not rewrite guidance before context; the concrete mechanism
+and placement remain adapter-defined. The runner never silently escalates to
+placebo or n=3.
 
 When a result contains both `shared-outcome` and `skill-contract` assertions,
 qualification verdicts are recomputed from shared-outcome and
@@ -223,14 +224,13 @@ The default implementation is the JSON harness adapter described in
 `docs/evaluations/harness-adapter.md`. Use `scripts/run_harness_eval.py` for
 smoke, qualification, or explicitly requested confirmation. The evaluator
 creates independent condition workspaces and verifies task hashes; the adapter
-starts the worker, activates guidance through the harness's normal mechanism,
-and returns `worker_id`, `session_id`, `guidance_probe`,
-`guidance_context_probe`, the workspace receipt read from the requested
-workspace, and a worker-sourced execution attestation bound to the evaluator's
-nonce, request, output, and return code. A local adapter without OS containment
-or without an independently obtained worker attestation is
-`protocol_status: limited`; only an adapter that proves an OS-level boundary
-may claim `valid`.
+starts the worker, reports generic guidance identity and activation/context
+verification, and returns a workspace receipt read from the requested
+workspace plus an execution attestation bound to the evaluator's nonce,
+request, output, and return code. `adapter_declared` attestation confidence is
+valid limited evidence; only an adapter that proves the stronger runtime or
+independent boundary may claim `execution_verified`, and only an adapter that
+proves an OS-level isolation boundary may claim `valid`.
 
 The normal development workflow is a one-repetition regression comparison or
 qualification. Do not add placebo or repetitions automatically. If a stronger
@@ -270,8 +270,10 @@ of the core protocol.
      - **Generator fixtures are evaluator-only.** The generator (`setup.sh`) is run
        under a sanitized environment (`eval_hashing.run_generator`) using a
        constrained shell-free argv, and its source is then **stripped** from the
-       seed the worker sees. Sanitization is not OS containment, so untrusted
-       generator code belongs behind an externally supplied OS-contained adapter.
+       seed the worker sees. Shell-free argv prevents command injection through
+       the invocation string; it does not prevent arbitrary code execution and is
+       not a sandbox or OS security boundary. Untrusted generator code belongs
+       behind an externally supplied OS-contained adapter.
        The worker must never read the generator source / answer key.
      - **Layer B is a POST-ACTIVATION experiment.** It answers "once guidance is
        active, does it improve task execution?" — it does NOT test whether Kilo's
@@ -563,11 +565,10 @@ scoring.
   each assertion decision, plus the required metadata (see `result-schema.md`):
   case/fixture/target-skill revisions, harness + version, model, reasoning
   effort, tool/network policy, worker/session IDs, actual working directory,
-   isolation/boundary verification, loaded-guidance evidence (target) and
-   explicit target-absence evidence (baseline), per-assertion grades with
-  evidence, `skill_pass`/`baseline_pass`/`better`, protocol + measurement +
-  outcome status, human-review notes, timing/token data, and contamination
-  notes.
+  isolation/boundary verification, loaded-guidance evidence (target) and
+  explicit target-absence evidence (baseline), per-assertion grades with
+  evidence, condition verdicts, protocol + measurement + outcome status,
+  human-review notes, timing/token data, and contamination notes.
 - **Cleanup (only after evidence is preserved):** delete disposable worker
   sandboxes once both outputs are graded and the raw copy is safely in the
   ignored evidence dir. Never delete the evidence dir.

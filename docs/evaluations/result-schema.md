@@ -30,12 +30,14 @@ provider, container runtime, or discovery directory. Use `method:
 adapter metadata. See [the adapter contract](harness-adapter.md) for the
 request/response boundary.
 
-Raw neutral evidence records the evaluator-owned runtime paths and, for every
-condition, a workspace receipt returned by the adapter. The receipt is read
-from a random file inside the requested workspace and checked against the
-evaluator's expected hash, so distinct worker/session IDs alone cannot prove
-workspace isolation. Guided conditions in a comparison must also report the
-same `activation_mechanism`.
+Raw neutral evidence records evaluator-owned workspace receipts and, for every
+guided condition, the generic guidance identity (`guidance_id`,
+`guidance_hash`, `guidance_source`) plus `activation_verified` and
+`context_verified`. The receipt is read from a random file inside the requested
+workspace and checked against the evaluator's expected hash, so distinct
+worker/session IDs alone cannot prove workspace isolation. The validator checks
+what guidance identity was active; it does not require a Kilo path, filesystem
+placement, CLI name, or one universal activation mechanism.
 
 Neutral regression evidence is revision-anchored. Its
 `case_anchors.candidate` and `case_anchors.reference` entries bind each
@@ -87,6 +89,8 @@ The following is a compact regression result shape. A qualification result uses
     "status": "limited",
     "tier": "tier-1-fast-dev",
     "worker_isolation_verified": true,
+    "execution_verified": false,
+    "attestation_confidence": "adapter_declared",
     "isolation_attestation": {
       "protocol": "agent-guidance-kit.isolation-attestation/v1",
       "status": "verified",
@@ -116,7 +120,7 @@ The following is a compact regression result shape. A qualification result uses
       ],
       "outcome": {
         "category": "both_pass",
-        "regression_status": "equivalent",
+        "regression_status": "preserved_behavior",
         "measurement_status": "inconclusive",
         "protocol_status": "limited"
       },
@@ -145,8 +149,13 @@ The following is a compact regression result shape. A qualification result uses
 `shared-outcome` and `universal-safety` assertions are the marginal-value
 denominator. `skill-contract` assertions are reported for contract adherence
 and version comparison, but they cannot make a no-skill baseline lose credit
-in a qualification result. One observed run may say “improved in the observed
-run” or “regression observed”; it does not establish statistical confidence.
+in a qualification result. Regression status is deliberately narrow:
+`improved_revision_behavior` means candidate passed while reference failed,
+`preserved_behavior` means both passed, `regression_detected` means candidate
+failed while reference passed, and `inconclusive` means neither passed or the
+comparison cannot support a directional result. These labels describe observed
+revision behavior; they do not claim that a skill is effective, better, or
+generally improved.
 
 ## Optional strict confirmation result (legacy Docker adapter)
 
@@ -479,16 +488,28 @@ OS-level boundary. Adapter-managed local workers should be marked
   `os-level` boundary, match `runtime.isolation_method`, and bind every case
   ID to its `raw_evidence_hash`. Missing or mismatched attestation means the
   comparison cannot claim `valid`.
+- `execution_verified` — optional boolean claim about the execution boundary.
+  It is accepted only when every condition's raw
+  `execution_attestation.confidence` is `runtime_verified` or
+  `independently_verified`; `adapter_declared` is valid limited evidence but
+  cannot support this claim. `attestation_confidence` records the aggregate
+  level used by a committed result.
+- `guidance_id`, `guidance_hash`, `guidance_source` — condition-level identity
+  fields in raw neutral evidence. `activation_verified` and
+  `context_verified` must both be true for a guided condition. Legacy Kilo
+  placement fields may be retained as adapter metadata, but they are not part
+  of the neutral activation contract.
 - `target_guidance_present` — evidence (manifest/log/probe) that the target
-  worker's guidance was ACTIVATED (discovery tree present + hash-matched +
-  skill command resolved). **Required for execution
-  runs**; must be `null` for routing runs.
-- `target_guidance_hash` — the frozen hash of the guidance tree the target
-  condition received at its discovery location. **Required for execution runs.**
+  worker received the intended guidance identity and entered it into context.
+  **Required for execution runs**; must be `null` for routing runs.
+- `target_guidance_hash` — the generic guidance hash the target condition
+  received. **Required for execution runs.** A legacy adapter may retain its
+  discovery-path or command evidence as optional metadata.
 - `target_absent_in_baseline` — evidence that the baseline did **not** receive
   the target skill's identity or text. **Required for execution runs.**
-- `baseline_guidance_absent` — evidence the baseline contained no discovery
-  tree (`.kilo/skills` absent).
+- `baseline_guidance_absent` — evidence the baseline did not receive the target
+  guidance identity or context. Provider- or filesystem-specific absence
+  probes are optional supporting metadata.
 - `contamination` — `none` or a description.
 - `natural_task_identical_across_conditions` — `true` only when the runner
   verified the worker-visible prompt hash is identical across all conditions.
@@ -518,9 +539,11 @@ OS-level boundary. Adapter-managed local workers should be marked
   `both_fail`, `placebo_only_pass`, `non_discriminating`, `invalid`, `not_run`.
 - For `evaluation_mode: "regression"`, use `candidate_only_pass`,
   `reference_only_pass`, `both_pass`, or `both_fail` and add
-  `outcome.regression_status` (`improved`, `equivalent`, `regressed`, or
-  `inconclusive`). `both_fail` normally maps to `inconclusive`, not
-  equivalence, because neither revision satisfied the tested criteria.
+  `outcome.regression_status` (`improved_revision_behavior`,
+  `preserved_behavior`, `regression_detected`, `inconclusive`, or `not_run`).
+  `both_fail` normally maps to `inconclusive`, not preserved behavior, because
+  neither revision satisfied the tested criteria. Do not use
+  `skill_improved`, `skill_effective`, or `better_skill` as regression claims.
   `verdict.candidate_pass` and `verdict.reference_pass` are the authoritative
   booleans.
 - `outcome.measurement_status` — `discriminating`, `non_discriminating`,

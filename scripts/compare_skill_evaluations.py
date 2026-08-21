@@ -64,11 +64,11 @@ def _observed_case(case: dict, left: str, right: str) -> tuple[str, str, str]:
         left_pass = all(left_values)
         right_pass = all(right_values)
         if left_pass and not right_pass:
-            shared_status = "IMPROVED IN OBSERVED RUN"
+            shared_status = "IMPROVED_REVISION_BEHAVIOR"
         elif right_pass and not left_pass:
-            shared_status = "REGRESSION OBSERVED"
+            shared_status = "REGRESSION_DETECTED"
         elif left_pass and right_pass:
-            shared_status = "EQUIVALENT ON TESTED CRITERIA"
+            shared_status = "PRESERVED_BEHAVIOR"
         else:
             shared_status = "INCONCLUSIVE"
     if not contract:
@@ -81,9 +81,9 @@ def _observed_case(case: dict, left: str, right: str) -> tuple[str, str, str]:
         elif all(left_contract) == all(right_contract):
             contract_status = "NONE OBSERVED"
         elif all(left_contract):
-            contract_status = "CANDIDATE CONTRACT IMPROVED"
+            contract_status = "CANDIDATE CONTRACT ADHERENCE DIFFERED"
         else:
-            contract_status = "CANDIDATE CONTRACT REGRESSED"
+            contract_status = "CANDIDATE CONTRACT ADHERENCE DIFFERED"
     note = (
         f"shared {sum(value is True for value in left_values)}/"
         f"{len(shared) if shared else 0} vs "

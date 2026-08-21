@@ -31,9 +31,11 @@ can treat generators uniformly. The canonical worker-visible materialization is
 both defer to it so frozen hashes always describe exactly what workers receive.
 
 ``run_generator`` accepts only the constrained ``<interpreter> <source>`` argv
-form and invokes it with ``shell=False``. Its sanitized environment normalizes
-provenance; it is not an OS security boundary. Generator source must therefore
-be trusted or executed by an externally supplied OS-contained adapter.
+form and invokes it with ``shell=False``. This shell-free argv contract prevents
+command injection through the invocation string; it does not prevent the
+generator itself from executing arbitrary code and is not a sandbox or other
+OS security boundary. Generator source must therefore be trusted or executed by
+an externally supplied OS-contained adapter.
 """
 import hashlib
 import os
@@ -389,8 +391,9 @@ def run_generator(fixture_dir: str, source: str = "setup.sh",
     """Run a generator in a sanitized temp dir; return (output_dir, hash).
 
     ``invocation`` is parsed as a shell-free ``argv`` and must name the supplied
-    ``source`` as its only argument. Environment sanitization does not provide
-    OS-level containment for generator code.
+    ``source`` as its only argument. Shell-free parsing prevents command
+    injection, while environment sanitization only normalizes provenance; neither
+    provides OS-level containment or prevents arbitrary generator code execution.
 
     The returned ``output_dir`` is the GENERATED workspace and still contains the
     generator source (e.g. ``setup.sh``). It is the caller's responsibility to

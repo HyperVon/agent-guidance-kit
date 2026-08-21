@@ -117,8 +117,9 @@ def build_evidence(args, adapter: evaluation_harness.CommandHarnessAdapter) -> d
         "conditions": list(conditions),
         "target_skill_source_path": f"skills/{args.skill}",
         "target_skill_content_hash": target_hash,
-        "target_guidance_path": evaluation_harness.RUNTIME_TREATMENT_PATHS[0],
+        "target_guidance_id": args.skill,
         "target_guidance_hash": target_hash,
+        "target_guidance_path": evaluation_harness.RUNTIME_TREATMENT_PATHS[0],
         "target_guidance_present": "adapter guidance probe required",
         "target_absent_in_baseline": (
             "baseline adapter reported no target guidance"
@@ -128,6 +129,10 @@ def build_evidence(args, adapter: evaluation_harness.CommandHarnessAdapter) -> d
             if "baseline" in conditions else None),
         "placebo_skill": args.placebo_skill if "placebo" in conditions else None,
         "placebo_skill_content_hash": (
+            evaluation_harness.skill_tree_hash(placebo_dir)
+            if placebo_dir else None),
+        "placebo_guidance_id": args.placebo_skill if placebo_dir else None,
+        "placebo_guidance_hash": (
             evaluation_harness.skill_tree_hash(placebo_dir)
             if placebo_dir else None),
         "placebo_guidance_path": (

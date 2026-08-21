@@ -25,6 +25,9 @@ string supplied by the worker.
   "attestation_nonce": "...",
   "model": "provider/model-or-runtime-id",
   "guidance": {
+    "guidance_id": "code-review",
+    "guidance_hash": "sha256:...",
+    "guidance_source": "external-runtime",
     "skill_name": "code-review",
     "guidance_path": ".evaluation-runtime/guidance",
     "guidance_content_hash": "sha256:..."
@@ -55,12 +58,18 @@ The minimum response for a successful run is:
   "output": "the worker's final output",
   "guidance_probe": "present",
   "guidance_context_probe": "present",
+  "activation_verified": true,
+  "context_verified": true,
+  "guidance_id": "code-review",
+  "guidance_hash": "sha256:...",
+  "guidance_source": "external-runtime",
   "activation_mechanism": "adapter-defined",
   "workspace_receipt_path": ".evaluation-runtime/workspace-receipt",
   "workspace_receipt": "random-receipt-read-from-requested-workspace",
   "execution_attestation": {
     "protocol": "agent-guidance-kit.execution-attestation/v1",
     "status": "verified",
+    "confidence": "independently_verified",
     "verification_mode": "independent",
     "source": "worker",
     "worker_id": "worker-...",
@@ -84,6 +93,16 @@ required by the neutral protocol. `adapter_metadata` may contain provider,
 model, image, CLI, or version details; the core validator does not interpret
 those fields.
 
+Guided responses must identify the guidance by the evaluator-supplied
+`guidance_id` and `guidance_hash`, identify the adapter's activation boundary in
+`guidance_source`, and report `activation_verified: true` and
+`context_verified: true`. These fields describe what guidance was active, not
+where a particular harness stores it. `guidance_path`, `skill_name`, and
+`guidance_content_hash` remain optional compatibility metadata for legacy
+adapters; Kilo-specific paths are never required by this contract. A baseline
+response must report the corresponding verification booleans as false (or omit
+the guided identity fields).
+
 `workspace_receipt_path` must be the exact neutral path from the request, and
 `workspace_receipt` must be the unmodified token read from that path. The
 evaluator stores only a hash of the expected token in the repetition metadata;
@@ -94,12 +113,22 @@ Successful responses must also include a verified `execution_attestation`.
 The evaluator binds that attestation to its nonce and request hash, the returned
 worker/session IDs, the workspace receipt, the worker output, and the return
 code, probes, and activation mechanism. The `observation_hash` covers those
-returned observations as a single canonical binding. The adapter must obtain
-the attestation from the worker or harness
-boundary independently of the response fields it is attesting; it must not
-construct it by copying those fields after the fact. If the adapter cannot make
-that claim, it must return an unverified/failed run and the result is limited or
-invalid.
+returned observations as a single canonical binding. The `confidence` level
+makes the trust claim explicit:
+
+- `adapter_declared` means the adapter declares the binding and the evaluator
+  checks its hashes and request/response consistency. It is valid limited
+  evidence, but it is not an independent execution verification.
+- `runtime_verified` additionally includes a `runtime_evidence` object bound to
+  the worker/session and observation hash. It may support a result-level
+  `execution_verified: true` claim when every condition meets this level.
+- `independently_verified` requires `verification_mode: "independent"` and is
+  the strongest contract level. It may also support `execution_verified: true`.
+
+An adapter must not label copied response fields as a stronger confidence level
+than it can support. The result-level `execution_verified: true` claim is
+therefore rejected unless every condition's attestation is
+`runtime_verified` or `independently_verified`.
 
 For interoperability, `observation_hash` is the `sha256:` digest of compact,
 UTF-8 JSON with sorted keys over these fields: `run_status`, `worker_id`,

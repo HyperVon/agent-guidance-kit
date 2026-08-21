@@ -30,6 +30,22 @@ from evaluation_protocols import (ALLOWED_ASSERTION_SCOPES, PROTOCOL_NAMES,
                                   is_safe_skill_name, legacy_protocol_name,
                                   protocol_name, resolve_path_within,
                                   validate_declaration)
+from validators.attestation import (
+    ATTESTATION_CONFIDENCE_LEVELS,
+    is_strong_confidence,
+    validate_execution_attestation,
+    validate_execution_verified_claim,
+)
+from validators.evidence import validate_workspace_receipt
+from validators.execution import (
+    expected_guidance_identity,
+    validate_guidance_observation,
+)
+from validators.regression import (
+    regression_status_for_verdict,
+    validate_regression_claim,
+)
+from validators.routing import validate_selected_skill_decision
 
 try:
     import run_execution_eval as execution_runner
@@ -709,6 +725,17 @@ def check_one_result(base, res, skill_names, case_index):
         if condition in runs and not isinstance(runs[condition], dict):
             err(f"{base}: top-level runs.{condition} must be an object")
     status = pr.get("status")
+    if mode in REGRESSION_MODES:
+        validate_regression_claim(base, res, errors)
+    execution_verified = pr.get("execution_verified")
+    if execution_verified is not None and not isinstance(execution_verified, bool):
+        err(f"{base}: protocol.execution_verified must be boolean when present")
+    confidence = pr.get("attestation_confidence")
+    if (confidence is not None and
+            confidence not in ATTESTATION_CONFIDENCE_LEVELS):
+        err(f"{base}: protocol.attestation_confidence is unsupported")
+    if execution_verified is True and not is_strong_confidence(confidence):
+        err(f"{base}: execution_verified=true requires runtime or independent attestation confidence")
     _validate_isolation_attestation(base, res, cases, status)
     if status not in ALLOWED_PROTOCOL:
         err(f"{base}: protocol.status '{status}' invalid")
@@ -990,18 +1017,7 @@ def check_result_case(base, cs, skill, mode, case_index, *,
         if not isinstance(gp, bool) or not isinstance(bp, bool):
             err(f"{base} case {cid}: regression verdict requires candidate_pass/reference_pass booleans")
             return
-        if gp and not bp:
-            expect = "candidate_only_pass"
-            regression_status = "improved"
-        elif bp and not gp:
-            expect = "reference_only_pass"
-            regression_status = "regressed"
-        elif gp and bp:
-            expect = "both_pass"
-            regression_status = "equivalent"
-        else:
-            expect = "both_fail"
-            regression_status = "inconclusive"
+        expect, regression_status = regression_status_for_verdict(gp, bp)
         if cat != expect:
             err(f"{base} case {cid}: outcome.category '{cat}' inconsistent with regression verdict (expected {expect})")
         if oc.get("regression_status") not in REGRESSION_STATUSES:
@@ -1548,19 +1564,22 @@ def validate_generic_execution_evidence(evidence):
         errs.append("neutral execution evidence missing canonical_task_seed_hash")
     elif expected_fixture and seed != expected_fixture:
         errs.append("neutral execution canonical seed does not match frozen fixture")
-    runtime_paths = evidence.get("runtime_treatment_paths")
-    if (harness_runner is None or
-            runtime_paths != list(harness_runner.RUNTIME_TREATMENT_PATHS)):
-        errs.append("neutral execution runtime_treatment_paths do not match the neutral evaluator paths")
+    # Runtime treatment paths are adapter metadata. The neutral contract binds
+    # guidance by identity and does not interpret where a harness loads it.
     if not anchor["expected_fixture_hash"]:
         errs.append("execution evidence current fixture has no frozen content/output hash")
     elif not isinstance(evidence.get("expected_fixture_hash"), str) or not evidence.get("expected_fixture_hash").strip():
         errs.append("execution evidence missing expected_fixture_hash for frozen content/output hash")
     elif evidence.get("expected_fixture_hash") != anchor["expected_fixture_hash"]:
         errs.append("execution evidence expected_fixture_hash does not match current frozen fixture hash")
-    if not evidence.get("target_guidance_hash"):
+    target_guidance_id, target_guidance_hash = expected_guidance_identity(
+        evidence, "target")
+    if target_guidance_id != evidence.get("skill"):
+        errs.append("neutral execution target guidance_id does not match the skill identity")
+    if not target_guidance_hash:
         errs.append("neutral execution evidence missing target_guidance_hash")
-    elif evidence.get("target_skill_content_hash") != evidence.get("target_guidance_hash"):
+    elif (evidence.get("target_skill_content_hash") is not None and
+          evidence.get("target_skill_content_hash") != target_guidance_hash):
         errs.append("neutral execution target guidance hash does not match target skill content hash")
     if "baseline" in conditions:
         if not evidence.get("target_absent_in_baseline"):
@@ -1568,11 +1587,11 @@ def validate_generic_execution_evidence(evidence):
         if not evidence.get("baseline_guidance_absent"):
             errs.append("neutral execution evidence missing baseline_guidance_absent")
     if "placebo" in conditions:
-        for key in ("placebo_skill", "placebo_skill_content_hash",
-                    "placebo_guidance_path"):
-            if not evidence.get(key):
-                errs.append(f"neutral execution evidence missing {key}")
-        placebo = evidence.get("placebo_skill")
+        placebo, placebo_hash = expected_guidance_identity(evidence, "placebo")
+        if not placebo:
+            errs.append("neutral execution evidence missing placebo_guidance_id")
+        if not placebo_hash:
+            errs.append("neutral execution evidence missing placebo_guidance_hash")
         if placebo == evidence.get("skill"):
             errs.append("neutral execution placebo skill must differ from target")
         if not is_safe_skill_name(placebo):
@@ -1580,12 +1599,13 @@ def validate_generic_execution_evidence(evidence):
         elif harness_runner is not None and isinstance(placebo, str):
             placebo_path = os.path.join(ROOT, "skills", placebo)
             current_placebo_hash = harness_runner.skill_tree_hash(placebo_path)
-            if evidence.get("placebo_skill_content_hash") != current_placebo_hash:
-                errs.append("neutral execution placebo skill hash does not match the current skill")
+            if placebo_hash != current_placebo_hash:
+                errs.append("neutral execution placebo guidance hash does not match the current skill")
 
     seen_repetitions = set()
     seen_workers = set()
     seen_sessions = set()
+    attestation_confidences = []
     expected_task_hash = hashlib.sha256(
         anchor["case"].get("prompt", "").encode()).hexdigest()
     for repetition in repetitions:
@@ -1608,7 +1628,6 @@ def validate_generic_execution_evidence(evidence):
         starts = []
         workers = []
         sessions = []
-        activation_mechanisms = []
         workspaces = (repetition.get("condition_workspace_ids") or {}).values()
         if len(set(workspaces)) != len(conditions):
             errs.append(f"{tag}: condition workspace ids are not distinct")
@@ -1629,7 +1648,6 @@ def validate_generic_execution_evidence(evidence):
                         "starting_task_hash", "ending_task_hash",
                         "starting_full_hash", "ending_full_hash",
                         "guidance_probe", "guidance_context_probe",
-                        "guidance_path", "guidance_content_hash",
                         "workspace_receipt", "workspace_receipt_path",
                         "workspace_receipt_hash", "attestation_nonce",
                         "execution_request_hash", "execution_observation_hash",
@@ -1638,8 +1656,8 @@ def validate_generic_execution_evidence(evidence):
                     errs.append(f"{ctag}: missing {key}")
             _validate_workspace_receipt(
                 cmeta, receipt_hashes.get(name), ctag, errs)
-            _validate_execution_attestation(
-                cmeta, receipt_hashes.get(name), ctag, errs)
+            attestation_confidences.append(_validate_execution_attestation(
+                cmeta, receipt_hashes.get(name), ctag, errs))
             if cmeta.get("run_status") != "success" or cmeta.get("returncode") != 0:
                 errs.append(f"{ctag}: failed condition is not evidence")
             if not (cmeta.get("output") or "").strip():
@@ -1662,42 +1680,16 @@ def validate_generic_execution_evidence(evidence):
             if session:
                 seen_sessions.add(session)
             guided = name != "baseline"
-            if guided:
-                expected_hash = (evidence.get("target_guidance_hash")
-                                 if name == "target" else
-                                 evidence.get("placebo_skill_content_hash"))
-                expected_path = (evidence.get("target_guidance_path")
-                                 if name == "target" else
-                                 evidence.get("placebo_guidance_path"))
-                if cmeta.get("guidance_probe") != "present":
-                    errs.append(f"{ctag}: guidance probe did not confirm a present tree")
-                if cmeta.get("guidance_context_probe") != "present":
-                    errs.append(f"{ctag}: guidance context probe did not confirm activation")
-                if cmeta.get("guidance_content_hash") != expected_hash:
-                    errs.append(f"{ctag}: guidance content hash does not match the frozen skill")
-                if cmeta.get("guidance_path") != expected_path:
-                    errs.append(f"{ctag}: guidance path does not match the neutral runtime path")
-                if not isinstance(cmeta.get("activation_mechanism"), str) or not cmeta.get("activation_mechanism"):
-                    errs.append(f"{ctag}: activation_mechanism is missing")
-                else:
-                    activation_mechanisms.append(cmeta["activation_mechanism"])
-            else:
-                if cmeta.get("guidance_probe") not in {"absent", None}:
-                    errs.append(f"{ctag}: baseline guidance probe must be absent")
-                if cmeta.get("guidance_context_probe") not in {"none", "absent", None}:
-                    errs.append(f"{ctag}: baseline guidance context probe must be none/absent")
-                if cmeta.get("guidance_path") is not None:
-                    errs.append(f"{ctag}: baseline must not have a guidance path")
-                if cmeta.get("guidance_content_hash") is not None:
-                    errs.append(f"{ctag}: baseline must not have a guidance content hash")
+            expected_id, expected_hash = expected_guidance_identity(evidence, name)
+            validate_guidance_observation(
+                cmeta, expected_id, expected_hash, ctag, errs, guided=guided)
         if len(set(workers)) != len(conditions):
             errs.append(f"{tag}: conditions do not have distinct worker_ids")
         if len(set(sessions)) != len(conditions):
             errs.append(f"{tag}: conditions do not have distinct session_ids")
         if len(set(starts)) != 1:
             errs.append(f"{tag}: condition starting task hashes differ")
-        if len(set(activation_mechanisms)) > 1:
-            errs.append(f"{tag}: guided conditions use different activation_mechanisms")
+    validate_execution_verified_claim(evidence, attestation_confidences, errs)
     return errs
 
 
@@ -1751,13 +1743,13 @@ def _execution_source_anchor_generic(evidence, errs):
         errs.append("execution evidence current fixture has no frozen content/output hash")
     elif evidence.get("expected_fixture_hash") != expected:
         errs.append("execution evidence expected_fixture_hash does not match current frozen fixture hash")
-    expected_skill_path = os.path.join("skills", skill)
-    if evidence.get("target_skill_source_path") != expected_skill_path:
-        errs.append("execution evidence target_skill_source_path does not match the target skill")
     if harness_runner is not None:
         current_hash = harness_runner.skill_tree_hash(os.path.join(ROOT, skill_rel))
-        if evidence.get("target_skill_content_hash") != current_hash:
-            errs.append("execution evidence target_skill_content_hash does not match the current target skill")
+        reported_hash = (evidence.get("target_guidance_hash") or
+                         evidence.get("target_skill_content_hash"))
+        if reported_hash != current_hash:
+            errs.append("execution evidence target_guidance_hash does not match "
+                        "the current target guidance identity")
     return {"skill": skill, "case_id": case_id, "case": case,
             "fixture": fixture, "expected_fixture_hash": expected,
             "evals_path": evals_path, "evals_rel": evals_rel,
@@ -1765,82 +1757,23 @@ def _execution_source_anchor_generic(evidence, errs):
 
 
 def _validate_workspace_receipt(cmeta, expected_hash, ctag, errs):
-    """Require the adapter to return the random receipt from this workspace."""
+    """Compatibility wrapper for the focused evidence validator."""
 
     expected_path = (harness_runner.WORKSPACE_RECEIPT_PATH
                      if harness_runner is not None else None)
-    if cmeta.get("workspace_receipt_path") != expected_path:
-        errs.append(f"{ctag}: workspace receipt path is not the neutral receipt path")
-    receipt = cmeta.get("workspace_receipt")
-    if not isinstance(receipt, str) or not receipt:
-        errs.append(f"{ctag}: adapter did not return a workspace receipt")
-        return
-    if cmeta.get("workspace_receipt_hash") != expected_hash:
-        errs.append(f"{ctag}: workspace receipt hash is not bound to its condition")
-    actual_hash = HASH_PREFIX + hashlib.sha256(receipt.encode()).hexdigest()
-    if actual_hash != expected_hash:
-        errs.append(f"{ctag}: workspace receipt does not match the evaluator receipt")
+    validate_workspace_receipt(
+        cmeta, expected_hash, ctag, errs, expected_path=expected_path)
 
 
 def _validate_execution_attestation(cmeta, expected_receipt_hash, ctag, errs):
-    """Require a worker-sourced attestation bound to all neutral evidence."""
+    """Compatibility wrapper for the focused attestation validator."""
 
-    attestation = cmeta.get("execution_attestation")
-    if not isinstance(attestation, dict):
-        errs.append(f"{ctag}: missing execution_attestation")
-        return
-    if attestation.get("protocol") != EXECUTION_ATTESTATION_PROTOCOL:
-        errs.append(f"{ctag}: execution_attestation protocol is unsupported")
-    if attestation.get("status") != "verified":
-        errs.append(f"{ctag}: execution_attestation is not verified")
-    if attestation.get("verification_mode") != "independent":
-        errs.append(f"{ctag}: execution_attestation is not independently verified")
-    if attestation.get("source") != "worker":
-        errs.append(f"{ctag}: execution_attestation source is not the worker")
-    for key in ("worker_id", "session_id", "nonce", "request_hash",
-                "workspace_receipt_hash", "output_hash", "returncode"):
-        if key not in attestation:
-            errs.append(f"{ctag}: execution_attestation missing {key}")
-    for key in ("worker_id", "session_id", "nonce"):
-        value = attestation.get(key)
-        if not isinstance(value, str) or not value.strip():
-            errs.append(f"{ctag}: execution_attestation {key} must be non-empty")
-    for key in ("request_hash", "workspace_receipt_hash", "output_hash",
-                "observation_hash"):
-        value = attestation.get(key)
-        if not isinstance(value, str) or not re.fullmatch(
-                r"sha256:[0-9a-f]{64}", value):
-            errs.append(f"{ctag}: execution_attestation {key} must be a SHA-256 digest")
-    if attestation.get("worker_id") != cmeta.get("worker_id"):
-        errs.append(f"{ctag}: execution_attestation worker_id is not bound")
-    if attestation.get("session_id") != cmeta.get("session_id"):
-        errs.append(f"{ctag}: execution_attestation session_id is not bound")
-    if attestation.get("nonce") != cmeta.get("attestation_nonce"):
-        errs.append(f"{ctag}: execution_attestation nonce is not bound")
-    if attestation.get("request_hash") != cmeta.get("execution_request_hash"):
-        errs.append(f"{ctag}: execution_attestation request is not bound")
-    expected_observation_hash = None
-    if harness_runner is not None:
-        expected_observation_hash = harness_runner.attestation_observation_hash(
-            cmeta)
-    if cmeta.get("execution_observation_hash") != expected_observation_hash:
-        errs.append(f"{ctag}: execution observation is not evaluator-bound")
-    if attestation.get("observation_hash") != expected_observation_hash:
-        errs.append(f"{ctag}: execution_attestation observation is not bound")
-    if attestation.get("workspace_receipt_hash") != expected_receipt_hash:
-        errs.append(f"{ctag}: execution_attestation receipt is not bound")
-    if (not isinstance(attestation.get("returncode"), int) or
-            isinstance(attestation.get("returncode"), bool)):
-        errs.append(f"{ctag}: execution_attestation returncode must be an integer")
-    elif attestation.get("returncode") != cmeta.get("returncode"):
-        errs.append(f"{ctag}: execution_attestation returncode is not bound")
-    output = cmeta.get("output")
-    if not isinstance(output, str):
-        errs.append(f"{ctag}: execution_attestation cannot bind non-text output")
-    else:
-        output_hash = HASH_PREFIX + hashlib.sha256(output.encode()).hexdigest()
-        if attestation.get("output_hash") != output_hash:
-            errs.append(f"{ctag}: execution_attestation output is not bound")
+    observation_hash_fn = (harness_runner.attestation_observation_hash
+                            if harness_runner is not None else
+                            lambda _cmeta: None)
+    return validate_execution_attestation(
+        cmeta, expected_receipt_hash, ctag, errs,
+        observation_hash_fn=observation_hash_fn)
 
 
 def validate_execution_evidence(evidence):
@@ -2451,14 +2384,10 @@ def validate_generic_regression_evidence(evidence):
         errs.append("regression evidence missing canonical_task_seed_hash")
     elif expected_seed and seed != expected_seed:
         errs.append("regression canonical_task_seed_hash does not match frozen fixture")
-    runtime_paths = evidence.get("runtime_treatment_paths")
-    if (harness_runner is None or
-            runtime_paths != list(harness_runner.RUNTIME_TREATMENT_PATHS)):
-        errs.append("regression evidence runtime_treatment_paths do not match the neutral evaluator paths")
-
     seen_repetitions = set()
     seen_workers = set()
     seen_sessions = set()
+    attestation_confidences = []
     for repetition in repetitions:
         tag = f"rep{repetition.get('rep')}"
         rid = repetition.get("repetition_id")
@@ -2488,7 +2417,6 @@ def validate_generic_regression_evidence(evidence):
         if (repetition.get("workspace_receipt_path") !=
                 getattr(harness_runner, "WORKSPACE_RECEIPT_PATH", None)):
             errs.append(f"{tag}: workspace receipt path is not the neutral receipt path")
-        activation_mechanisms = []
         for name in ("candidate", "reference"):
             cmeta = cmap.get(name) or {}
             ctag = f"{tag} {name}"
@@ -2498,7 +2426,6 @@ def validate_generic_regression_evidence(evidence):
                         "starting_task_hash", "ending_task_hash",
                         "starting_full_hash", "ending_full_hash",
                         "guidance_probe", "guidance_context_probe",
-                        "guidance_path", "guidance_content_hash",
                         "workspace_receipt", "workspace_receipt_path",
                         "workspace_receipt_hash", "attestation_nonce",
                         "execution_request_hash", "execution_observation_hash",
@@ -2507,8 +2434,8 @@ def validate_generic_regression_evidence(evidence):
                     errs.append(f"{ctag}: missing {key}")
             _validate_workspace_receipt(
                 cmeta, receipt_hashes.get(name), ctag, errs)
-            _validate_execution_attestation(
-                cmeta, receipt_hashes.get(name), ctag, errs)
+            attestation_confidences.append(_validate_execution_attestation(
+                cmeta, receipt_hashes.get(name), ctag, errs))
             if cmeta.get("run_status") != "success" or cmeta.get("returncode") != 0:
                 errs.append(f"{ctag}: failed condition is not evidence")
             if not (cmeta.get("output") or "").strip():
@@ -2528,26 +2455,12 @@ def validate_generic_regression_evidence(evidence):
                 seen_workers.add(worker_id)
             if session_id:
                 seen_sessions.add(session_id)
-            expected_hash_key = f"{name}_skill_content_hash"
-            if cmeta.get("skill_content_hash") not in (None, cmeta.get("guidance_content_hash")):
-                errs.append(f"{ctag}: legacy skill_content_hash disagrees with guidance_content_hash")
-            if cmeta.get("guidance_content_hash") != evidence.get(expected_hash_key):
-                errs.append(f"{ctag}: guidance content hash does not match the revision anchor")
-            expected_path = evidence.get(f"{name}_guidance_path")
-            if expected_path and cmeta.get("guidance_path") != expected_path:
-                errs.append(f"{ctag}: guidance path does not match the neutral runtime path")
-            if cmeta.get("guidance_probe") != "present":
-                errs.append(f"{ctag}: guidance probe did not confirm a present tree")
-            if cmeta.get("guidance_context_probe") != "present":
-                errs.append(f"{ctag}: guidance context probe did not confirm activation")
-            if not isinstance(cmeta.get("activation_mechanism"), str) or not cmeta.get("activation_mechanism"):
-                errs.append(f"{ctag}: activation_mechanism must be recorded by the adapter")
-            else:
-                activation_mechanisms.append(cmeta["activation_mechanism"])
+            expected_id, expected_hash = expected_guidance_identity(evidence, name)
+            validate_guidance_observation(
+                cmeta, expected_id, expected_hash, ctag, errs, guided=True)
         if len(set(starts)) != 1:
             errs.append(f"{tag}: candidate/reference starting task hashes differ")
-        if len(set(activation_mechanisms)) > 1:
-            errs.append(f"{tag}: candidate/reference use different activation_mechanisms")
+    validate_execution_verified_claim(evidence, attestation_confidences, errs)
     return errs
 
 
@@ -2647,12 +2560,13 @@ def validate_catalog_routing_evidence(evidence):
                                 f"match=True (false pass)")
                 continue
             decision = r.get("decision") or {}
-            if "selected_skill" not in decision:
-                errs.append(f"{rep_tag}: success but decision missing "
-                            f"'selected_skill'")
+            decision_errors = validate_selected_skill_decision(
+                decision, set(valid_actions))
+            for decision_error in decision_errors:
+                errs.append(f"{rep_tag}: {decision_error}")
+            if (not isinstance(decision, dict) or
+                    "selected_skill" not in decision):
                 continue
-            if decision.get("action") not in valid_actions:
-                errs.append(f"{rep_tag}: invalid action {decision.get('action')!r}")
             sel = decision.get("selected_skill")
             act = decision.get("action")
             if sel is not None and sel not in catalogs.get(name, set()):

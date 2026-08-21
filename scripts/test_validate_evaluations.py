@@ -45,6 +45,7 @@ def fake_execution_attestation(request, response):
     return {
         "protocol": eha.EXECUTION_ATTESTATION_PROTOCOL,
         "status": "verified",
+        "confidence": "independently_verified",
         "verification_mode": "independent",
         "source": "worker",
         "worker_id": response["worker_id"],
@@ -1017,7 +1018,7 @@ class ResultFailureTests(unittest.TestCase):
             "outcome": {"category": "both_pass",
                         "measurement_status": "non_discriminating",
                         "protocol_status": "valid",
-                        "regression_status": "equivalent"},
+                        "regression_status": "preserved_behavior"},
             "verdict": {"candidate_pass": True, "reference_pass": True},
             "assertions": [{"assertion": "preserves the behavior",
                             "candidate": {"pass": True, "evidence": "test passed"},
@@ -1036,6 +1037,12 @@ class ResultFailureTests(unittest.TestCase):
         reset()
         ve.check_one_result("r.md", res, {"code-review"}, case_index)
         self.assertEqual(ve.errors, [], ve.errors)
+
+    def test_regression_rejects_effectiveness_overclaim(self):
+        ve.validate_regression_claim(
+            "r.md", {"outcome": {"claim": "skill_effective"}}, ve.errors)
+        self.assertTrue(any("skill_effective" in error for error in ve.errors),
+                        ve.errors)
 
     def test_qualification_n1_non_discriminating_requires_honest_early_stop(self):
         self.assertEqual(
@@ -1209,6 +1216,11 @@ class HarnessAdapterTests(unittest.TestCase):
                         "guidance_probe": "present",
                         "guidance_context_probe": "present",
                         "activation_mechanism": "fake-adapter",
+                        "guidance_id": guidance["guidance_id"],
+                        "guidance_hash": guidance["guidance_hash"],
+                        "guidance_source": "external_runtime",
+                        "activation_verified": True,
+                        "context_verified": True,
                         "guidance_path": guidance["guidance_path"],
                         "guidance_content_hash": guidance["guidance_content_hash"],
                         "workspace_receipt_path": request["workspace_receipt_path"],
@@ -1297,6 +1309,11 @@ class HarnessAdapterTests(unittest.TestCase):
                 "guidance_probe": "present",
                 "guidance_context_probe": "present",
                 "activation_mechanism": "adapter-defined",
+                "guidance_id": skill,
+                "guidance_hash": content_hash,
+                "guidance_source": "external_runtime",
+                "activation_verified": True,
+                "context_verified": True,
                 "guidance_path": eha.RUNTIME_TREATMENT_PATHS[0],
                 "guidance_content_hash": content_hash,
                 "workspace_receipt_path": eha.WORKSPACE_RECEIPT_PATH,
@@ -1311,6 +1328,7 @@ class HarnessAdapterTests(unittest.TestCase):
             condition["execution_attestation"] = {
                 "protocol": eha.EXECUTION_ATTESTATION_PROTOCOL,
                 "status": "verified",
+                "confidence": "independently_verified",
                 "verification_mode": "independent",
                 "source": "worker",
                 "worker_id": worker,
@@ -1380,8 +1398,8 @@ class HarnessAdapterTests(unittest.TestCase):
         self.assertTrue(any("materialized Git revision" in error for error in errors), errors)
         evidence["candidate_skill_content_hash"] = evidence["reference_skill_content_hash"]
         evidence["repetitions"][0]["conditions"]["candidate"][
-            "guidance_context_probe"] = "absent"
-        self.assertTrue(any("context probe" in error
+            "context_verified"] = False
+        self.assertTrue(any("context_verified must be true" in error
                             for error in ve.validate_generic_regression_evidence(evidence)))
 
     def test_neutral_regression_binds_revision_local_case_anchors(self):
@@ -1428,13 +1446,60 @@ class HarnessAdapterTests(unittest.TestCase):
         self.assertTrue(any("workspace receipt does not match" in error
                             for error in errors), errors)
 
-    def test_neutral_regression_requires_one_activation_mechanism(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        candidate_receipt_hash = evidence["repetitions"][0][
+            "condition_workspace_receipt_hashes"]["candidate"]
+        evidence["repetitions"][0]["conditions"]["reference"][
+            "workspace_receipt_hash"] = candidate_receipt_hash
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("workspace receipt hash is not bound" in error
+                            for error in errors), errors)
+
+    def test_neutral_regression_rejects_forged_guidance_identity(self):
         evidence = self._neutral_regression_evidence_fixture()
         evidence["repetitions"][0]["conditions"]["reference"][
-            "activation_mechanism"] = "different-adapter"
+            "guidance_hash"] = "sha256:" + "f" * 64
         errors = ve.validate_generic_regression_evidence(evidence)
-        self.assertTrue(any("different activation_mechanisms" in error
+        self.assertTrue(any("guidance_hash does not match" in error
                             for error in errors), errors)
+
+    def test_neutral_regression_accepts_adapter_declared_evidence(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        for condition in evidence["repetitions"][0]["conditions"].values():
+            condition["execution_attestation"]["confidence"] = "adapter_declared"
+        self.assertEqual(ve.validate_generic_regression_evidence(evidence), [])
+
+    def test_neutral_regression_rejects_unverified_execution_claim(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        for condition in evidence["repetitions"][0]["conditions"].values():
+            condition["execution_attestation"]["confidence"] = "adapter_declared"
+        evidence["execution_verified"] = True
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("execution_verified=true" in error for error in errors),
+                        errors)
+
+    def test_neutral_regression_accepts_runtime_verified_execution_claim(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        for condition in evidence["repetitions"][0]["conditions"].values():
+            attestation = condition["execution_attestation"]
+            attestation["confidence"] = "runtime_verified"
+            attestation["runtime_evidence"] = {
+                "worker_id": condition["worker_id"],
+                "session_id": condition["session_id"],
+                "observation_hash": condition["execution_observation_hash"],
+            }
+        evidence["protocol"] = {
+            "name": "regression", "execution_verified": True}
+        self.assertEqual(ve.validate_generic_regression_evidence(evidence), [])
+
+    def test_neutral_regression_rejects_forged_runtime_attestation(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        attestation = evidence["repetitions"][0]["conditions"]["candidate"][
+            "execution_attestation"]
+        attestation["confidence"] = "runtime_verified"
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("runtime_evidence" in error for error in errors),
+                        errors)
 
     def test_neutral_regression_requires_bound_execution_attestation(self):
         evidence = self._neutral_regression_evidence_fixture()

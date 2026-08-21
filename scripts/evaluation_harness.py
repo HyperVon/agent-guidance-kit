@@ -31,6 +31,15 @@ from eval_hashing import HASH_PREFIX, hash_task_workspace, hash_workspace
 ADAPTER_PROTOCOL = "agent-guidance-kit.harness-adapter/v1"
 EXECUTION_ATTESTATION_PROTOCOL = (
     "agent-guidance-kit.execution-attestation/v1")
+ATTESTATION_CONFIDENCE_LEVELS = frozenset({
+    "adapter_declared",
+    "runtime_verified",
+    "independently_verified",
+})
+STRONG_ATTESTATION_CONFIDENCE_LEVELS = frozenset({
+    "runtime_verified",
+    "independently_verified",
+})
 ATTESTED_OBSERVATION_FIELDS = (
     "run_status", "worker_id", "session_id", "returncode", "output",
     "guidance_probe", "guidance_context_probe", "activation_mechanism",
@@ -252,6 +261,11 @@ class CommandHarnessAdapter:
     output, probes, activation mechanism, and workspace receipt. Extra
     harness-specific metadata is preserved under ``adapter_metadata`` and never
     interpreted by the protocol validator.
+
+    The attestation's ``confidence`` distinguishes an adapter-declared binding
+    from runtime or independently verified evidence. Adapter-declared evidence
+    is acceptable for limited comparisons, but it cannot support an
+    ``execution_verified`` claim.
     """
 
     def __init__(self, command: str | list[str], *, name: str = "external",
@@ -362,6 +376,9 @@ def run_condition_repetition(
         if content_hash is None:
             raise ValueError(f"skill source has no hashable guidance tree: {spec}")
         guidance[name] = {
+            "guidance_id": spec.get("guidance_id", spec["skill_name"]),
+            "guidance_hash": content_hash,
+            "guidance_source": spec.get("guidance_source", "evaluator_runtime"),
             "skill_name": spec["skill_name"],
             "guidance_path": os.path.relpath(tree, workspaces[name]),
             "guidance_content_hash": content_hash,
@@ -424,8 +441,21 @@ def run_condition_repetition(
             "ending_full_hash": full_after,
             "guidance_probe": meta.get("guidance_probe"),
             "guidance_context_probe": meta.get("guidance_context_probe"),
+            "activation_verified": meta.get(
+                "activation_verified",
+                meta.get("guidance_probe") == "present"),
+            "context_verified": meta.get(
+                "context_verified",
+                meta.get("guidance_context_probe") == "present"),
             "activation_mechanism": meta.get(
                 "activation_mechanism", "adapter" if spec else "none"),
+            "guidance_id": (meta.get("guidance_id") or
+                            (guidance.get(name) or {}).get("guidance_id")),
+            "guidance_hash": (meta.get("guidance_hash") or
+                              meta.get("guidance_content_hash") or
+                              (guidance.get(name) or {}).get("guidance_hash")),
+            "guidance_source": (meta.get("guidance_source") or
+                                (guidance.get(name) or {}).get("guidance_source")),
             "guidance_path": (meta.get("guidance_path") or
                               (guidance.get(name) or {}).get("guidance_path")),
             "guidance_content_hash": (meta.get("guidance_content_hash") or

@@ -58,7 +58,13 @@ PROTOCOLS = {
 PROTOCOL_NAMES = frozenset(PROTOCOLS)
 CONDITION_NAMES = frozenset({"target", "baseline", "placebo", "candidate", "reference"})
 ALLOWED_ASSERTION_SCOPES = frozenset({"shared-outcome", "skill-contract", "universal-safety"})
-REGRESSION_STATUSES = frozenset({"improved", "equivalent", "regressed", "inconclusive", "not_run"})
+REGRESSION_STATUSES = frozenset({
+    "improved_revision_behavior",
+    "preserved_behavior",
+    "regression_detected",
+    "inconclusive",
+    "not_run",
+})
 
 
 def is_safe_skill_name(value: object) -> bool:

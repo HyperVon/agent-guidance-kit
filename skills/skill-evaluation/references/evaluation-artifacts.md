@@ -224,27 +224,27 @@ Each execution repetition MUST prove:
 - **Independent starting state (TASK state).** One pristine seed, then one
   independent copy per condition. All `starting_task_hash` values must equal
   `canonical_task_seed_hash` / `expected_fixture_hash`. TASK-state hashes
-  exclude the evaluator runtime treatment paths (recorded in
-  `runtime_treatment_paths`, e.g. the neutral adapter's
-  `.evaluation-runtime/guidance` (or the optional legacy adapter's
-  `.kilo/skills`) so target/placebo treatment trees cannot invalidate seed
-  equality; full-filesystem hashes are recorded separately
-  (`starting_full_hash` / `ending_full_hash`).
+  exclude the evaluator's explicitly recorded treatment paths so target/placebo
+  treatment trees cannot invalidate seed equality; full-filesystem hashes are
+  recorded separately (`starting_full_hash` / `ending_full_hash`). The path
+  list is evaluator/adapter metadata, not a required harness placement.
 - **Distinct execution.** Distinct worker IDs and session IDs per condition.
   A container ID is optional adapter metadata, not a core requirement.
 - **Controlled post-activation.** Layer B does NOT test whether the router
-  activates the guidance. The evaluator activates target/placebo guidance
-  through the same harness adapter mechanism and records
-  `activation_mechanism`, `guidance_path`, and `guidance_content_hash`. The
-  adapter must use an identical activation procedure for the compared
-  conditions; provider- or CLI-specific fields are optional metadata.
-- **Activation boundary (adapter-probed).**
-  `conditions.<name>.guidance_probe` is `"present"` only when the adapter
-  verified that the intended guidance was available and content-hash-matched;
-  a guided condition also requires `guidance_context_probe: "present"` to prove
-  that the guidance entered worker context. Mere file presence is never
-  activation. Harness-native event logs may be retained under adapter metadata
-  but are not part of the core schema.
+  activates the guidance. The evaluator gives the adapter the intended
+  `guidance_id` and `guidance_hash`; the adapter returns
+  `guidance_source`, `activation_verified`, and `context_verified` for each
+  guided condition. `activation_mechanism`, `guidance_path`, and
+  `guidance_content_hash` remain optional compatibility metadata. The adapter
+  must apply an equivalent activation policy to compared conditions, while the
+  validator checks identity rather than a provider- or CLI-specific path.
+- **Activation boundary (adapter-probed).** Guided conditions must report
+  `guidance_id`, `guidance_hash`, `guidance_source`,
+  `activation_verified: true`, and `context_verified: true`. The legacy
+  `guidance_probe` / `guidance_context_probe` aliases are accepted for
+  compatibility, but mere file presence is never activation. Harness-native
+  event logs may be retained under adapter metadata but are not part of the
+  core schema.
 - **Failed runs are rejected.** A non-zero return code, missing worker/session
   identity, or empty output is `run_status="failed"` and invalidates the
   evidence file.
