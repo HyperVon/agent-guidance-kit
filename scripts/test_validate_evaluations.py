@@ -43,6 +43,10 @@ def fake_execution_attestation(request, response):
     """Build the worker attestation shape used by neutral test adapters."""
     receipt = response["workspace_receipt"]
     output = response.get("output", "")
+    observation = dict(response)
+    if any(field in response for field in (
+            "guidance_identity", "activation_method", "activation_evidence")):
+        observation["canonical_activation_fields_observed"] = True
     return {
         "protocol": eha.EXECUTION_ATTESTATION_PROTOCOL,
         "status": "verified",
@@ -53,7 +57,7 @@ def fake_execution_attestation(request, response):
         "session_id": response["session_id"],
         "nonce": request["attestation_nonce"],
         "request_hash": eha.attestation_request_hash(request),
-        "observation_hash": eha.attestation_observation_hash(response),
+        "observation_hash": eha.attestation_observation_hash(observation),
         "workspace_receipt_hash": "sha256:" + hashlib.sha256(
             receipt.encode()).hexdigest(),
         "output_hash": "sha256:" + hashlib.sha256(
@@ -1066,9 +1070,13 @@ class HarnessAdapterTests(unittest.TestCase):
             "worker_id": "worker-1",
             "session_id": "session-1",
             "output": "completed",
-            "guidance_probe": "present",
-            "guidance_context_probe": "present",
-            "activation_mechanism": "adapter-defined",
+            "guidance_identity": "code-review",
+            "guidance_hash": "sha256:guidance",
+            "activation_method": "adapter-defined",
+            "activation_evidence": {
+                "guidance_loaded": True,
+                "context_loaded": True,
+            },
             "workspace_receipt_path": eha.WORKSPACE_RECEIPT_PATH,
             "workspace_receipt": "receipt-token",
         }
@@ -1076,10 +1084,12 @@ class HarnessAdapterTests(unittest.TestCase):
             ["adapter"], 0, json.dumps(response), "")
         with unittest.mock.patch.object(eha.subprocess, "run",
                                         return_value=completed):
-            adapter = eha.CommandHarnessAdapter("adapter", name="test")
+            adapter = eha.CommandHarnessAdapter(["adapter"], name="test")
             actual = adapter.run({"condition": "candidate"})
         self.assertEqual(actual["worker_id"], "worker-1")
-        self.assertEqual(actual["guidance_context_probe"], "present")
+        self.assertIsNone(actual["guidance_context_probe"])
+        self.assertTrue(actual["activation_verified"])
+        self.assertEqual(actual["guidance_identity"], "code-review")
         self.assertEqual(actual["adapter_metadata"]["protocol"],
                          eha.ADAPTER_PROTOCOL)
 
@@ -1088,11 +1098,50 @@ class HarnessAdapterTests(unittest.TestCase):
             ["adapter"], 1, output=b"partial output", stderr=b"partial error")
         with unittest.mock.patch.object(eha.subprocess, "run",
                                         side_effect=timeout):
-            actual = eha.CommandHarnessAdapter("adapter").run({})
+            actual = eha.CommandHarnessAdapter(["adapter"]).run({})
         self.assertEqual(actual["run_status"], "failed")
         self.assertEqual(actual["stdout"], "partial output")
         self.assertEqual(actual["stderr"], "partial error")
         json.dumps(actual)
+
+    def test_command_adapter_requires_argv_and_preserves_literal_arguments(self):
+        with self.assertRaisesRegex(ValueError, "argv list"):
+            eha.CommandHarnessAdapter("python3 adapter.py")
+        parsed = eha.parse_command_argv_json(
+            '["python3", "adapter.py", "; touch should-not-run"]')
+        self.assertEqual(parsed[-1], "; touch should-not-run")
+        with self.assertRaisesRegex(ValueError, "invalid"):
+            eha.parse_command_argv_json("not-json")
+        with self.assertRaisesRegex(ValueError, "JSON argv list"):
+            eha.parse_command_argv_json('{"program": "python3"}')
+        with self.assertRaisesRegex(ValueError, "NUL"):
+            eha.validate_command_argv(["python3", "bad\x00arg"])
+
+        tmp = tempfile.mkdtemp()
+        try:
+            script = os.path.join(tmp, "adapter.py")
+            marker = os.path.join(tmp, "should-not-run")
+            open(script, "w", encoding="utf-8").write(
+                "import json, sys\n"
+                "print(json.dumps({'run_status': 'success', 'returncode': 0,\n"
+                "  'worker_id': 'w', 'session_id': 's', 'output': 'ok',\n"
+                "  'adapter_metadata': {'argv': sys.argv[1:]}}))\n"
+            )
+            literal = f"; touch {marker}"
+            actual = eha.CommandHarnessAdapter(
+                [sys.executable, script, literal]).run({})
+            self.assertEqual(actual["adapter_metadata"]["argv"], [literal])
+            self.assertFalse(os.path.exists(marker))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_command_adapter_rejects_invalid_json_response(self):
+        completed = subprocess.CompletedProcess(["adapter"], 0, "not-json", "")
+        with unittest.mock.patch.object(eha.subprocess, "run",
+                                        return_value=completed):
+            actual = eha.CommandHarnessAdapter(["adapter"]).run({})
+        self.assertEqual(actual["run_status"], "failed")
+        self.assertIn("invalid JSON", actual["reason"])
 
     def test_neutral_harness_rejects_symlinked_inputs(self):
         tmp = tempfile.mkdtemp()
@@ -1140,12 +1189,21 @@ class HarnessAdapterTests(unittest.TestCase):
                         "worker_id": "worker-" + request["condition"],
                         "session_id": "session-" + request["condition"],
                         "output": "done",
-                        "guidance_probe": "present" if guided else "absent",
-                        "guidance_context_probe": "present" if guided else "none",
-                        "activation_mechanism": "fake-adapter" if guided else "none",
+                        "guidance_identity": request["guidance"].get(
+                            "guidance_identity") if guided else None,
+                        "guidance_hash": request["guidance"].get(
+                            "guidance_hash") if guided else None,
+                        "activation_method": "fake-adapter" if guided else "none",
+                        "activation_evidence": {
+                            "guidance_loaded": guided,
+                            "context_loaded": guided,
+                        },
+                        "activation_verified": guided,
+                        "context_verified": guided,
                         "workspace_receipt_path": request["workspace_receipt_path"],
                         "workspace_receipt": receipt,
                     }
+                    response["canonical_activation_fields_observed"] = True
                     response["execution_attestation"] = fake_execution_attestation(
                         request, response)
                     return response
@@ -1160,6 +1218,10 @@ class HarnessAdapterTests(unittest.TestCase):
                 repetition["workspace_receipt_path"],
                 eha.WORKSPACE_RECEIPT_PATH)
             for name, condition in repetition["conditions"].items():
+                self.assertEqual(condition["guidance_identity"],
+                                 "sample" if name == "target" else None)
+                self.assertEqual(condition["activation_method"],
+                                 "fake-adapter" if name == "target" else "none")
                 self.assertEqual(condition["workspace_receipt_path"],
                                  eha.WORKSPACE_RECEIPT_PATH)
                 self.assertEqual(
@@ -1182,6 +1244,38 @@ class HarnessAdapterTests(unittest.TestCase):
                 shutil.rmtree(workspace, ignore_errors=True)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_neutral_runner_preserves_failed_artifacts_for_debugging(self):
+        class FailedAdapter:
+            name = "failed-test-adapter"
+
+            def run(self, request):
+                return {
+                    "run_status": "failed",
+                    "returncode": 17,
+                    "worker_id": "failed-" + request["condition"],
+                    "session_id": "failed-session-" + request["condition"],
+                    "output": "",
+                    "reason": "test failure",
+                }
+
+        args = argparse.Namespace(
+            skill="code-review", case_id=1, protocol="smoke",
+            conditions=["target"], placebo_skill=None, model=None, reps=1,
+            preserve_failed_artifacts=False,
+        )
+        evidence = rhe.build_evidence(args, FailedAdapter())
+        self.assertEqual(evidence["result_schema_version"], 3)
+        self.assertEqual(evidence["evidence_protocol_version"], 3)
+        self.assertEqual(evidence["adapter_protocol_version"],
+                         eha.ADAPTER_PROTOCOL)
+        preserved = evidence["preserved_artifacts"]
+        self.assertGreaterEqual(len(preserved), 2)
+        self.assertTrue(all(os.path.exists(path) for path in preserved))
+        self.assertEqual(evidence["repetitions"][0]["conditions"]["target"][
+            "run_status"], "failed")
+        for path in preserved:
+            shutil.rmtree(path, ignore_errors=True)
 
     def test_regression_materializes_git_revision_with_repository_shape(self):
         root, resolved = rsre.materialize_skill_revision("HEAD", "code-review")
@@ -1214,12 +1308,13 @@ class HarnessAdapterTests(unittest.TestCase):
                         "worker_id": "worker-" + request["condition"],
                         "session_id": "session-" + request["condition"],
                         "output": "completed",
-                        "guidance_probe": "present",
-                        "guidance_context_probe": "present",
-                        "activation_mechanism": "fake-adapter",
-                        "guidance_id": guidance["guidance_id"],
+                        "guidance_identity": guidance["guidance_identity"],
                         "guidance_hash": guidance["guidance_hash"],
-                        "guidance_source": "external_runtime",
+                        "activation_method": "fake-adapter",
+                        "activation_evidence": {
+                            "guidance_loaded": True,
+                            "context_loaded": True,
+                        },
                         "activation_verified": True,
                         "context_verified": True,
                         "guidance_path": guidance["guidance_path"],
@@ -1227,6 +1322,7 @@ class HarnessAdapterTests(unittest.TestCase):
                         "workspace_receipt_path": request["workspace_receipt_path"],
                         "workspace_receipt": receipt,
                     }
+                    response["canonical_activation_fields_observed"] = True
                     response["execution_attestation"] = fake_execution_attestation(
                         request, response)
                     return response
@@ -1248,6 +1344,9 @@ class HarnessAdapterTests(unittest.TestCase):
                 os.path.commonpath((fixture_dir, candidate_root)),
                 candidate_root)
             self.assertEqual(evidence["result_schema_version"], 3)
+            self.assertEqual(evidence["evidence_protocol_version"], 3)
+            self.assertEqual(evidence["adapter_protocol_version"],
+                             eha.ADAPTER_PROTOCOL)
             for key in ("candidate_skill_hash", "reference_skill_hash",
                         "case_set_hash", "fixture_hash", "runner_version",
                         "reproduction_status"):
@@ -1320,8 +1419,15 @@ class HarnessAdapterTests(unittest.TestCase):
                 "guidance_probe": "present",
                 "guidance_context_probe": "present",
                 "activation_mechanism": "adapter-defined",
+                "guidance_identity": skill,
                 "guidance_id": skill,
                 "guidance_hash": content_hash,
+                "activation_method": "adapter-defined",
+                "activation_evidence": {
+                    "guidance_loaded": True,
+                    "context_loaded": True,
+                },
+                "canonical_activation_fields_observed": True,
                 "guidance_source": "external_runtime",
                 "activation_verified": True,
                 "context_verified": True,
@@ -1499,6 +1605,34 @@ class HarnessAdapterTests(unittest.TestCase):
         self.assertTrue(any("adapter_claims.guidance_loaded" in error
                             for error in errors), errors)
 
+    def test_adapter_cannot_self_certify_execution(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        for condition in evidence["repetitions"][0]["conditions"].values():
+            condition["execution_attestation"]["confidence"] = "adapter_declared"
+            condition["execution_verified"] = True
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("adapter execution_verified=true" in error
+                            for error in errors), errors)
+
+    def test_adapter_isolation_claim_requires_independent_attestation(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        repetition = evidence["repetitions"][0]
+        condition = repetition["conditions"]["candidate"]
+        condition["execution_attestation"]["confidence"] = "adapter_declared"
+        condition["attestation_layers"] = eha.build_attestation_layers(
+            condition,
+            expected_receipt_hash=repetition[
+                "condition_workspace_receipt_hashes"]["candidate"],
+            expected_guidance_id="code-review",
+            expected_guidance_hash=condition["guidance_hash"],
+            guided=True,
+        )
+        condition["attestation_layers"]["adapter_claims"][
+            "isolation_verified"] = True
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("isolation_verified requires independent_attestation"
+                            in error for error in errors), errors)
+
     def test_neutral_regression_rejects_unverified_execution_claim(self):
         evidence = self._neutral_regression_evidence_fixture()
         for condition in evidence["repetitions"][0]["conditions"].values():
@@ -1593,6 +1727,8 @@ class HarnessAdapterTests(unittest.TestCase):
         evidence = self._neutral_regression_evidence_fixture()
         evidence.update({
             "result_schema_version": 3,
+            "evidence_protocol_version": 3,
+            "adapter_protocol_version": eha.ADAPTER_PROTOCOL,
             "reproduction_status": "reproducible",
             "runner_version": rsre.REGRESSION_RUNNER_VERSION,
             "candidate_skill_hash": evidence["candidate_skill_content_hash"],
@@ -1603,6 +1739,21 @@ class HarnessAdapterTests(unittest.TestCase):
                 evidence["case_anchors"]["reference"]),
         })
         self.assertEqual(ve.validate_generic_regression_evidence(evidence), [])
+        del evidence["evidence_protocol_version"]
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("evidence_protocol_version=3" in error
+                            for error in errors), errors)
+        evidence["evidence_protocol_version"] = 3
+        del evidence["repetitions"][0]["conditions"]["candidate"][
+            "activation_evidence"]
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("canonical activation_evidence" in error
+                            for error in errors), errors)
+        evidence["repetitions"][0]["conditions"]["candidate"][
+            "activation_evidence"] = {
+                "guidance_loaded": True,
+                "context_loaded": True,
+            }
         del evidence["runner_version"]
         errors = ve.validate_generic_regression_evidence(evidence)
         self.assertTrue(any("immutable metadata runner_version" in error

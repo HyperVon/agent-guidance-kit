@@ -1,19 +1,23 @@
 # Harness adapter contract
 
-The evaluation protocols are harness-neutral. They compare conditions, freeze
+The canonical [harness-neutral protocol specification](protocol-spec.md) owns
+the versioning, identity, trust, and failure-retention rules below. The
+evaluation protocols are harness-neutral. They compare conditions, freeze
 the task, verify independent workspaces, and validate assertion evidence. A
 harness adapter is responsible only for starting one worker/session and
 proving what guidance that worker received.
 
-The adapter is an external command. The evaluator sends one JSON request on
-stdin and expects one JSON object on stdout. The command must not use a shell
-string supplied by the worker.
+The adapter is an external executable invoked from an argv list. The evaluator
+sends one JSON request on stdin and expects one JSON object on stdout. The
+generic runners accept this list through `--harness-command-json`; shell syntax
+is not parsed or evaluated.
 
 ## Request
 
 ```json
 {
   "adapter_protocol": "agent-guidance-kit.harness-adapter/v1",
+  "evidence_protocol_version": 3,
   "protocol": "regression",
   "condition": "candidate",
   "repetition_id": "...",
@@ -25,12 +29,12 @@ string supplied by the worker.
   "attestation_nonce": "...",
   "model": "provider/model-or-runtime-id",
   "guidance": {
-    "guidance_id": "code-review",
-    "guidance_hash": "sha256:...",
-    "guidance_source": "external-runtime",
-    "skill_name": "code-review",
-    "guidance_path": ".evaluation-runtime/guidance",
-    "guidance_content_hash": "sha256:..."
+    "guidance_identity": "code-review",
+    "guidance_activation_reference": {
+      "identity": "code-review",
+      "content_hash": "sha256:..."
+    },
+    "guidance_hash": "sha256:..."
   }
 }
 ```
@@ -56,14 +60,15 @@ The minimum response for a successful run is:
   "worker_id": "worker-...",
   "session_id": "session-...",
   "output": "the worker's final output",
-  "guidance_probe": "present",
-  "guidance_context_probe": "present",
   "activation_verified": true,
   "context_verified": true,
-  "guidance_id": "code-review",
+  "guidance_identity": "code-review",
   "guidance_hash": "sha256:...",
-  "guidance_source": "external-runtime",
-  "activation_mechanism": "adapter-defined",
+  "activation_method": "adapter-defined",
+  "activation_evidence": {
+    "guidance_loaded": true,
+    "context_loaded": true
+  },
   "workspace_receipt_path": ".evaluation-runtime/workspace-receipt",
   "workspace_receipt": "random-receipt-read-from-requested-workspace",
   "execution_attestation": {
@@ -80,9 +85,7 @@ The minimum response for a successful run is:
     "workspace_receipt_hash": "sha256:...",
     "output_hash": "sha256:...",
     "returncode": 0
-  },
-  "guidance_path": ".evaluation-runtime/guidance",
-  "guidance_content_hash": "sha256:..."
+  }
 }
 ```
 
@@ -94,14 +97,16 @@ model, image, CLI, or version details; the core validator does not interpret
 those fields.
 
 Guided responses must identify the guidance by the evaluator-supplied
-`guidance_id` and `guidance_hash`, identify the adapter's activation boundary in
-`guidance_source`, and report `activation_verified: true` and
+`guidance_identity` and `guidance_hash`, identify the adapter's activation
+boundary in `activation_method`, report the boolean observations in
+`activation_evidence`, and report `activation_verified: true` and
 `context_verified: true`. These fields describe what guidance was active, not
-where a particular harness stores it. `guidance_path`, `skill_name`, and
+where a particular harness stores it. `guidance_id`, `guidance_source`,
+`activation_mechanism`, `guidance_path`, `skill_name`, and
 `guidance_content_hash` remain optional compatibility metadata for legacy
 adapters; Kilo-specific paths are never required by this contract. A baseline
-response must report the corresponding verification booleans as false (or omit
-the guided identity fields).
+response must report false activation evidence and omit (or null) the guided
+identity fields.
 
 `workspace_receipt_path` must be the exact neutral path from the request, and
 `workspace_receipt` must be the unmodified token read from that path. The
@@ -175,10 +180,12 @@ layer when it disagrees with the underlying response. Older evidence may omit
 confidence.
 
 For interoperability, `observation_hash` is the `sha256:` digest of compact,
-UTF-8 JSON with sorted keys over these fields: `run_status`, `worker_id`,
-`session_id`, `returncode`, `output`, `guidance_probe`,
+UTF-8 JSON with sorted keys over the legacy observation fields `run_status`,
+`worker_id`, `session_id`, `returncode`, `output`, `guidance_probe`,
 `guidance_context_probe`, `activation_mechanism`, `workspace_receipt_path`,
-and `workspace_receipt`. Missing values are represented as JSON `null`; output
+and `workspace_receipt`. Schema-v3 responses that provide canonical activation
+fields also bind `guidance_identity`, `guidance_hash`, `activation_method`, and
+`activation_evidence`. Missing values are represented as JSON `null`; output
 and receipt values are UTF-8 text with replacement for invalid byte sequences.
 
 This contract is harness agnostic, but it has an explicit integration trust
@@ -190,6 +197,10 @@ independent worker/harness attestation and its documented implementation.
 
 For a failed invocation, return `run_status: "failed"`, the non-zero
 `returncode` when available, and a reason. Failed runs are never evidence.
+The generic runners preserve a failed condition's evaluator workspace and
+fixture seed automatically, record their paths in `preserved_artifacts`, and
+clean successful disposable runs unless `--preserve-failed-artifacts` is
+requested. Retain raw evidence and logs before removing preserved artifacts.
 
 ## Optional harness implementations
 

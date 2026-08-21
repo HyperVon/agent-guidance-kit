@@ -3,7 +3,7 @@
 
 This is the generic counterpart to the repository's optional legacy
 ``run_execution_eval.py`` Docker/Kilo adapter.  The evaluator prepares the
-fixture and independent condition workspaces; ``--harness-command`` performs
+fixture and independent condition workspaces; ``--harness-command-json`` performs
 the actual worker/session invocation using the JSON contract in
 ``docs/evaluations/harness-adapter.md``.
 
@@ -11,11 +11,11 @@ Examples::
 
     python3 scripts/run_harness_eval.py \
       --skill code-review --case-id 5 --protocol qualification --reps 1 \
-      --harness-command 'python3 path/to/adapter.py'
+      --harness-command-json '["python3","path/to/adapter.py"]'
 
     python3 scripts/run_harness_eval.py \
       --skill code-review --case-id 5 --protocol smoke --conditions target \
-      --harness-command 'python3 path/to/adapter.py'
+      --harness-command-json '["python3","path/to/adapter.py"]'
 
 No follow-up placebo or confirmation run is launched implicitly.
 """
@@ -34,8 +34,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import evaluation_harness
 from eval_hashing import HASH_PREFIX, materialize_fixture_seed
-from evaluation_protocols import (PROTOCOL_NAMES, is_safe_skill_name,
-                                  resolve_path_within,
+from evaluation_protocols import (EVIDENCE_PROTOCOL_VERSION,
+                                  PROTOCOL_NAMES, RESULT_SCHEMA_VERSION,
+                                  is_safe_skill_name, resolve_path_within,
                                   validate_declaration)
 
 
@@ -104,7 +105,9 @@ def build_evidence(args, adapter: evaluation_harness.CommandHarnessAdapter) -> d
         raise ValueError(f"skill has no hashable guidance tree: {skill_dir}")
 
     evidence = {
-        "result_schema_version": 2,
+        "result_schema_version": RESULT_SCHEMA_VERSION,
+        "evidence_protocol_version": EVIDENCE_PROTOCOL_VERSION,
+        "adapter_protocol_version": evaluation_harness.ADAPTER_PROTOCOL,
         "evidence_type": "execution",
         "protocol": args.protocol,
         "harness": {
@@ -117,9 +120,9 @@ def build_evidence(args, adapter: evaluation_harness.CommandHarnessAdapter) -> d
         "conditions": list(conditions),
         "target_skill_source_path": f"skills/{args.skill}",
         "target_skill_content_hash": target_hash,
+        "target_guidance_identity": args.skill,
         "target_guidance_id": args.skill,
         "target_guidance_hash": target_hash,
-        "target_guidance_path": evaluation_harness.RUNTIME_TREATMENT_PATHS[0],
         "target_guidance_present": "adapter guidance probe required",
         "target_absent_in_baseline": (
             "baseline adapter reported no target guidance"
@@ -131,14 +134,11 @@ def build_evidence(args, adapter: evaluation_harness.CommandHarnessAdapter) -> d
         "placebo_skill_content_hash": (
             evaluation_harness.skill_tree_hash(placebo_dir)
             if placebo_dir else None),
+        "placebo_guidance_identity": args.placebo_skill if placebo_dir else None,
         "placebo_guidance_id": args.placebo_skill if placebo_dir else None,
         "placebo_guidance_hash": (
             evaluation_harness.skill_tree_hash(placebo_dir)
             if placebo_dir else None),
-        "placebo_guidance_path": (
-            evaluation_harness.RUNTIME_TREATMENT_PATHS[0]
-            if placebo_dir else None),
-        "runtime_treatment_paths": list(evaluation_harness.RUNTIME_TREATMENT_PATHS),
         "expected_fixture_hash": expected_fixture_hash,
         "fixture_source_path": os.path.relpath(evals_path, ROOT),
         "fixture_path": os.path.normpath(os.path.relpath(fixture_dir, ROOT)),
@@ -146,6 +146,7 @@ def build_evidence(args, adapter: evaluation_harness.CommandHarnessAdapter) -> d
             open(evals_path, "rb").read()).hexdigest(),
         "canonical_task_seed_hash": None,
         "repetitions": [],
+        "preserved_artifacts": [],
     }
     activation_specs = {
         "target": {"skill_name": args.skill, "source_dir": skill_dir},
@@ -155,9 +156,12 @@ def build_evidence(args, adapter: evaluation_harness.CommandHarnessAdapter) -> d
         activation_specs["placebo"] = {
             "skill_name": args.placebo_skill, "source_dir": placebo_dir,
         }
+    preserve_requested = bool(getattr(args, "preserve_failed_artifacts", False))
     for index in range(args.reps):
         seed, _ = materialize_fixture_seed(
             fixture_dir, fixture.get("type"), source, invocation)
+        workspaces = {}
+        preserve = preserve_requested
         try:
             seed_hash = HASH_PREFIX + evaluation_harness.hash_task_workspace(
                 seed, evaluation_harness.RUNTIME_TREATMENT_PATHS)
@@ -170,10 +174,22 @@ def build_evidence(args, adapter: evaluation_harness.CommandHarnessAdapter) -> d
                 args.model, adapter, protocol=args.protocol, case_id=args.case_id)
             evidence["canonical_task_seed_hash"] = canonical
             evidence["repetitions"].append(repetition)
-            for workspace in workspaces.values():
-                shutil.rmtree(workspace, ignore_errors=True)
+            preserve = preserve or any(
+                condition.get("run_status") != "success" or
+                condition.get("returncode") != 0
+                for condition in repetition["conditions"].values()
+            )
+        except Exception:
+            preserve = True
+            raise
         finally:
-            shutil.rmtree(seed, ignore_errors=True)
+            if preserve:
+                evidence["preserved_artifacts"].extend(
+                    [*workspaces.values(), seed])
+            else:
+                for workspace in workspaces.values():
+                    evaluation_harness.cleanup_workspace(workspace)
+                shutil.rmtree(seed, ignore_errors=True)
     return evidence
 
 
@@ -196,16 +212,20 @@ def main() -> None:
                         default=["target", "baseline"])
     parser.add_argument("--placebo-skill")
     parser.add_argument("--model", default=None)
-    parser.add_argument("--harness-command", required=True)
+    parser.add_argument("--harness-command-json", required=True,
+                        type=evaluation_harness.parse_command_argv_json,
+                        help="JSON-encoded executable argv; shell syntax is not interpreted")
     parser.add_argument("--harness-name", default="external")
     parser.add_argument("--harness-timeout", type=int, default=1200)
     parser.add_argument("--harness-cwd")
     parser.add_argument("--reps", type=int, default=1)
+    parser.add_argument("--preserve-failed-artifacts", action="store_true",
+                        help="preserve evaluator workspaces and seeds for debugging")
     parser.add_argument("--out", default=None)
     args = parser.parse_args()
     try:
         adapter = evaluation_harness.CommandHarnessAdapter(
-            args.harness_command, name=args.harness_name,
+            args.harness_command_json, name=args.harness_name,
             timeout_seconds=args.harness_timeout, cwd=args.harness_cwd)
         evidence = build_evidence(args, adapter)
     except (OSError, ValueError) as exc:

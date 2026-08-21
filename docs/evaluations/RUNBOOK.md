@@ -35,7 +35,8 @@ the current question:
 
 The protocol is not tied to Kilo, Docker, a model provider, or any particular
 agent CLI. New execution and regression runs use the JSON harness adapter
-contract in [harness-adapter.md](harness-adapter.md). The adapter supplies the
+contract in [harness-adapter.md](harness-adapter.md), governed by the
+[canonical protocol specification](protocol-spec.md). The adapter supplies the
 worker/session boundary and proves guidance activation; the evaluator supplies
 the task seed, hashes, condition comparison, and validation. Docker/Kilo is a
 retained optional adapter for the strict historical confirmation path.
@@ -46,7 +47,7 @@ For a routine revision comparison, use:
 python3 scripts/run_skill_regression_eval.py \
   --skill code-review --reference <previous-sha> --candidate HEAD \
   --case-id 5 --reps 1 \
-  --harness-command 'python3 path/to/adapter.py'
+  --harness-command-json '["python3","path/to/adapter.py"]'
 ```
 
 For a fair target-vs-baseline qualification, use the same adapter boundary:
@@ -54,14 +55,17 @@ For a fair target-vs-baseline qualification, use the same adapter boundary:
 ```bash
 python3 scripts/run_harness_eval.py \
   --skill code-review --case-id 5 --protocol qualification --reps 1 \
-  --harness-command 'python3 path/to/adapter.py'
+  --harness-command-json '["python3","path/to/adapter.py"]'
 ```
 
-The adapter command receives one JSON request on stdin and returns one JSON
-response on stdout. It must apply the same activation policy to candidate and
-reference and must not rewrite guidance before context; the concrete mechanism
-and placement remain adapter-defined. The runner never silently escalates to
-placebo or n=3.
+The adapter argv is JSON-encoded and passed without shell interpretation. It
+receives one JSON request on stdin and returns one JSON response on stdout. It
+must apply the same activation policy to candidate and reference and must not
+rewrite guidance before context; the concrete mechanism and placement remain
+adapter-defined. Use `--preserve-failed-artifacts` when retaining artifacts for
+successful-run debugging is useful; failed conditions preserve their seed and
+workspaces automatically. The runner never silently escalates to placebo or
+n=3.
 
 When a result contains both `shared-outcome` and `skill-contract` assertions,
 qualification verdicts are recomputed from shared-outcome and

@@ -17,7 +17,8 @@ The normal loop is harness-neutral: static validation, a cheap smoke when
 needed, candidate-vs-reference regression at n=1 for routine edits, and a
 target-vs-baseline qualification at n=1 when marginal value is the question.
 Strict target/baseline/placebo n≥3 confirmation remains available only by
-explicit choice. The JSON adapter boundary is documented in
+explicit choice. The canonical JSON protocol is documented in
+`docs/evaluations/protocol-spec.md` and the adapter boundary in
 `docs/evaluations/harness-adapter.md`; Docker/Kilo fields in the historical
 sections below describe one optional legacy adapter, not a repository-wide
 requirement.

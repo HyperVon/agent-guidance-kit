@@ -63,6 +63,8 @@ PROTOCOLS = {
 PROTOCOL_NAMES = frozenset(PROTOCOLS)
 CONDITION_NAMES = frozenset({"target", "baseline", "placebo", "candidate", "reference"})
 ALLOWED_ASSERTION_SCOPES = frozenset({"shared-outcome", "skill-contract", "universal-safety"})
+RESULT_SCHEMA_VERSION = 3
+EVIDENCE_PROTOCOL_VERSION = 3
 REGRESSION_STATUSES = OBSERVED_REGRESSION_STATUSES
 
 # Historical consumers may still emit the pre-v2 labels. They are accepted as

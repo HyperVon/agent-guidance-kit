@@ -129,6 +129,7 @@ about one is never evidence about another.
    task only — byte-identical across conditions. Provider, model, image, CLI,
    and version details are optional adapter metadata; the protocol does not
    require a specific harness. See
+   [`protocol-spec.md`](../../docs/evaluations/protocol-spec.md),
    [`harness-adapter.md`](../../docs/evaluations/harness-adapter.md) and
    `scripts/run_harness_eval.py` for the generic execution entrypoint.
 3. **Protocol validity** — were the conditions genuinely independent and leak-free?

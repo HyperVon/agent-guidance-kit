@@ -149,6 +149,26 @@ def validate_execution_verified_claim(
         )
 
 
+def validate_condition_execution_claim(
+    cmeta: dict,
+    confidence: str | None,
+    ctag: str,
+    errs: list[str],
+) -> None:
+    """Prevent a condition adapter from self-certifying execution."""
+
+    claim = cmeta.get("execution_verified")
+    if claim is None:
+        return
+    if not isinstance(claim, bool):
+        errs.append(f"{ctag}: execution_verified must be boolean when present")
+    elif claim is True and not is_strong_confidence(confidence):
+        errs.append(
+            f"{ctag}: adapter execution_verified=true requires runtime_verified "
+            "or independently_verified attestation"
+        )
+
+
 def validate_attestation_layers(
     cmeta: dict,
     expected_receipt_hash: str | None,
@@ -182,13 +202,20 @@ def validate_attestation_layers(
     adapter_claims = layers.get("adapter_claims")
     if not isinstance(adapter_claims, dict):
         adapter_claims = {}
+    activation_evidence = cmeta.get("activation_evidence")
     expected_adapter_claims = {
         "guidance_loaded": cmeta.get(
             "guidance_loaded",
-            cmeta.get("guidance_probe") == "present"),
+            activation_evidence.get("guidance_loaded")
+            if isinstance(activation_evidence, dict) and
+            isinstance(activation_evidence.get("guidance_loaded"), bool)
+            else cmeta.get("guidance_probe") == "present"),
         "context_loaded": cmeta.get(
             "context_loaded",
-            cmeta.get("guidance_context_probe") == "present"),
+            activation_evidence.get("context_loaded")
+            if isinstance(activation_evidence, dict) and
+            isinstance(activation_evidence.get("context_loaded"), bool)
+            else cmeta.get("guidance_context_probe") == "present"),
         "execution_completed": cmeta.get(
             "execution_completed",
             cmeta.get("run_status") == "success" and
@@ -202,9 +229,12 @@ def validate_attestation_layers(
         elif adapter_claims.get(key) != expected:
             errs.append(f"{ctag}: adapter_claims.{key} does not match adapter response")
 
-    observed_id = cmeta.get("guidance_id") or cmeta.get("skill_name")
-    observed_hash = cmeta.get("guidance_hash") or cmeta.get(
-        "guidance_content_hash")
+    observed_id = (cmeta["guidance_identity"]
+                   if "guidance_identity" in cmeta else
+                   cmeta.get("guidance_id") or cmeta.get("skill_name"))
+    observed_hash = (cmeta["guidance_hash"]
+                     if "guidance_hash" in cmeta else
+                     cmeta.get("guidance_content_hash"))
     guidance_hash_matches = (
         (observed_id == expected_guidance_id and
          observed_hash == expected_guidance_hash)
@@ -212,16 +242,20 @@ def validate_attestation_layers(
     )
     required_shape = (
         "run_status", "worker_id", "session_id", "returncode", "output",
-        "guidance_probe", "guidance_context_probe",
         "workspace_receipt_path", "workspace_receipt",
         "execution_attestation",
     )
+    has_activation_observation = (
+        "guidance_probe" in cmeta and
+        "guidance_context_probe" in cmeta
+    ) or isinstance(cmeta.get("activation_evidence"), dict)
     expected_evaluator_values = {
         "receipt_hash_matches": verify_workspace_receipt(
             cmeta.get("workspace_receipt"), expected_receipt_hash),
         "guidance_hash_matches": guidance_hash_matches,
         "result_schema_valid": (
             all(key in cmeta for key in required_shape)
+            and has_activation_observation
             and isinstance(cmeta.get("execution_attestation"), dict)
             and isinstance(cmeta.get("output"), str)
         ),
@@ -262,12 +296,25 @@ def validate_attestation_layers(
     elif source is not None:
         errs.append(f"{ctag}: independent_attestation.source requires available=true")
 
+    if adapter_claims.get("isolation_verified") is True:
+        if independent.get("available") is not True:
+            errs.append(
+                f"{ctag}: adapter_claims.isolation_verified requires "
+                "independent_attestation"
+            )
+        elif not isinstance(cmeta.get("isolation_attestation"), dict):
+            errs.append(
+                f"{ctag}: adapter_claims.isolation_verified requires a "
+                "bound isolation_attestation"
+            )
+
 
 __all__ = [
     "ATTESTATION_CONFIDENCE_LEVELS",
     "EXECUTION_ATTESTATION_PROTOCOL",
     "STRONG_ATTESTATION_CONFIDENCE_LEVELS",
     "is_strong_confidence",
+    "validate_condition_execution_claim",
     "validate_attestation_layers",
     "validate_execution_attestation",
     "validate_execution_verified_claim",

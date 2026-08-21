@@ -5,11 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shlex
 import subprocess
 import uuid
 
 from eval_hashing import HASH_PREFIX, hash_task_workspace, hash_workspace
+from evaluation_protocols import EVIDENCE_PROTOCOL_VERSION
 
 from .attestation import (
     EXECUTION_ATTESTATION_PROTOCOL,
@@ -34,6 +34,38 @@ from .workspace import (
 
 ADAPTER_PROTOCOL = "agent-guidance-kit.harness-adapter/v1"
 DEFAULT_TIMEOUT_SECONDS = 1200
+
+
+def validate_command_argv(command: object) -> list[str]:
+    """Validate an executable argv without interpreting shell syntax."""
+
+    if isinstance(command, str):
+        raise ValueError(
+            "harness adapter command must be an argv list; use "
+            "--harness-command-json"
+        )
+    if not isinstance(command, (list, tuple)):
+        raise ValueError("harness adapter command must be a JSON argv list")
+    if not command:
+        raise ValueError("harness adapter command must not be empty")
+    argv = list(command)
+    if not isinstance(argv[0], str) or not argv[0].strip():
+        raise ValueError("harness adapter executable must be a non-empty string")
+    if any(not isinstance(argument, str) or "\x00" in argument
+           for argument in argv):
+        raise ValueError(
+            "harness adapter argv entries must be strings without NUL bytes")
+    return argv
+
+
+def parse_command_argv_json(value: str) -> list[str]:
+    """Parse the CLI's JSON-encoded argv without shell interpretation."""
+
+    try:
+        command = json.loads(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"harness command JSON is invalid: {exc}") from exc
+    return validate_command_argv(command)
 
 
 def _failure(returncode: int | None, reason: str, *, stdout: str = "",
@@ -66,13 +98,11 @@ class CommandHarnessAdapter:
     ``execution_verified`` claim.
     """
 
-    def __init__(self, command: str | list[str], *, name: str = "external",
+    def __init__(self, command: list[str] | tuple[str, ...], *,
+                 name: str = "external",
                  timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
                  cwd: str | None = None):
-        self.command = (shlex.split(command) if isinstance(command, str)
-                        else list(command))
-        if not self.command:
-            raise ValueError("harness adapter command must not be empty")
+        self.command = validate_command_argv(command)
         self.name = name
         self.timeout_seconds = timeout_seconds
         self.cwd = cwd
@@ -82,6 +112,7 @@ class CommandHarnessAdapter:
 
         request = dict(request)
         request.setdefault("adapter_protocol", ADAPTER_PROTOCOL)
+        request.setdefault("evidence_protocol_version", EVIDENCE_PROTOCOL_VERSION)
         try:
             process = subprocess.run(
                 self.command,
@@ -91,6 +122,7 @@ class CommandHarnessAdapter:
                 timeout=self.timeout_seconds,
                 cwd=self.cwd,
                 check=False,
+                shell=False,
             )
         except subprocess.TimeoutExpired as exc:
             return _failure(None, "harness adapter timed out",
@@ -130,6 +162,34 @@ class CommandHarnessAdapter:
             "guidance_probe", normalized.get("skill_probe"))
         normalized["guidance_context_probe"] = normalized.get(
             "guidance_context_probe", normalized.get("skill_context_probe"))
+        normalized["guidance_identity"] = normalized.get(
+            "guidance_identity", normalized.get("guidance_id") or
+            normalized.get("skill_name"))
+        normalized["guidance_hash"] = normalized.get(
+            "guidance_hash", normalized.get("guidance_content_hash"))
+        normalized["activation_method"] = normalized.get(
+            "activation_method", normalized.get("activation_mechanism"))
+        if "activation_evidence" not in normalized:
+            normalized["activation_evidence"] = {
+                "guidance_loaded": normalized.get("guidance_loaded",
+                                                   normalized.get(
+                                                       "guidance_probe") ==
+                                                   "present"),
+                "context_loaded": normalized.get("context_loaded",
+                                                  normalized.get(
+                                                      "guidance_context_probe") ==
+                                                  "present"),
+            }
+        activation_evidence = normalized.get("activation_evidence")
+        if isinstance(activation_evidence, dict):
+            if not isinstance(normalized.get("activation_verified"), bool):
+                normalized["activation_verified"] = activation_evidence.get(
+                    "guidance_loaded",
+                    normalized.get("guidance_probe") == "present")
+            if not isinstance(normalized.get("context_verified"), bool):
+                normalized["context_verified"] = activation_evidence.get(
+                    "context_loaded",
+                    normalized.get("guidance_context_probe") == "present")
         normalized["adapter_metadata"] = normalized.get("adapter_metadata", {
             "name": self.name,
             "protocol": ADAPTER_PROTOCOL,
@@ -176,7 +236,12 @@ def run_condition_repetition(
             raise ValueError(f"skill source has no hashable guidance tree: {spec}")
         guidance[name] = {
             "guidance_id": spec.get("guidance_id", spec["skill_name"]),
+            "guidance_identity": spec.get("guidance_id", spec["skill_name"]),
             "guidance_hash": content_hash,
+            "guidance_activation_reference": {
+                "identity": spec.get("guidance_id", spec["skill_name"]),
+                "content_hash": content_hash,
+            },
             "guidance_source": spec.get("guidance_source", "evaluator_runtime"),
             "skill_name": spec["skill_name"],
             "guidance_path": os.path.relpath(tree, workspaces[name]),
@@ -192,6 +257,7 @@ def run_condition_repetition(
         snapshot_before = snapshot_workspace(workspaces[name])
         request = {
             "adapter_protocol": ADAPTER_PROTOCOL,
+            "evidence_protocol_version": EVIDENCE_PROTOCOL_VERSION,
             "protocol": protocol,
             "condition": name,
             "repetition_id": repetition_id,
@@ -207,16 +273,70 @@ def run_condition_repetition(
         request_hash = attestation_request_hash(request)
         meta = adapter.run(request)
         observation = dict(meta)
+        canonical_activation_fields_observed = any(
+            field in meta for field in (
+                "guidance_identity", "activation_method", "activation_evidence"))
+        activation_evidence = meta.get("activation_evidence")
+        if "activation_evidence" not in meta:
+            activation_evidence = {
+                "guidance_loaded": meta.get(
+                    "activation_verified",
+                    meta.get("guidance_probe") == "present"),
+                "context_loaded": meta.get(
+                    "context_verified",
+                    meta.get("guidance_context_probe") == "present"),
+            }
+        activation_verified = meta.get("activation_verified")
+        if "activation_verified" not in meta:
+            activation_verified = (
+                activation_evidence.get(
+                    "guidance_loaded", meta.get("guidance_probe") == "present")
+                if isinstance(activation_evidence, dict)
+                else meta.get("guidance_probe") == "present")
+        context_verified = meta.get("context_verified")
+        if "context_verified" not in meta:
+            context_verified = (
+                activation_evidence.get(
+                    "context_loaded",
+                    meta.get("guidance_context_probe") == "present")
+                if isinstance(activation_evidence, dict)
+                else meta.get("guidance_context_probe") == "present")
+        guidance_probe = meta.get("guidance_probe", meta.get("skill_probe"))
+        guidance_context_probe = meta.get(
+            "guidance_context_probe", meta.get("skill_context_probe"))
+        if canonical_activation_fields_observed:
+            observed_guidance_identity = meta.get("guidance_identity")
+            observed_guidance_hash = meta.get("guidance_hash")
+            observed_activation_method = meta.get("activation_method")
+        else:
+            observed_guidance_identity = (
+                meta.get("guidance_id") or meta.get("skill_name") or
+                (guidance.get(name) or {}).get("guidance_identity"))
+            observed_guidance_hash = (
+                meta.get("guidance_hash") or meta.get("guidance_content_hash") or
+                (guidance.get(name) or {}).get("guidance_hash"))
+            observed_activation_method = (
+                meta.get("activation_mechanism") or
+                ("adapter" if spec else "none"))
+        if canonical_activation_fields_observed:
+            observation["canonical_activation_fields_observed"] = True
+            observation.update({
+                "guidance_identity": observed_guidance_identity,
+                "guidance_hash": observed_guidance_hash,
+                "activation_method": observed_activation_method,
+                "activation_evidence": activation_evidence,
+            })
         observation.update({
             "run_status": meta.get("run_status", meta.get("status")),
             "worker_id": meta.get("worker_id") or meta.get("container_id"),
             "output": as_text(meta.get("output", meta.get("text", ""))),
-            "guidance_probe": meta.get(
-                "guidance_probe", meta.get("skill_probe")),
-            "guidance_context_probe": meta.get(
-                "guidance_context_probe", meta.get("skill_context_probe")),
-            "activation_mechanism": meta.get(
-                "activation_mechanism", "adapter" if spec else "none"),
+            "guidance_probe": guidance_probe,
+            "guidance_context_probe": guidance_context_probe,
+            "activation_mechanism": (
+                meta.get("activation_mechanism")
+                if canonical_activation_fields_observed else
+                meta.get("activation_mechanism",
+                         observed_activation_method or ("adapter" if spec else "none"))),
             "workspace_receipt_path": meta.get("workspace_receipt_path"),
             "workspace_receipt": meta.get("workspace_receipt"),
         })
@@ -238,21 +358,22 @@ def run_condition_repetition(
             "ending_task_hash": task_after,
             "starting_full_hash": full_before,
             "ending_full_hash": full_after,
-            "guidance_probe": meta.get("guidance_probe"),
-            "guidance_context_probe": meta.get("guidance_context_probe"),
-            "activation_verified": meta.get(
-                "activation_verified",
-                meta.get("guidance_probe") == "present"),
-            "context_verified": meta.get(
-                "context_verified",
-                meta.get("guidance_context_probe") == "present"),
-            "activation_mechanism": meta.get(
-                "activation_mechanism", "adapter" if spec else "none"),
-            "guidance_id": (meta.get("guidance_id") or
-                            (guidance.get(name) or {}).get("guidance_id")),
-            "guidance_hash": (meta.get("guidance_hash") or
-                              meta.get("guidance_content_hash") or
-                              (guidance.get(name) or {}).get("guidance_hash")),
+            "guidance_probe": guidance_probe,
+            "guidance_context_probe": guidance_context_probe,
+            "guidance_identity": observed_guidance_identity,
+            "activation_method": observed_activation_method,
+            "activation_evidence": activation_evidence,
+            "canonical_activation_fields_observed":
+                canonical_activation_fields_observed,
+            "activation_verified": activation_verified,
+            "context_verified": context_verified,
+            "activation_mechanism": (
+                meta.get("activation_mechanism")
+                if canonical_activation_fields_observed else
+                meta.get("activation_mechanism",
+                         observed_activation_method or ("adapter" if spec else "none"))),
+            "guidance_id": meta.get("guidance_id") or observed_guidance_identity,
+            "guidance_hash": observed_guidance_hash,
             "guidance_source": (meta.get("guidance_source") or
                                 (guidance.get(name) or {}).get("guidance_source")),
             "guidance_path": (meta.get("guidance_path") or
@@ -326,7 +447,9 @@ __all__ = [
     "copy_seed",
     "make_temp_dir",
     "materialize_guidance",
+    "parse_command_argv_json",
     "run_condition_repetition",
     "skill_tree_hash",
     "snapshot_workspace",
+    "validate_command_argv",
 ]

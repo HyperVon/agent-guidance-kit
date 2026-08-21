@@ -31,7 +31,9 @@ from evaluation.harness import (
     DEFAULT_TIMEOUT_SECONDS,
     CommandHarnessAdapter,
     _failure,
+    parse_command_argv_json,
     run_condition_repetition,
+    validate_command_argv,
 )
 from evaluation.receipts import (
     RUNTIME_TREATMENT_PATHS,
@@ -69,6 +71,7 @@ __all__ = [
     "copy_seed",
     "make_temp_dir",
     "materialize_guidance",
+    "parse_command_argv_json",
     "hash_task_workspace",
     "hash_workspace",
     "receipt_hash",
@@ -77,4 +80,5 @@ __all__ = [
     "snapshot_workspace",
     "subprocess",
     "verify_workspace_receipt",
+    "validate_command_argv",
 ]

@@ -24,7 +24,9 @@ STRONG_ATTESTATION_CONFIDENCE_LEVELS = frozenset({
 ATTESTED_OBSERVATION_FIELDS = (
     "run_status", "worker_id", "session_id", "returncode", "output",
     "guidance_probe", "guidance_context_probe", "activation_mechanism",
-    "workspace_receipt_path", "workspace_receipt")
+    "workspace_receipt_path", "workspace_receipt", "guidance_identity",
+    "guidance_hash", "activation_method", "activation_evidence")
+LEGACY_ATTESTED_OBSERVATION_FIELDS = ATTESTED_OBSERVATION_FIELDS[:10]
 
 
 def as_text(value: object) -> str:
@@ -51,7 +53,10 @@ def attestation_observation_hash(observation: dict) -> str:
     """Hash the adapter observation bound by a worker attestation."""
 
     payload = {field: observation.get(field)
-               for field in ATTESTED_OBSERVATION_FIELDS}
+               for field in LEGACY_ATTESTED_OBSERVATION_FIELDS}
+    if observation.get("canonical_activation_fields_observed") is True:
+        payload.update({field: observation.get(field)
+                        for field in ATTESTED_OBSERVATION_FIELDS[10:]})
     payload["output"] = as_text(payload["output"])
     payload["workspace_receipt"] = as_text(payload["workspace_receipt"])
     serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"),
@@ -66,9 +71,12 @@ def _bool_claim(meta: dict, key: str, fallback: bool) -> bool:
 
 def _guidance_matches(meta: dict, expected_id: object,
                       expected_hash: object, guided: bool) -> bool:
-    observed_id = meta.get("guidance_id") or meta.get("skill_name")
-    observed_hash = meta.get("guidance_hash") or meta.get(
-        "guidance_content_hash")
+    observed_id = (meta["guidance_identity"]
+                   if "guidance_identity" in meta else
+                   meta.get("guidance_id") or meta.get("skill_name"))
+    observed_hash = (meta["guidance_hash"]
+                     if "guidance_hash" in meta else
+                     meta.get("guidance_content_hash"))
     if not guided:
         return observed_id is None and observed_hash is None
     return observed_id == expected_id and observed_hash == expected_hash
@@ -105,12 +113,22 @@ def build_attestation_layers(
     evaluator independently performed that verification.
     """
 
+    activation_evidence = meta.get("activation_evidence")
+    guidance_loaded = (
+        activation_evidence.get("guidance_loaded")
+        if isinstance(activation_evidence, dict) and
+        isinstance(activation_evidence.get("guidance_loaded"), bool)
+        else _bool_claim(meta, "guidance_loaded",
+                         meta.get("guidance_probe") == "present"))
+    context_loaded = (
+        activation_evidence.get("context_loaded")
+        if isinstance(activation_evidence, dict) and
+        isinstance(activation_evidence.get("context_loaded"), bool)
+        else _bool_claim(meta, "context_loaded",
+                         meta.get("guidance_context_probe") == "present"))
     adapter_claims = {
-        "guidance_loaded": _bool_claim(
-            meta, "guidance_loaded", meta.get("guidance_probe") == "present"),
-        "context_loaded": _bool_claim(
-            meta, "context_loaded",
-            meta.get("guidance_context_probe") == "present"),
+        "guidance_loaded": guidance_loaded,
+        "context_loaded": context_loaded,
         "execution_completed": _bool_claim(
             meta, "execution_completed",
             meta.get("run_status") == "success" and meta.get("returncode") == 0),

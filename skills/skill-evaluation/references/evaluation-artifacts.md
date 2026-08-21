@@ -1,5 +1,10 @@
 # Evaluation artifacts
 
+New harness-neutral execution and regression artifacts follow the canonical
+[evaluation protocol specification](../../../docs/evaluations/protocol-spec.md)
+and [adapter contract](../../../docs/evaluations/harness-adapter.md). The
+historical Docker/Kilo examples below are explicitly optional legacy evidence.
+
 Progressive-disclosure companion to `skill-evaluation`. Load this when authoring
 the `evals/evals.json` case set or recording run results. The grading,
 contamination, and verification *rules* stay in `SKILL.md`; this file holds
@@ -232,19 +237,21 @@ Each execution repetition MUST prove:
   A container ID is optional adapter metadata, not a core requirement.
 - **Controlled post-activation.** Layer B does NOT test whether the router
   activates the guidance. The evaluator gives the adapter the intended
-  `guidance_id` and `guidance_hash`; the adapter returns
-  `guidance_source`, `activation_verified`, and `context_verified` for each
-  guided condition. `activation_mechanism`, `guidance_path`, and
-  `guidance_content_hash` remain optional compatibility metadata. The adapter
-  must apply an equivalent activation policy to compared conditions, while the
-  validator checks identity rather than a provider- or CLI-specific path.
+  `guidance_identity`, `guidance_hash`, and
+  `guidance_activation_reference`; the adapter returns
+  `activation_method`, `activation_evidence`, `activation_verified`, and
+  `context_verified` for each guided condition. The adapter must apply an
+  equivalent activation policy to compared conditions, while the validator
+  checks identity rather than a provider- or CLI-specific path. The former
+  `guidance_id`, `guidance_source`, `activation_mechanism`, `guidance_path`,
+  and `guidance_content_hash` names remain optional compatibility metadata.
 - **Activation boundary (adapter-probed).** Guided conditions must report
-  `guidance_id`, `guidance_hash`, `guidance_source`,
-  `activation_verified: true`, and `context_verified: true`. The legacy
-  `guidance_probe` / `guidance_context_probe` aliases are accepted for
-  compatibility, but mere file presence is never activation. Harness-native
-  event logs may be retained under adapter metadata but are not part of the
-  core schema.
+  `guidance_identity`, `guidance_hash`, a non-empty `activation_method`, an
+  `activation_evidence` object, `activation_verified: true`, and
+  `context_verified: true`. The legacy `guidance_probe` /
+  `guidance_context_probe` aliases are accepted for compatibility, but mere
+  file presence is never activation. Harness-native event logs may be retained
+  under adapter metadata but are not part of the core schema.
 - **Trust layers.** New neutral conditions may include `attestation_layers`:
   `adapter_claims` preserves adapter observations, `evaluator_verification`
   records evaluator-recomputed consistency checks, and
@@ -287,7 +294,9 @@ and adapter contract. Neither condition is a no-skill baseline.
 Every new regression artifact records `candidate_revision`,
 `reference_revision`, `candidate_skill_hash`, `reference_skill_hash`,
 `case_set_hash`, `fixture_hash`, `runner_version`, and
-`reproduction_status: "reproducible"`. The validator resolves both case
+`reproduction_status: "reproducible"`, along with the distinct
+`result_schema_version`, `evidence_protocol_version`, and
+`adapter_protocol_version` declarations. The validator resolves both case
 anchors and skill trees from those exact Git revisions. Missing history,
 changed anchors, or an unavailable fixture is
 `INVALID_REPRODUCTION_ENVIRONMENT`, never a pass. Version 2 evidence remains
@@ -300,10 +309,14 @@ not establish statistical improvement; repeat independent runs before making
 that claim.
 
 The required per-condition fields are `worker_id`, `session_id`,
-`guidance_probe`, `guidance_context_probe`, `guidance_path`, and
-`guidance_content_hash`. A `container_id`, provider name, image, CLI version,
-or other harness-specific field may be added as adapter metadata but is not
-required by the regression protocol.
+`guidance_identity`, `guidance_hash`, `activation_method`, and the
+`activation_evidence` object. `activation_verified` and `context_verified` must
+agree with that object. The legacy probe aliases and guidance paths may be
+retained for compatibility. A `container_id`, provider name, image, CLI
+version, or other harness-specific field may be added as adapter metadata but
+is not required by the regression protocol. Failed invocations are retained in
+the ignored run-evidence area through `preserved_artifacts`; successful
+disposable runs are cleaned unless `--preserve-failed-artifacts` is requested.
 
 ## Recording a run
 

@@ -1,5 +1,7 @@
 # Evaluation result schema
 
+New harness-neutral records follow the [canonical protocol specification](protocol-spec.md).
+
 Committed result files live under `docs/evaluations/results/<skill>.md`. They are
 sanitized summaries: keep enough quoted evidence to justify every assertion
 decision, but store raw worker outputs, session logs, and tool trajectories in
@@ -27,17 +29,21 @@ it does not assume one universal target/baseline/placebo experiment.
 The core result schema does not require a particular agent CLI, model
 provider, container runtime, or discovery directory. Use `method:
 "harness-adapter"` and record the adapter name/version in optional runtime or
-adapter metadata. See [the adapter contract](harness-adapter.md) for the
-request/response boundary.
+adapter metadata. New records separate `result_schema_version`,
+`evidence_protocol_version`, and `adapter_protocol_version`. See [the adapter
+contract](harness-adapter.md) for the request/response boundary.
 
 Raw neutral evidence records evaluator-owned workspace receipts and, for every
-guided condition, the generic guidance identity (`guidance_id`,
-`guidance_hash`, `guidance_source`) plus `activation_verified` and
-`context_verified`. The receipt is read from a random file inside the requested
+guided condition, the canonical guidance identity (`guidance_identity`,
+`guidance_hash`, `activation_method`, `activation_evidence`) plus
+`activation_verified` and `context_verified`. The receipt is read from a random
+file inside the requested
 workspace and checked against the evaluator's expected hash, so distinct
 worker/session IDs alone cannot prove workspace isolation. The validator checks
 what guidance identity was active; it does not require a Kilo path, filesystem
-placement, CLI name, or one universal activation mechanism.
+placement, CLI name, or one universal activation mechanism. The former
+`guidance_id`, `guidance_source`, `guidance_probe`, and
+`activation_mechanism` names remain compatibility aliases.
 
 Each new neutral condition may also carry `attestation_layers`. This makes the
 trust chain explicit: `adapter_claims` is what the adapter says,
@@ -96,6 +102,8 @@ The following is a compact regression result shape. A qualification result uses
 ```result-json
 {
   "result_schema_version": 3,
+  "evidence_protocol_version": 3,
+  "adapter_protocol_version": "agent-guidance-kit.harness-adapter/v1",
   "skill": "code-review",
   "evaluation_mode": "regression",
   "method": "harness-adapter",

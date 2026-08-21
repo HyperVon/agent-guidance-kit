@@ -26,8 +26,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from eval_hashing import (HASH_PREFIX, canonical_hash, source_hash_of,
                           verify_generator_deterministic)
 from evaluation_protocols import (ALLOWED_ASSERTION_SCOPES, PROTOCOL_NAMES,
+                                  EVIDENCE_PROTOCOL_VERSION,
                                   LEGACY_RESULT_REGRESSION_STATUSES,
-                                  REGRESSION_STATUSES, get_protocol,
+                                  REGRESSION_STATUSES, RESULT_SCHEMA_VERSION,
+                                  get_protocol,
                                   is_safe_skill_name, legacy_protocol_name,
                                   protocol_name, resolve_path_within,
                                   validate_declaration)
@@ -42,6 +44,7 @@ from validators.attestation import (
     ATTESTATION_CONFIDENCE_LEVELS,
     is_strong_confidence,
     validate_attestation_layers,
+    validate_condition_execution_claim,
     validate_execution_attestation,
     validate_execution_verified_claim,
 )
@@ -814,6 +817,13 @@ def check_one_result(base, res, skill_names, case_index):
     if (status == "valid" and explicit_protocol in PROTOCOL_NAMES and
             result_schema_version not in (2, 3)):
         err(f"{base}: protocol-declared valid results must set result_schema_version=2 or 3")
+    if status == "valid" and result_schema_version == RESULT_SCHEMA_VERSION:
+        if res.get("evidence_protocol_version") != EVIDENCE_PROTOCOL_VERSION:
+            err(f"{base}: result schema v3 requires evidence_protocol_version=3")
+        if method == "harness-adapter":
+            adapter_version = res.get("adapter_protocol_version")
+            if not adapter_version:
+                err(f"{base}: harness-adapter result schema v3 requires adapter_protocol_version")
     if (status == "valid" and mode in REGRESSION_MODES and
             result_schema_version == 3):
         for key in ("candidate_skill_hash", "reference_skill_hash",
@@ -1567,6 +1577,7 @@ def validate_generic_execution_evidence(evidence):
     if not isinstance(harness, dict) or harness.get("adapter_protocol") != (
             "agent-guidance-kit.harness-adapter/v1"):
         errs.append("neutral execution evidence must identify the harness adapter protocol")
+    _validate_neutral_evidence_versions(evidence, harness, errs)
     anchor = _execution_source_anchor_generic(evidence, errs)
     if anchor is None:
         return errs
@@ -1629,6 +1640,7 @@ def validate_generic_execution_evidence(evidence):
     seen_workers = set()
     seen_sessions = set()
     attestation_confidences = []
+    require_canonical = evidence.get("result_schema_version") == RESULT_SCHEMA_VERSION
     expected_task_hash = hashlib.sha256(
         anchor["case"].get("prompt", "").encode()).hexdigest()
     for repetition in repetitions:
@@ -1667,20 +1679,25 @@ def validate_generic_execution_evidence(evidence):
             ctag = f"{tag} {name}"
             if cmeta.get("repetition_id") != rid:
                 errs.append(f"{ctag}: repetition_id does not match parent repetition")
-            for key in ("worker_id", "session_id", "run_status", "returncode",
-                        "starting_task_hash", "ending_task_hash",
-                        "starting_full_hash", "ending_full_hash",
-                        "guidance_probe", "guidance_context_probe",
-                        "workspace_receipt", "workspace_receipt_path",
-                        "workspace_receipt_hash", "attestation_nonce",
-                        "execution_request_hash", "execution_observation_hash",
-                        "execution_attestation"):
+            required_fields = (
+                "worker_id", "session_id", "run_status", "returncode",
+                "starting_task_hash", "ending_task_hash",
+                "starting_full_hash", "ending_full_hash",
+                "workspace_receipt", "workspace_receipt_path",
+                "workspace_receipt_hash", "attestation_nonce",
+                "execution_request_hash", "execution_observation_hash",
+                "execution_attestation")
+            if not require_canonical:
+                required_fields += ("guidance_probe", "guidance_context_probe")
+            for key in required_fields:
                 if key not in cmeta:
                     errs.append(f"{ctag}: missing {key}")
             _validate_workspace_receipt(
                 cmeta, receipt_hashes.get(name), ctag, errs)
-            attestation_confidences.append(_validate_execution_attestation(
-                cmeta, receipt_hashes.get(name), ctag, errs))
+            confidence = _validate_execution_attestation(
+                cmeta, receipt_hashes.get(name), ctag, errs)
+            attestation_confidences.append(confidence)
+            validate_condition_execution_claim(cmeta, confidence, ctag, errs)
             if cmeta.get("run_status") != "success" or cmeta.get("returncode") != 0:
                 errs.append(f"{ctag}: failed condition is not evidence")
             if not (cmeta.get("output") or "").strip():
@@ -1705,7 +1722,8 @@ def validate_generic_execution_evidence(evidence):
             guided = name != "baseline"
             expected_id, expected_hash = expected_guidance_identity(evidence, name)
             validate_guidance_observation(
-                cmeta, expected_id, expected_hash, ctag, errs, guided=guided)
+                cmeta, expected_id, expected_hash, ctag, errs, guided=guided,
+                require_canonical=require_canonical)
             validate_attestation_layers(
                 cmeta, receipt_hashes.get(name), expected_id, expected_hash,
                 ctag, errs, guided=guided)
@@ -1780,6 +1798,35 @@ def _execution_source_anchor_generic(evidence, errs):
             "fixture": fixture, "expected_fixture_hash": expected,
             "evals_path": evals_path, "evals_rel": evals_rel,
             "fixture_rel": fixture_rel, "source_hash": source_hash}
+
+
+def _validate_neutral_evidence_versions(
+    evidence: dict,
+    harness: object,
+    errs: list[str],
+) -> None:
+    """Keep result, evidence, and adapter protocol versions distinct."""
+
+    schema = evidence.get("result_schema_version")
+    if schema is None:
+        return
+    if (not isinstance(schema, int) or isinstance(schema, bool) or
+            schema not in (2, RESULT_SCHEMA_VERSION)):
+        errs.append("neutral evidence result_schema_version must be 2 or 3")
+        return
+    if schema < RESULT_SCHEMA_VERSION:
+        return
+    if evidence.get("evidence_protocol_version") != EVIDENCE_PROTOCOL_VERSION:
+        errs.append(
+            "neutral evidence schema v3 requires evidence_protocol_version=3"
+        )
+    adapter_protocol = harness.get("adapter_protocol") if isinstance(
+        harness, dict) else None
+    if evidence.get("adapter_protocol_version") != adapter_protocol:
+        errs.append(
+            "neutral evidence schema v3 adapter_protocol_version must match "
+            "harness.adapter_protocol"
+        )
 
 
 def _validate_workspace_receipt(cmeta, expected_hash, ctag, errs):
@@ -2309,6 +2356,7 @@ def validate_generic_regression_evidence(evidence):
     if not isinstance(harness, dict) or harness.get("adapter_protocol") != (
             "agent-guidance-kit.harness-adapter/v1"):
         errs.append("regression evidence must identify the harness adapter protocol")
+    _validate_neutral_evidence_versions(evidence, harness, errs)
     skill = evidence.get("skill")
     case_id = evidence.get("case_id")
     if not isinstance(skill, str) or not skill:
@@ -2467,6 +2515,7 @@ def validate_generic_regression_evidence(evidence):
     seen_workers = set()
     seen_sessions = set()
     attestation_confidences = []
+    require_canonical = evidence.get("result_schema_version") == RESULT_SCHEMA_VERSION
     for repetition in repetitions:
         tag = f"rep{repetition.get('rep')}"
         rid = repetition.get("repetition_id")
@@ -2501,20 +2550,25 @@ def validate_generic_regression_evidence(evidence):
             ctag = f"{tag} {name}"
             if cmeta.get("repetition_id") != rid:
                 errs.append(f"{ctag}: repetition_id does not match parent repetition")
-            for key in ("worker_id", "session_id", "run_status", "returncode",
-                        "starting_task_hash", "ending_task_hash",
-                        "starting_full_hash", "ending_full_hash",
-                        "guidance_probe", "guidance_context_probe",
-                        "workspace_receipt", "workspace_receipt_path",
-                        "workspace_receipt_hash", "attestation_nonce",
-                        "execution_request_hash", "execution_observation_hash",
-                        "execution_attestation"):
+            required_fields = (
+                "worker_id", "session_id", "run_status", "returncode",
+                "starting_task_hash", "ending_task_hash",
+                "starting_full_hash", "ending_full_hash",
+                "workspace_receipt", "workspace_receipt_path",
+                "workspace_receipt_hash", "attestation_nonce",
+                "execution_request_hash", "execution_observation_hash",
+                "execution_attestation")
+            if not require_canonical:
+                required_fields += ("guidance_probe", "guidance_context_probe")
+            for key in required_fields:
                 if key not in cmeta:
                     errs.append(f"{ctag}: missing {key}")
             _validate_workspace_receipt(
                 cmeta, receipt_hashes.get(name), ctag, errs)
-            attestation_confidences.append(_validate_execution_attestation(
-                cmeta, receipt_hashes.get(name), ctag, errs))
+            confidence = _validate_execution_attestation(
+                cmeta, receipt_hashes.get(name), ctag, errs)
+            attestation_confidences.append(confidence)
+            validate_condition_execution_claim(cmeta, confidence, ctag, errs)
             if cmeta.get("run_status") != "success" or cmeta.get("returncode") != 0:
                 errs.append(f"{ctag}: failed condition is not evidence")
             if not (cmeta.get("output") or "").strip():
@@ -2536,7 +2590,8 @@ def validate_generic_regression_evidence(evidence):
                 seen_sessions.add(session_id)
             expected_id, expected_hash = expected_guidance_identity(evidence, name)
             validate_guidance_observation(
-                cmeta, expected_id, expected_hash, ctag, errs, guided=True)
+                cmeta, expected_id, expected_hash, ctag, errs, guided=True,
+                require_canonical=require_canonical)
             validate_attestation_layers(
                 cmeta, receipt_hashes.get(name), expected_id, expected_hash,
                 ctag, errs, guided=True)

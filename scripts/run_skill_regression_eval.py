@@ -17,7 +17,7 @@ Example::
     python3 scripts/run_skill_regression_eval.py \
       --skill code-review --reference <git-sha> --candidate HEAD \
       --case-id 5 --reps 1 \
-      --harness-command 'python3 path/to/adapter.py'
+      --harness-command-json '["python3","path/to/adapter.py"]'
 
 The command never escalates to placebo or repeated confirmation.  Increase
 ``--reps`` or run the separate confirmation protocol only when the observed
@@ -48,7 +48,9 @@ from evaluation.regression import (
     case_set_hash,
 )
 from eval_hashing import HASH_PREFIX, materialize_fixture_seed
-from evaluation_protocols import resolve_path_within, validate_declaration
+from evaluation_protocols import (EVIDENCE_PROTOCOL_VERSION,
+                                   RESULT_SCHEMA_VERSION, resolve_path_within,
+                                   validate_declaration)
 
 
 def resolve_revision(revision: str) -> str:
@@ -234,7 +236,9 @@ def build_evidence(args, candidate_dir: str, reference_dir: str,
     candidate_hash = _revision_tree_hash(candidate_skill_dir)
     reference_hash = _revision_tree_hash(reference_skill_dir)
     evidence = {
-        "result_schema_version": 3,
+        "result_schema_version": RESULT_SCHEMA_VERSION,
+        "evidence_protocol_version": EVIDENCE_PROTOCOL_VERSION,
+        "adapter_protocol_version": evaluation_harness.ADAPTER_PROTOCOL,
         "evidence_type": "regression",
         "protocol": "regression",
         "skill": args.skill,
@@ -244,7 +248,6 @@ def build_evidence(args, candidate_dir: str, reference_dir: str,
             "name": adapter.name,
             "adapter_protocol": evaluation_harness.ADAPTER_PROTOCOL,
         },
-        "runtime_treatment_paths": list(evaluation_harness.RUNTIME_TREATMENT_PATHS),
         "candidate_revision": candidate_revision,
         "reference_revision": reference_revision,
         "fixture_revision": reference_revision,
@@ -264,10 +267,10 @@ def build_evidence(args, candidate_dir: str, reference_dir: str,
         "reference_skill_hash": reference_hash,
         "candidate_guidance_id": args.skill,
         "reference_guidance_id": args.skill,
+        "candidate_guidance_identity": args.skill,
+        "reference_guidance_identity": args.skill,
         "candidate_guidance_hash": candidate_hash,
         "reference_guidance_hash": reference_hash,
-        "candidate_guidance_path": evaluation_harness.RUNTIME_TREATMENT_PATHS[0],
-        "reference_guidance_path": evaluation_harness.RUNTIME_TREATMENT_PATHS[0],
         "fixture_source_path": reference_anchor["source_path"],
         "fixture_path": reference_anchor["fixture_path"],
         "fixture_source_hash": reference_anchor["source_hash"],
@@ -275,14 +278,18 @@ def build_evidence(args, candidate_dir: str, reference_dir: str,
         "canonical_task_seed_hash": None,
         "conditions": ["candidate", "reference"],
         "repetitions": [],
+        "preserved_artifacts": [],
     }
 
     activation_specs = {
         "candidate": {"skill_name": args.skill, "source_dir": candidate_skill_dir},
         "reference": {"skill_name": args.skill, "source_dir": reference_skill_dir},
     }
+    preserve_requested = bool(getattr(args, "preserve_failed_artifacts", False))
     for index in range(args.reps):
         seed, _ = materialize_fixture_seed(fixture_dir, ftype, source, invocation)
+        workspaces = {}
+        preserve = preserve_requested
         try:
             seed_hash = HASH_PREFIX + evaluation_harness.hash_task_workspace(
                 seed, evaluation_harness.RUNTIME_TREATMENT_PATHS)
@@ -297,10 +304,22 @@ def build_evidence(args, candidate_dir: str, reference_dir: str,
             )
             evidence["canonical_task_seed_hash"] = canonical
             evidence["repetitions"].append(repetition)
-            for workspace in workspaces.values():
-                evaluation_harness.cleanup_workspace(workspace)
+            preserve = preserve or any(
+                condition.get("run_status") != "success" or
+                condition.get("returncode") != 0
+                for condition in repetition["conditions"].values()
+            )
+        except Exception:
+            preserve = True
+            raise
         finally:
-            shutil.rmtree(seed, ignore_errors=True)
+            if preserve:
+                evidence["preserved_artifacts"].extend(
+                    [*workspaces.values(), seed])
+            else:
+                for workspace in workspaces.values():
+                    evaluation_harness.cleanup_workspace(workspace)
+                shutil.rmtree(seed, ignore_errors=True)
     return evidence
 
 
@@ -314,8 +333,9 @@ def main() -> None:
     parser.add_argument("--case-id", type=int, required=True)
     parser.add_argument("--model", default=None,
                         help="opaque model/runtime identifier passed to the adapter")
-    parser.add_argument("--harness-command", required=True,
-                        help="command implementing the JSON harness-adapter contract")
+    parser.add_argument("--harness-command-json", required=True,
+                        type=evaluation_harness.parse_command_argv_json,
+                        help="JSON-encoded executable argv; shell syntax is not interpreted")
     parser.add_argument("--harness-name", default="external",
                         help="name recorded in evidence (default: external)")
     parser.add_argument("--harness-timeout", type=int, default=1200,
@@ -323,14 +343,17 @@ def main() -> None:
     parser.add_argument("--harness-cwd", default=None,
                         help="optional working directory for the adapter command")
     parser.add_argument("--reps", type=int, default=1)
+    parser.add_argument("--preserve-failed-artifacts", action="store_true",
+                        help="preserve evaluator workspaces and seeds for debugging")
     parser.add_argument("--out", default=None,
                         help="evidence output path (normally under .eval-evidence)")
     args = parser.parse_args()
 
     candidate_root = reference_root = None
+    preserve_roots = bool(getattr(args, "preserve_failed_artifacts", False))
     try:
         adapter = evaluation_harness.CommandHarnessAdapter(
-            args.harness_command,
+            args.harness_command_json,
             name=args.harness_name,
             timeout_seconds=args.harness_timeout,
             cwd=args.harness_cwd,
@@ -340,6 +363,7 @@ def main() -> None:
         evidence = build_evidence(args, candidate_root, reference_root,
                                   candidate_revision, reference_revision,
                                   adapter)
+        preserve_roots = preserve_roots or bool(evidence["preserved_artifacts"])
         out = args.out or os.path.join(
             ROOT, ".eval-evidence",
             f"regression-{args.skill}-case{args.case_id}.json",
@@ -356,10 +380,13 @@ def main() -> None:
             print(f"rep{repetition['rep']}: {states} "
                   f"distinct={repetition['distinct_workers']} "
                   f"task_hash={repetition['natural_task_hash'][:10]}")
+    except Exception:
+        preserve_roots = True
+        raise
     finally:
-        if candidate_root:
+        if candidate_root and not preserve_roots:
             evaluation_harness.cleanup_workspace(candidate_root)
-        if reference_root:
+        if reference_root and not preserve_roots:
             evaluation_harness.cleanup_workspace(reference_root)
 
 
