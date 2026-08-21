@@ -134,6 +134,30 @@ about one is never evidence about another.
 3. **Protocol validity** — were the conditions genuinely independent and leak-free?
    Without this, any comparison is uninterpretable.
 
+### Evidence trust model and lifecycle
+
+Neutral adapter evidence is layered. `adapter_claims` preserves what an adapter
+reports, `evaluator_verification` records checks recomputed from the response
+and evaluator-owned artifacts, and optional `independent_attestation` records
+an external/runtime verifier. Adapter claims remain observations even when
+their hashes are internally consistent; the evaluator must not describe them as
+independently proven. Confidence is explicit:
+`adapter_declared` is limited evidence, while `runtime_verified` and
+`independently_verified` are the only levels that can support
+`execution_verified: true`.
+
+Use one lifecycle vocabulary:
+
+```text
+activation_verified -> execution_attested -> isolation_verified -> protocol_valid
+```
+
+`activation_verified`/`context_verified` describe guidance activation,
+`execution_attestation` and `execution_verified` describe bound execution
+facts, `isolation_attestation`/`worker_isolation_verified` describe the worker
+boundary, and `protocol.status` is the aggregate result. These fields are not
+interchangeable.
+
 ## Scope gate
 
 Use this workflow only when the user asks to measure routing or output quality.

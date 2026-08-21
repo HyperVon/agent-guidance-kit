@@ -26,13 +26,22 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from eval_hashing import (HASH_PREFIX, canonical_hash, source_hash_of,
                           verify_generator_deterministic)
 from evaluation_protocols import (ALLOWED_ASSERTION_SCOPES, PROTOCOL_NAMES,
+                                  LEGACY_RESULT_REGRESSION_STATUSES,
                                   REGRESSION_STATUSES, get_protocol,
                                   is_safe_skill_name, legacy_protocol_name,
                                   protocol_name, resolve_path_within,
                                   validate_declaration)
+from evaluation.regression import (
+    INVALID_REPRODUCTION_ENVIRONMENT,
+    REGRESSION_RUNNER_VERSION,
+    REPRODUCTION_STATUSES,
+    case_set_hash,
+    normalize_regression_status,
+)
 from validators.attestation import (
     ATTESTATION_CONFIDENCE_LEVELS,
     is_strong_confidence,
+    validate_attestation_layers,
     validate_execution_attestation,
     validate_execution_verified_claim,
 )
@@ -801,9 +810,21 @@ def check_one_result(base, res, skill_names, case_index):
     selected_protocol = explicit_protocol or legacy_protocol
     if explicit_protocol is not None and explicit_protocol not in PROTOCOL_NAMES:
         err(f"{base}: unknown evaluation protocol {explicit_protocol!r}")
+    result_schema_version = res.get("result_schema_version")
     if (status == "valid" and explicit_protocol in PROTOCOL_NAMES and
-            res.get("result_schema_version") != 2):
-        err(f"{base}: protocol-declared valid results must set result_schema_version=2")
+            result_schema_version not in (2, 3)):
+        err(f"{base}: protocol-declared valid results must set result_schema_version=2 or 3")
+    if (status == "valid" and mode in REGRESSION_MODES and
+            result_schema_version == 3):
+        for key in ("candidate_skill_hash", "reference_skill_hash",
+                    "case_set_hash", "fixture_hash", "runner_version",
+                    "reproduction_status"):
+            if not isinstance(res.get(key), str) or not res[key].strip():
+                err(f"{base}: result schema v3 regression is missing {key}")
+        if res.get("runner_version") != REGRESSION_RUNNER_VERSION:
+            err(f"{base}: result schema v3 runner_version is unsupported")
+        if res.get("reproduction_status") != "reproducible":
+            err(f"{base}: {INVALID_REPRODUCTION_ENVIRONMENT}: result is not reproducible")
     if mode in REGRESSION_MODES and status == "valid" and explicit_protocol != "regression":
         err(f"{base}: valid regression result must declare protocol.name='regression'")
     if mode in EXEC_MODES and status == "valid" and explicit_protocol is None and legacy_protocol is None:
@@ -1020,10 +1041,12 @@ def check_result_case(base, cs, skill, mode, case_index, *,
         expect, regression_status = regression_status_for_verdict(gp, bp)
         if cat != expect:
             err(f"{base} case {cid}: outcome.category '{cat}' inconsistent with regression verdict (expected {expect})")
-        if oc.get("regression_status") not in REGRESSION_STATUSES:
+        reported_status = oc.get("regression_status")
+        if reported_status not in (REGRESSION_STATUSES |
+                                   LEGACY_RESULT_REGRESSION_STATUSES):
             err(f"{base} case {cid}: regression result requires outcome.regression_status")
-        elif oc.get("regression_status") != regression_status:
-            err(f"{base} case {cid}: regression_status '{oc.get('regression_status')}' does not match observed candidate/reference verdict (expected {regression_status})")
+        elif normalize_regression_status(reported_status) != regression_status:
+            err(f"{base} case {cid}: regression_status '{reported_status}' does not match observed candidate/reference verdict (expected {regression_status})")
     else:
         gp = verdict.get("target_pass")
         bp = verdict.get("baseline_pass")
@@ -1683,6 +1706,9 @@ def validate_generic_execution_evidence(evidence):
             expected_id, expected_hash = expected_guidance_identity(evidence, name)
             validate_guidance_observation(
                 cmeta, expected_id, expected_hash, ctag, errs, guided=guided)
+            validate_attestation_layers(
+                cmeta, receipt_hashes.get(name), expected_id, expected_hash,
+                ctag, errs, guided=guided)
         if len(set(workers)) != len(conditions):
             errs.append(f"{tag}: conditions do not have distinct worker_ids")
         if len(set(sessions)) != len(conditions):
@@ -2294,17 +2320,49 @@ def validate_generic_regression_evidence(evidence):
     if not isinstance(case_id, int):
         errs.append("regression evidence missing integer case_id")
         return errs
+    schema_version = evidence.get("result_schema_version")
+    immutable_metadata_required = (
+        isinstance(schema_version, int) and not isinstance(schema_version, bool)
+        and schema_version >= 3
+    )
+    if "reproduction_status" in evidence:
+        reproduction_status = evidence.get("reproduction_status")
+        if reproduction_status not in REPRODUCTION_STATUSES:
+            errs.append(
+                f"{INVALID_REPRODUCTION_ENVIRONMENT}: regression evidence has "
+                f"unsupported reproduction_status {reproduction_status!r}"
+            )
+        elif reproduction_status != "reproducible":
+            errs.append(
+                f"{INVALID_REPRODUCTION_ENVIRONMENT}: regression evidence did "
+                f"not reproduce exactly ({reproduction_status})"
+            )
+    elif immutable_metadata_required:
+        errs.append("regression evidence missing reproduction_status")
     for key in ("candidate_revision", "reference_revision",
                 "candidate_skill_content_hash", "reference_skill_content_hash"):
         if not isinstance(evidence.get(key), str) or not evidence[key].strip():
             errs.append(f"regression evidence missing {key}")
+    if immutable_metadata_required:
+        for key in ("runner_version", "case_set_hash", "fixture_hash",
+                    "candidate_skill_hash", "reference_skill_hash"):
+            if not isinstance(evidence.get(key), str) or not evidence[key].strip():
+                errs.append(f"regression evidence missing immutable metadata {key}")
+        if evidence.get("runner_version") != REGRESSION_RUNNER_VERSION:
+            errs.append(
+                "regression evidence runner_version does not match the "
+                "validator-supported runner version"
+            )
     expected_skill_source = f"skills/{skill}"
     for key in ("candidate_skill_source_path", "reference_skill_source_path"):
         if evidence.get(key) != expected_skill_source:
             errs.append(f"regression evidence {key} does not match the current skill")
     for key in ("candidate_revision", "reference_revision"):
         if not _git_commit_exists(evidence.get(key)):
-            errs.append(f"regression evidence {key} must be an existing Git commit SHA")
+            errs.append(
+                f"{INVALID_REPRODUCTION_ENVIRONMENT}: regression evidence "
+                f"{key} must be an existing Git commit SHA"
+            )
     revision_anchors = {}
     for label, revision_key in (("candidate", "candidate_revision"),
                                 ("reference", "reference_revision")):
@@ -2315,8 +2373,15 @@ def validate_generic_regression_evidence(evidence):
             revision_anchors[label] = _regression_case_anchor(
                 revision, skill, case_id)
         except Exception as exc:  # fail closed with anchored evidence error
-            errs.append(f"regression evidence {label} case anchor could not be read: {exc}")
+            errs.append(
+                f"{INVALID_REPRODUCTION_ENVIRONMENT}: regression evidence "
+                f"{label} case anchor could not be read: {exc}"
+            )
     if set(revision_anchors) != {"candidate", "reference"}:
+        errs.append(
+            f"{INVALID_REPRODUCTION_ENVIRONMENT}: both exact candidate and "
+            "reference case anchors are required"
+        )
         return errs
     case_anchors = evidence.get("case_anchors")
     if not isinstance(case_anchors, dict):
@@ -2355,6 +2420,20 @@ def validate_generic_regression_evidence(evidence):
         errs.append("regression evidence missing expected_fixture_hash for frozen content/output hash")
     elif evidence.get("expected_fixture_hash") != expected_fixture:
         errs.append("regression evidence expected_fixture_hash does not match the reference frozen fixture hash")
+    if "fixture_hash" in evidence and evidence.get("fixture_hash") != expected_fixture:
+        errs.append("regression evidence fixture_hash does not match the reference frozen fixture hash")
+    if ("candidate_skill_hash" in evidence and
+            evidence.get("candidate_skill_hash") != evidence.get(
+                "candidate_skill_content_hash")):
+        errs.append("regression evidence candidate_skill_hash does not match candidate_skill_content_hash")
+    if ("reference_skill_hash" in evidence and
+            evidence.get("reference_skill_hash") != evidence.get(
+                "reference_skill_content_hash")):
+        errs.append("regression evidence reference_skill_hash does not match reference_skill_content_hash")
+    expected_case_set_hash = case_set_hash(
+        revision_anchors["candidate"], revision_anchors["reference"])
+    if "case_set_hash" in evidence and evidence.get("case_set_hash") != expected_case_set_hash:
+        errs.append("regression evidence case_set_hash does not match revision-local case anchors")
     revision_hashes = {}
     for revision_key, hash_key in (
             ("candidate_revision", "candidate_skill_content_hash"),
@@ -2458,6 +2537,9 @@ def validate_generic_regression_evidence(evidence):
             expected_id, expected_hash = expected_guidance_identity(evidence, name)
             validate_guidance_observation(
                 cmeta, expected_id, expected_hash, ctag, errs, guided=True)
+            validate_attestation_layers(
+                cmeta, receipt_hashes.get(name), expected_id, expected_hash,
+                ctag, errs, guided=True)
         if len(set(starts)) != 1:
             errs.append(f"{tag}: candidate/reference starting task hashes differ")
     validate_execution_verified_claim(evidence, attestation_confidences, errs)

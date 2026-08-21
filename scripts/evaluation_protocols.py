@@ -12,6 +12,11 @@ from dataclasses import dataclass
 import ntpath
 import os
 
+from evaluation.regression import (
+    LEGACY_REGRESSION_STATUSES,
+    OBSERVED_REGRESSION_STATUSES,
+)
+
 
 @dataclass(frozen=True)
 class Protocol:
@@ -58,13 +63,28 @@ PROTOCOLS = {
 PROTOCOL_NAMES = frozenset(PROTOCOLS)
 CONDITION_NAMES = frozenset({"target", "baseline", "placebo", "candidate", "reference"})
 ALLOWED_ASSERTION_SCOPES = frozenset({"shared-outcome", "skill-contract", "universal-safety"})
-REGRESSION_STATUSES = frozenset({
-    "improved_revision_behavior",
-    "preserved_behavior",
-    "regression_detected",
-    "inconclusive",
-    "not_run",
-})
+REGRESSION_STATUSES = OBSERVED_REGRESSION_STATUSES
+
+# Historical consumers may still emit the pre-v2 labels. They are accepted as
+# compatibility aliases by result validation; new runners emit observation-
+# only names.
+LEGACY_RESULT_REGRESSION_STATUSES = LEGACY_REGRESSION_STATUSES
+
+LIFECYCLE_STAGES = (
+    "activation_verified",
+    "execution_attested",
+    "isolation_verified",
+    "protocol_valid",
+)
+LIFECYCLE_FIELD_STAGE = {
+    "activation_verified": "activation_verified",
+    "context_verified": "activation_verified",
+    "execution_attestation": "execution_attested",
+    "execution_verified": "execution_attested",
+    "isolation_attestation": "isolation_verified",
+    "worker_isolation_verified": "isolation_verified",
+    "protocol.status": "protocol_valid",
+}
 
 
 def is_safe_skill_name(value: object) -> bool:

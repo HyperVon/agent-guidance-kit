@@ -2,22 +2,9 @@
 
 from __future__ import annotations
 
-from .protocol import (
-    FORBIDDEN_REGRESSION_CLAIMS,
-)
+from evaluation.regression import regression_status_for_verdict
 
-
-def regression_status_for_verdict(
-    candidate_pass: bool, reference_pass: bool) -> tuple[str, str]:
-    """Return the neutral outcome category and revision-comparison status."""
-
-    if candidate_pass and not reference_pass:
-        return "candidate_only_pass", "improved_revision_behavior"
-    if reference_pass and not candidate_pass:
-        return "reference_only_pass", "regression_detected"
-    if candidate_pass and reference_pass:
-        return "both_pass", "preserved_behavior"
-    return "both_fail", "inconclusive"
+from .protocol import FORBIDDEN_REGRESSION_CLAIMS
 
 
 def validate_regression_claim(base: str, result: dict, errs: list[str]) -> None:
@@ -34,7 +21,7 @@ def validate_regression_claim(base: str, result: dict, errs: list[str]) -> None:
                         errs.append(
                             f"{base}: regression protocol cannot claim "
                             f"{child!r} at {child_path}; use "
-                            "revision-behavior terminology"
+                            "observation-only revision terminology"
                         )
                 elif isinstance(child, (dict, list)):
                     walk(child, child_path)
@@ -44,6 +31,7 @@ def validate_regression_claim(base: str, result: dict, errs: list[str]) -> None:
                     walk(child, f"{path}[{index}]")
 
     walk(result)
+
 
 __all__ = [
     "FORBIDDEN_REGRESSION_CLAIMS",

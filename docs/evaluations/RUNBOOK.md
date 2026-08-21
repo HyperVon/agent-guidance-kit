@@ -232,6 +232,13 @@ valid limited evidence; only an adapter that proves the stronger runtime or
 independent boundary may claim `execution_verified`, and only an adapter that
 proves an OS-level isolation boundary may claim `valid`.
 
+Neutral evidence now makes the trust chain explicit with three optional
+condition-level layers: `adapter_claims` (what the adapter says),
+`evaluator_verification` (what the evaluator recomputes from receipts,
+identities, and response shape), and `independent_attestation` (an optional
+external/runtime source). Consistency checking does not turn the first layer
+into independent proof.
+
 The normal development workflow is a one-repetition regression comparison or
 qualification. Do not add placebo or repetitions automatically. If a stronger
 claim needs the retained Docker/Kilo procedure, run it explicitly as the
@@ -246,6 +253,21 @@ revision, and the validator resolves both `case_anchors` entries from their
 recorded revisions rather than from the current checkout. A changed historical
 candidate fixture is consequently visible in evidence without changing the
 task supplied to either worker.
+
+New regression evidence also records the candidate/reference skill hashes,
+`case_set_hash`, shared `fixture_hash`, `runner_version`, and
+`reproduction_status`. If the exact Git history or revision-local case cannot
+be resolved, the validator reports `INVALID_REPRODUCTION_ENVIRONMENT`; it does
+not silently use the current checkout or record a pass.
+
+The canonical lifecycle is:
+
+```text
+activation_verified -> execution_attested -> isolation_verified -> protocol_valid
+```
+
+`execution_verified` is a strong execution-attestation claim, not an alias for
+`protocol.status: valid`; isolation remains a separate gate.
 
 ### 4a. Optional strict Docker/Kilo adapter
 
@@ -545,6 +567,18 @@ independent dimensions:
 
 A `both_pass` case means something very different from `both_fail`; preserve the
 distinction.
+
+For candidate/reference comparisons, use observation-only labels:
+
+| Label | Meaning |
+| --- | --- |
+| `OBSERVED_CANDIDATE_ONLY_PASS` | candidate passed; reference failed |
+| `OBSERVED_REFERENCE_ONLY_PASS` | reference passed; candidate failed |
+| `OBSERVED_BOTH_PASS` | both passed |
+| `OBSERVED_BOTH_FAIL` | both failed |
+
+These labels describe one observed comparison, not a statistical conclusion.
+Repeated independent runs are required before claiming improvement.
 
 Protocol-valid execution result blocks additionally declare `protocol.conditions`
 and `protocol.repeats`. Each case carries its own task and fixture hashes plus one

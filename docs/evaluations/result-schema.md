@@ -39,6 +39,13 @@ worker/session IDs alone cannot prove workspace isolation. The validator checks
 what guidance identity was active; it does not require a Kilo path, filesystem
 placement, CLI name, or one universal activation mechanism.
 
+Each new neutral condition may also carry `attestation_layers`. This makes the
+trust chain explicit: `adapter_claims` is what the adapter says,
+`evaluator_verification` is what the validator recomputes for consistency, and
+`independent_attestation` records an optional external/runtime source. An
+adapter claim is never relabeled as independent proof. Legacy evidence may
+omit the object and remains readable at its original confidence level.
+
 Neutral regression evidence is revision-anchored. Its
 `case_anchors.candidate` and `case_anchors.reference` entries bind each
 revision's `evals/evals.json` hash, prompt hash, fixture declaration, frozen
@@ -49,6 +56,27 @@ generator are not materialized or executed; the evaluator uses the reference
 fixture for both conditions. Validation resolves both anchors from their
 recorded Git revisions, so a historical candidate is not reinterpreted using
 the current checkout's evals or fixtures.
+
+Regression evidence schema version 3 additionally records immutable
+`candidate_skill_hash`, `reference_skill_hash`, `case_set_hash`, `fixture_hash`,
+`runner_version`, and `reproduction_status`. The case-set hash covers both
+revision-local anchors; the fixture hash identifies the exact shared task; and
+the runner version identifies the metadata/validation contract. If either Git
+revision, case anchor, or fixture cannot be resolved exactly, validation returns
+`INVALID_REPRODUCTION_ENVIRONMENT` and the evidence cannot be a pass. Version 2
+artifacts remain readable through the compatibility path.
+
+The comparison lifecycle is intentionally separate:
+
+| Stage | Canonical fields | Meaning |
+| --- | --- | --- |
+| Activation | `activation_verified`, `context_verified` | Guidance identity/context was observed for the condition. |
+| Execution attestation | `execution_attestation`, `execution_verified` | Returned execution facts are bound; `execution_verified` additionally requires strong confidence. |
+| Isolation | `isolation_attestation`, `worker_isolation_verified` | The worker boundary was independently attested. |
+| Protocol result | `protocol.status` | Aggregate protocol validity after the preceding gates. |
+
+`execution_verified` is not a synonym for `protocol.status: valid`, and an
+activation probe is not an isolation proof.
 
 For a `valid` execution or regression comparison, `protocol.isolation_attestation`
 is also required. It must use the
@@ -67,7 +95,7 @@ The following is a compact regression result shape. A qualification result uses
 
 ```result-json
 {
-  "result_schema_version": 2,
+  "result_schema_version": 3,
   "skill": "code-review",
   "evaluation_mode": "regression",
   "method": "harness-adapter",
@@ -75,6 +103,12 @@ The following is a compact regression result shape. A qualification result uses
   "fixture_revision": "sha256:…",
   "candidate_skill_revision": "git:…",
   "reference_skill_revision": "git:…",
+  "candidate_skill_hash": "sha256:…",
+  "reference_skill_hash": "sha256:…",
+  "case_set_hash": "sha256:…",
+  "fixture_hash": "sha256:…",
+  "runner_version": "agent-guidance-kit.regression-runner/v2",
+  "reproduction_status": "reproducible",
   "runtime": {
     "harness": "adapter-name",
     "harness_version": "adapter-defined",
@@ -120,7 +154,7 @@ The following is a compact regression result shape. A qualification result uses
       ],
       "outcome": {
         "category": "both_pass",
-        "regression_status": "preserved_behavior",
+        "regression_status": "observed_both_pass",
         "measurement_status": "inconclusive",
         "protocol_status": "limited"
       },
@@ -150,12 +184,15 @@ The following is a compact regression result shape. A qualification result uses
 denominator. `skill-contract` assertions are reported for contract adherence
 and version comparison, but they cannot make a no-skill baseline lose credit
 in a qualification result. Regression status is deliberately narrow:
-`improved_revision_behavior` means candidate passed while reference failed,
-`preserved_behavior` means both passed, `regression_detected` means candidate
-failed while reference passed, and `inconclusive` means neither passed or the
-comparison cannot support a directional result. These labels describe observed
-revision behavior; they do not claim that a skill is effective, better, or
-generally improved.
+`observed_candidate_only_pass` means candidate passed while reference failed,
+`observed_reference_only_pass` means reference passed while candidate failed,
+`observed_both_pass` means both passed, and `observed_both_fail` means both
+failed. `inconclusive` and `not_run` remain available for incomplete or
+unavailable comparisons. The uppercase report labels are
+`OBSERVED_CANDIDATE_ONLY_PASS`, `OBSERVED_REFERENCE_ONLY_PASS`,
+`OBSERVED_BOTH_PASS`, and `OBSERVED_BOTH_FAIL`. These are observations, not
+statistical conclusions; repeated independent runs are required before making
+an improvement claim. The old labels remain readable as compatibility aliases.
 
 ## Optional strict confirmation result (legacy Docker adapter)
 
@@ -466,6 +503,13 @@ evidence is a hard error, never silently skipped.
 - `case_anchors` — required for harness-neutral regression evidence; the
   `candidate` and `reference` entries independently bind each revision's case,
   prompt, fixture declaration, and generator source (when applicable).
+- `candidate_skill_hash` / `reference_skill_hash` — content hashes of the
+  worker-visible guidance trees at their recorded revisions.
+- `case_set_hash` — canonical hash of both revision-local case anchors.
+- `fixture_hash` — hash of the exact shared worker-visible fixture.
+- `runner_version` — version of the regression metadata/validation contract.
+- `reproduction_status` — `reproducible` or
+  `invalid_reproduction_environment`; the latter is never a pass.
 - `target_skill_revision` — commit hash of the `SKILL.md` under test.
 
 ## Runtime block
@@ -539,10 +583,11 @@ OS-level boundary. Adapter-managed local workers should be marked
   `both_fail`, `placebo_only_pass`, `non_discriminating`, `invalid`, `not_run`.
 - For `evaluation_mode: "regression"`, use `candidate_only_pass`,
   `reference_only_pass`, `both_pass`, or `both_fail` and add
-  `outcome.regression_status` (`improved_revision_behavior`,
-  `preserved_behavior`, `regression_detected`, `inconclusive`, or `not_run`).
-  `both_fail` normally maps to `inconclusive`, not preserved behavior, because
-  neither revision satisfied the tested criteria. Do not use
+  `outcome.regression_status` (`observed_candidate_only_pass`,
+  `observed_reference_only_pass`, `observed_both_pass`,
+  `observed_both_fail`, `inconclusive`, or `not_run`). `both_fail` maps to
+  `observed_both_fail`: it is an observation that neither revision passed, not
+  a statistical conclusion. The pre-v2 labels remain readable as aliases. Do not use
   `skill_improved`, `skill_effective`, or `better_skill` as regression claims.
   `verdict.candidate_pass` and `verdict.reference_pass` are the authoritative
   booleans.

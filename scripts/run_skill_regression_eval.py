@@ -43,6 +43,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import evaluation_harness
+from evaluation.regression import (
+    REGRESSION_RUNNER_VERSION,
+    case_set_hash,
+)
 from eval_hashing import HASH_PREFIX, materialize_fixture_seed
 from evaluation_protocols import resolve_path_within, validate_declaration
 
@@ -230,7 +234,7 @@ def build_evidence(args, candidate_dir: str, reference_dir: str,
     candidate_hash = _revision_tree_hash(candidate_skill_dir)
     reference_hash = _revision_tree_hash(reference_skill_dir)
     evidence = {
-        "result_schema_version": 2,
+        "result_schema_version": 3,
         "evidence_type": "regression",
         "protocol": "regression",
         "skill": args.skill,
@@ -244,6 +248,10 @@ def build_evidence(args, candidate_dir: str, reference_dir: str,
         "candidate_revision": candidate_revision,
         "reference_revision": reference_revision,
         "fixture_revision": reference_revision,
+        "reproduction_status": "reproducible",
+        "runner_version": REGRESSION_RUNNER_VERSION,
+        "case_set_hash": case_set_hash(candidate_anchor, reference_anchor),
+        "fixture_hash": expected_fixture_hash,
         "case_anchors": {
             "candidate": candidate_anchor,
             "reference": reference_anchor,
@@ -252,6 +260,8 @@ def build_evidence(args, candidate_dir: str, reference_dir: str,
         "reference_skill_source_path": f"skills/{args.skill}",
         "candidate_skill_content_hash": candidate_hash,
         "reference_skill_content_hash": reference_hash,
+        "candidate_skill_hash": candidate_hash,
+        "reference_skill_hash": reference_hash,
         "candidate_guidance_id": args.skill,
         "reference_guidance_id": args.skill,
         "candidate_guidance_hash": candidate_hash,
@@ -288,7 +298,7 @@ def build_evidence(args, candidate_dir: str, reference_dir: str,
             evidence["canonical_task_seed_hash"] = canonical
             evidence["repetitions"].append(repetition)
             for workspace in workspaces.values():
-                shutil.rmtree(workspace, ignore_errors=True)
+                evaluation_harness.cleanup_workspace(workspace)
         finally:
             shutil.rmtree(seed, ignore_errors=True)
     return evidence
@@ -348,9 +358,9 @@ def main() -> None:
                   f"task_hash={repetition['natural_task_hash'][:10]}")
     finally:
         if candidate_root:
-            shutil.rmtree(candidate_root, ignore_errors=True)
+            evaluation_harness.cleanup_workspace(candidate_root)
         if reference_root:
-            shutil.rmtree(reference_root, ignore_errors=True)
+            evaluation_harness.cleanup_workspace(reference_root)
 
 
 if __name__ == "__main__":

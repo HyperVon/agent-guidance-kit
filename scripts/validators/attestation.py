@@ -11,6 +11,7 @@ from evaluation_harness import (
     STRONG_ATTESTATION_CONFIDENCE_LEVELS,
     attestation_observation_hash,
 )
+from evaluation.receipts import verify_workspace_receipt
 
 
 def is_strong_confidence(value: object) -> bool:
@@ -146,3 +147,128 @@ def validate_execution_verified_claim(
             "execution_verified=true requires runtime_verified or "
             "independently_verified attestation for every condition"
         )
+
+
+def validate_attestation_layers(
+    cmeta: dict,
+    expected_receipt_hash: str | None,
+    expected_guidance_id: object,
+    expected_guidance_hash: object,
+    ctag: str,
+    errs: list[str],
+    *,
+    guided: bool,
+) -> None:
+    """Validate explicit trust layers without upgrading adapter assertions.
+
+    The field is optional for legacy evidence. When present, adapter claims
+    must match the normalized adapter response, evaluator verification values
+    must match facts recomputed by this validator, and independent-attestation
+    metadata must agree with the declared confidence. None of these checks
+    turns an adapter report into independent proof.
+    """
+
+    layers = cmeta.get("attestation_layers")
+    if layers is None:
+        return
+    if not isinstance(layers, dict):
+        errs.append(f"{ctag}: attestation_layers must be an object")
+        return
+    for name in ("adapter_claims", "evaluator_verification",
+                 "independent_attestation"):
+        if not isinstance(layers.get(name), dict):
+            errs.append(f"{ctag}: attestation_layers.{name} must be an object")
+
+    adapter_claims = layers.get("adapter_claims")
+    if not isinstance(adapter_claims, dict):
+        adapter_claims = {}
+    expected_adapter_claims = {
+        "guidance_loaded": cmeta.get(
+            "guidance_loaded",
+            cmeta.get("guidance_probe") == "present"),
+        "context_loaded": cmeta.get(
+            "context_loaded",
+            cmeta.get("guidance_context_probe") == "present"),
+        "execution_completed": cmeta.get(
+            "execution_completed",
+            cmeta.get("run_status") == "success" and
+            cmeta.get("returncode") == 0),
+    }
+    for key, expected in expected_adapter_claims.items():
+        if not isinstance(expected, bool):
+            expected = bool(expected)
+        if not isinstance(adapter_claims.get(key), bool):
+            errs.append(f"{ctag}: adapter_claims.{key} must be boolean")
+        elif adapter_claims.get(key) != expected:
+            errs.append(f"{ctag}: adapter_claims.{key} does not match adapter response")
+
+    observed_id = cmeta.get("guidance_id") or cmeta.get("skill_name")
+    observed_hash = cmeta.get("guidance_hash") or cmeta.get(
+        "guidance_content_hash")
+    guidance_hash_matches = (
+        (observed_id == expected_guidance_id and
+         observed_hash == expected_guidance_hash)
+        if guided else observed_id is None and observed_hash is None
+    )
+    required_shape = (
+        "run_status", "worker_id", "session_id", "returncode", "output",
+        "guidance_probe", "guidance_context_probe",
+        "workspace_receipt_path", "workspace_receipt",
+        "execution_attestation",
+    )
+    expected_evaluator_values = {
+        "receipt_hash_matches": verify_workspace_receipt(
+            cmeta.get("workspace_receipt"), expected_receipt_hash),
+        "guidance_hash_matches": guidance_hash_matches,
+        "result_schema_valid": (
+            all(key in cmeta for key in required_shape)
+            and isinstance(cmeta.get("execution_attestation"), dict)
+            and isinstance(cmeta.get("output"), str)
+        ),
+    }
+    evaluator_verification = layers.get("evaluator_verification")
+    if not isinstance(evaluator_verification, dict):
+        evaluator_verification = {}
+    for key, expected in expected_evaluator_values.items():
+        if not isinstance(evaluator_verification.get(key), bool):
+            errs.append(f"{ctag}: evaluator_verification.{key} must be boolean")
+        elif evaluator_verification.get(key) != expected:
+            errs.append(
+                f"{ctag}: evaluator_verification.{key} does not match evaluator checks"
+            )
+
+    attestation = cmeta.get("execution_attestation")
+    confidence = attestation.get("confidence") if isinstance(attestation, dict) else None
+    expected_independent = (
+        confidence == "independently_verified" and
+        isinstance(attestation, dict) and
+        attestation.get("verification_mode") == "independent")
+    independent = layers.get("independent_attestation")
+    if not isinstance(independent, dict):
+        independent = {}
+    if not isinstance(independent.get("available"), bool):
+        errs.append(f"{ctag}: independent_attestation.available must be boolean")
+    elif independent.get("available") != expected_independent:
+        errs.append(
+            f"{ctag}: independent_attestation.available does not match confidence"
+        )
+    source = independent.get("source")
+    if expected_independent:
+        expected_source = attestation.get("source")
+        if not isinstance(source, str) or not source.strip():
+            errs.append(f"{ctag}: independent_attestation.source must be non-empty when available")
+        elif source != expected_source:
+            errs.append(f"{ctag}: independent_attestation.source is not bound")
+    elif source is not None:
+        errs.append(f"{ctag}: independent_attestation.source requires available=true")
+
+
+__all__ = [
+    "ATTESTATION_CONFIDENCE_LEVELS",
+    "EXECUTION_ATTESTATION_PROTOCOL",
+    "STRONG_ATTESTATION_CONFIDENCE_LEVELS",
+    "is_strong_confidence",
+    "validate_attestation_layers",
+    "validate_execution_attestation",
+    "validate_execution_verified_claim",
+]

@@ -245,6 +245,11 @@ Each execution repetition MUST prove:
   compatibility, but mere file presence is never activation. Harness-native
   event logs may be retained under adapter metadata but are not part of the
   core schema.
+- **Trust layers.** New neutral conditions may include `attestation_layers`:
+  `adapter_claims` preserves adapter observations, `evaluator_verification`
+  records evaluator-recomputed consistency checks, and
+  `independent_attestation` records an optional external/runtime source. The
+  first layer is never independent proof; old evidence may omit the object.
 - **Failed runs are rejected.** A non-zero return code, missing worker/session
   identity, or empty output is `run_status="failed"` and invalidates the
   evidence file.
@@ -278,6 +283,21 @@ from Git, creates independent copies of one frozen fixture, and records
 `evidence_type: "regression"` with `protocol: "regression"`. Both conditions
 must use the same natural task, model/runtime settings, activation procedure,
 and adapter contract. Neither condition is a no-skill baseline.
+
+Every new regression artifact records `candidate_revision`,
+`reference_revision`, `candidate_skill_hash`, `reference_skill_hash`,
+`case_set_hash`, `fixture_hash`, `runner_version`, and
+`reproduction_status: "reproducible"`. The validator resolves both case
+anchors and skill trees from those exact Git revisions. Missing history,
+changed anchors, or an unavailable fixture is
+`INVALID_REPRODUCTION_ENVIRONMENT`, never a pass. Version 2 evidence remains
+readable as a legacy compatibility shape.
+
+Regression outcome labels are observation-only: `observed_candidate_only_pass`,
+`observed_reference_only_pass`, `observed_both_pass`, and
+`observed_both_fail` (reported in uppercase by the comparison tool). They do
+not establish statistical improvement; repeat independent runs before making
+that claim.
 
 The required per-condition fields are `worker_id`, `session_id`,
 `guidance_probe`, `guidance_context_probe`, `guidance_path`, and

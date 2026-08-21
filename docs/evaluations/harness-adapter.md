@@ -130,6 +130,50 @@ than it can support. The result-level `execution_verified: true` claim is
 therefore rejected unless every condition's attestation is
 `runtime_verified` or `independently_verified`.
 
+## Explicit trust layers
+
+New neutral evidence also records an `attestation_layers` object beside the
+condition's flat compatibility fields and `execution_attestation`:
+
+```json
+{
+  "attestation_layers": {
+    "adapter_claims": {
+      "guidance_loaded": true,
+      "context_loaded": true,
+      "execution_completed": true
+    },
+    "evaluator_verification": {
+      "receipt_hash_matches": true,
+      "guidance_hash_matches": true,
+      "result_schema_valid": true
+    },
+    "independent_attestation": {
+      "available": false,
+      "source": null
+    }
+  }
+}
+```
+
+The layers have deliberately different meanings:
+
+1. `adapter_claims` preserves what the adapter reported. It is useful
+   observation, not independent proof.
+2. `evaluator_verification` is recomputed by the evaluator from the returned
+   response, evaluator-owned receipt, and expected guidance identity. It means
+   the fields are internally consistent; it does not prove an arbitrary
+   adapter's worker boundary.
+3. `independent_attestation` records the explicitly declared external/runtime
+   source when one exists. `available: true` is only allowed to agree with an
+   `independently_verified` execution attestation and its non-empty source.
+
+The trust chain is therefore: **adapter says X -> evaluator checks consistency
+-> an optional external verifier proves X**. The validator rejects a supplied
+layer when it disagrees with the underlying response. Older evidence may omit
+`attestation_layers`; that is a compatibility path and does not upgrade its
+confidence.
+
 For interoperability, `observation_hash` is the `sha256:` digest of compact,
 UTF-8 JSON with sorted keys over these fields: `run_status`, `worker_id`,
 `session_id`, `returncode`, `output`, `guidance_probe`,

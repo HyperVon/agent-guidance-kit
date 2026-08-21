@@ -58,15 +58,15 @@ def sanitize_env():
     """
     env = dict(os.environ)
     # Neutral HOME / XDG so git never reads ~/.gitconfig or ~/.config.
-    sandbox = tempfile.mkdtemp(prefix="eval-fixture-sandbox-")
-    env["HOME"] = sandbox
-    env["XDG_CONFIG_HOME"] = sandbox
-    env["XDG_CACHE_HOME"] = sandbox
+    sanitized_home = tempfile.mkdtemp(prefix="eval-fixture-home-")
+    env["HOME"] = sanitized_home
+    env["XDG_CONFIG_HOME"] = sanitized_home
+    env["XDG_CACHE_HOME"] = sanitized_home
     # Force git to ignore any global/system configuration.
     env["GIT_CONFIG_GLOBAL"] = "/dev/null"
     env["GIT_CONFIG_SYSTEM"] = "/dev/null"
     env["GIT_CONFIG_NOSYSTEM"] = "1"
-    env["GIT_CEILING_DIRECTORIES"] = sandbox
+    env["GIT_CEILING_DIRECTORIES"] = sanitized_home
     # Remove any inherited identity / credential material.
     for key in (
         "EMAIL", "USER", "NAME", "LOGNAME",
@@ -75,7 +75,7 @@ def sanitize_env():
         "GH_TOKEN", "GITHUB_TOKEN", "GIT_SSH_COMMAND", "EDITOR", "VISUAL",
     ):
         env.pop(key, None)
-    return env, sandbox
+    return env, sanitized_home
 
 
 def _sha256_of(data: bytes) -> str:
@@ -403,7 +403,7 @@ def run_generator(fixture_dir: str, source: str = "setup.sh",
     by ``materialize_fixture_seed`` and excludes it.
     """
     argv = _generator_argv(source, invocation)
-    env, sandbox = sanitize_env()
+    env, sanitized_home = sanitize_env()
     work = tempfile.mkdtemp(prefix="eval-gen-")
     try:
         # Copy the generator directory (minus any previous .git) into the work dir.
@@ -423,8 +423,9 @@ def run_generator(fixture_dir: str, source: str = "setup.sh",
         h = _generator_output_hash(work)
         return work, h
     finally:
-        # The sanitized HOME/XDG sandbox is host-scoped and must never leak.
-        shutil.rmtree(sandbox, ignore_errors=True)
+        # The sanitized HOME/XDG directory normalizes provenance only; it is
+        # not an OS sandbox and must never be allowed to leak.
+        shutil.rmtree(sanitized_home, ignore_errors=True)
 
 
 def source_hash_of(source_path: str) -> str:
@@ -494,15 +495,15 @@ def materialize_fixture_seed(fixture_dir: str, ftype: str,
     Returns ``(seed_dir, hash)`` where ``hash`` is a git-aware content hash of
     the seed. The returned ``seed_dir`` is a fresh temp dir the caller owns.
     """
-    sandbox = tempfile.mkdtemp(prefix="eval-seed-")
+    seed_dir = tempfile.mkdtemp(prefix="eval-seed-")
     if ftype == "generator":
         work, _h = run_generator(fixture_dir, source, invocation)
         try:
-            shutil.copytree(work, sandbox, symlinks=True, dirs_exist_ok=True)
+            shutil.copytree(work, seed_dir, symlinks=True, dirs_exist_ok=True)
             # Remove the generator source so it is not worker-visible.
             gen_names = [n for n in os.listdir(fixture_dir) if n != ".git"]
             for n in gen_names:
-                p = os.path.join(sandbox, n)
+                p = os.path.join(seed_dir, n)
                 if os.path.isdir(p) and not os.path.islink(p):
                     shutil.rmtree(p, ignore_errors=True)
                 elif os.path.exists(p):
@@ -510,8 +511,8 @@ def materialize_fixture_seed(fixture_dir: str, ftype: str,
         finally:
             shutil.rmtree(work, ignore_errors=True)
     else:
-        shutil.copytree(fixture_dir, sandbox, symlinks=True, dirs_exist_ok=True)
-    return sandbox, hash_workspace(sandbox)
+        shutil.copytree(fixture_dir, seed_dir, symlinks=True, dirs_exist_ok=True)
+    return seed_dir, hash_workspace(seed_dir)
 
 
 def canonical_hash(path: str, ftype: str, source: str = "setup.sh",

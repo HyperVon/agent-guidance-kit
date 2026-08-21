@@ -6,6 +6,7 @@ Run from repo root:  python3 scripts/test_validate_evaluations.py
 Tests the validator's failure detection directly (no network / no real runs).
 """
 import argparse
+import glob
 import hashlib
 import json
 import os
@@ -1246,6 +1247,16 @@ class HarnessAdapterTests(unittest.TestCase):
             self.assertNotEqual(
                 os.path.commonpath((fixture_dir, candidate_root)),
                 candidate_root)
+            self.assertEqual(evidence["result_schema_version"], 3)
+            for key in ("candidate_skill_hash", "reference_skill_hash",
+                        "case_set_hash", "fixture_hash", "runner_version",
+                        "reproduction_status"):
+                self.assertIn(key, evidence)
+            for condition in evidence["repetitions"][0]["conditions"].values():
+                self.assertEqual(
+                    set(condition["attestation_layers"]),
+                    {"adapter_claims", "evaluator_verification",
+                     "independent_attestation"})
             self.assertEqual(ve.validate_generic_regression_evidence(evidence), [])
         finally:
             if candidate_root:
@@ -1469,6 +1480,25 @@ class HarnessAdapterTests(unittest.TestCase):
             condition["execution_attestation"]["confidence"] = "adapter_declared"
         self.assertEqual(ve.validate_generic_regression_evidence(evidence), [])
 
+    def test_neutral_regression_attestation_layers_are_recomputed(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        repetition = evidence["repetitions"][0]
+        for name, condition in repetition["conditions"].items():
+            condition["attestation_layers"] = eha.build_attestation_layers(
+                condition,
+                expected_receipt_hash=repetition[
+                    "condition_workspace_receipt_hashes"][name],
+                expected_guidance_id="code-review",
+                expected_guidance_hash=condition["guidance_hash"],
+                guided=True,
+            )
+        self.assertEqual(ve.validate_generic_regression_evidence(evidence), [])
+        evidence["repetitions"][0]["conditions"]["candidate"][
+            "attestation_layers"]["adapter_claims"]["guidance_loaded"] = False
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("adapter_claims.guidance_loaded" in error
+                            for error in errors), errors)
+
     def test_neutral_regression_rejects_unverified_execution_claim(self):
         evidence = self._neutral_regression_evidence_fixture()
         for condition in evidence["repetitions"][0]["conditions"].values():
@@ -1556,6 +1586,27 @@ class HarnessAdapterTests(unittest.TestCase):
         evidence["candidate_revision"] = "f" * 40
         errors = ve.validate_generic_regression_evidence(evidence)
         self.assertTrue(any("existing Git commit SHA" in error for error in errors), errors)
+        self.assertTrue(any("INVALID_REPRODUCTION_ENVIRONMENT" in error
+                            for error in errors), errors)
+
+    def test_neutral_regression_v3_requires_immutable_metadata(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        evidence.update({
+            "result_schema_version": 3,
+            "reproduction_status": "reproducible",
+            "runner_version": rsre.REGRESSION_RUNNER_VERSION,
+            "candidate_skill_hash": evidence["candidate_skill_content_hash"],
+            "reference_skill_hash": evidence["reference_skill_content_hash"],
+            "fixture_hash": evidence["expected_fixture_hash"],
+            "case_set_hash": rsre.case_set_hash(
+                evidence["case_anchors"]["candidate"],
+                evidence["case_anchors"]["reference"]),
+        })
+        self.assertEqual(ve.validate_generic_regression_evidence(evidence), [])
+        del evidence["runner_version"]
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("immutable metadata runner_version" in error
+                            for error in errors), errors)
 
     def test_neutral_execution_rejects_unsafe_skill_name(self):
         errors = ve.validate_generic_execution_evidence({
@@ -4410,6 +4461,61 @@ class HoldoutInvocationTests(unittest.TestCase):
                 rc.run_case_set(bad, None, "kilo")
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+class CommittedEvaluationArtifactIntegrationTests(unittest.TestCase):
+    """Exercise the repository's committed result files as a corpus."""
+
+    def test_all_committed_artifacts_are_readable_and_validated(self):
+        reset()
+        result_dir = os.path.join(ROOT, "docs", "evaluations", "results")
+        artifacts = sorted(glob.glob(os.path.join(result_dir, "*.md")))
+        self.assertTrue(artifacts, "expected committed evaluation artifacts")
+
+        original_evals_dir = ve.EVALS_DIR
+        try:
+            skill_names, case_index = ve.check_eval_files()
+            ve.check_results(skill_names, case_index)
+            parsed_blocks = 0
+            for path in artifacts:
+                text = open(path, encoding="utf-8",
+                            errors="replace").read()
+                blocks = ve.extract_result_json(text)
+                if os.path.basename(path) not in ve.HISTORICAL:
+                    self.assertTrue(
+                        blocks,
+                        f"non-historical artifact has no result-json: {path}")
+                parsed_blocks += len(blocks)
+                for block in blocks:
+                    self.assertIsInstance(block, dict)
+                    if block.get("evaluation_mode") == "regression":
+                        self.assertTrue(block.get("case_revision"))
+                        self.assertTrue(block.get("fixture_revision"))
+            self.assertGreater(parsed_blocks, 0)
+            self.assertEqual(ve.errors, [], ve.errors)
+        finally:
+            ve.EVALS_DIR = original_evals_dir
+            reset()
+
+
+class RegressionSemanticsTests(unittest.TestCase):
+    def test_regression_labels_are_observations(self):
+        self.assertEqual(
+            ve.regression_status_for_verdict(True, False),
+            ("candidate_only_pass", "observed_candidate_only_pass"),
+        )
+        self.assertEqual(
+            ve.regression_status_for_verdict(False, True),
+            ("reference_only_pass", "observed_reference_only_pass"),
+        )
+        self.assertEqual(
+            ve.regression_status_for_verdict(True, True),
+            ("both_pass", "observed_both_pass"),
+        )
+        self.assertEqual(
+            ve.regression_status_for_verdict(False, False),
+            ("both_fail", "observed_both_fail"),
+        )
 
 
 class ExpectedRouteNullTests(unittest.TestCase):

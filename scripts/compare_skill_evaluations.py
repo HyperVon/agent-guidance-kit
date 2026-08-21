@@ -14,6 +14,8 @@ import json
 import re
 from pathlib import Path
 
+from evaluation.regression import normalize_regression_status
+
 SHARED_SCOPES = {"shared-outcome", "universal-safety"}
 
 
@@ -64,13 +66,13 @@ def _observed_case(case: dict, left: str, right: str) -> tuple[str, str, str]:
         left_pass = all(left_values)
         right_pass = all(right_values)
         if left_pass and not right_pass:
-            shared_status = "IMPROVED_REVISION_BEHAVIOR"
+            shared_status = "OBSERVED_CANDIDATE_ONLY_PASS"
         elif right_pass and not left_pass:
-            shared_status = "REGRESSION_DETECTED"
+            shared_status = "OBSERVED_REFERENCE_ONLY_PASS"
         elif left_pass and right_pass:
-            shared_status = "PRESERVED_BEHAVIOR"
+            shared_status = "OBSERVED_BOTH_PASS"
         else:
-            shared_status = "INCONCLUSIVE"
+            shared_status = "OBSERVED_BOTH_FAIL"
     if not contract:
         contract_status = "NOT_REPORTED"
     else:
@@ -106,6 +108,7 @@ def compare_results(candidate: dict, reference: dict | None = None) -> str:
                 case, "candidate", "reference")
             declared = (case.get("outcome") or {}).get(
                 "regression_status", "inconclusive")
+            declared = normalize_regression_status(declared)
             lines.extend([
                 f"Case {case_id}:",
                 f"candidate shared-outcome: {shared_status} ({note})",
