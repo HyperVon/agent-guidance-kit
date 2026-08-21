@@ -6,6 +6,7 @@ Run from repo root:  python3 scripts/test_validate_evaluations.py
 Tests the validator's failure detection directly (no network / no real runs).
 """
 import argparse
+import glob
 import hashlib
 import json
 import os
@@ -23,8 +24,12 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import build_routing_catalog as brc
 import docker_isolation_preflight as dip
 import eval_hashing as eh
+import evaluation_harness as eha
+import evaluation_protocols as ep
 import run_catalog_routing_eval as rc
 import run_execution_eval as ree
+import run_harness_eval as rhe
+import run_skill_regression_eval as rsre
 import validate_evaluations as ve
 
 
@@ -32,6 +37,33 @@ import validate_evaluations as ve
 def reset():
     ve.errors.clear()
     ve.warnings.clear()
+
+
+def fake_execution_attestation(request, response):
+    """Build the worker attestation shape used by neutral test adapters."""
+    receipt = response["workspace_receipt"]
+    output = response.get("output", "")
+    observation = dict(response)
+    if any(field in response for field in (
+            "guidance_identity", "activation_method", "activation_evidence")):
+        observation["canonical_activation_fields_observed"] = True
+    return {
+        "protocol": eha.EXECUTION_ATTESTATION_PROTOCOL,
+        "status": "verified",
+        "confidence": "independently_verified",
+        "verification_mode": "independent",
+        "source": "worker",
+        "worker_id": response["worker_id"],
+        "session_id": response["session_id"],
+        "nonce": request["attestation_nonce"],
+        "request_hash": eha.attestation_request_hash(request),
+        "observation_hash": eha.attestation_observation_hash(observation),
+        "workspace_receipt_hash": "sha256:" + hashlib.sha256(
+            receipt.encode()).hexdigest(),
+        "output_hash": "sha256:" + hashlib.sha256(
+            output.encode()).hexdigest(),
+        "returncode": response["returncode"],
+    }
 
 
 def fake_path(skill="foo"):
@@ -139,9 +171,23 @@ class ResultFailureTests(unittest.TestCase):
     def tearDown(self):
         reset()
 
+    def _isolation_attestation(self, *case_ids):
+        return {
+            "protocol": ve.ISOLATION_ATTESTATION_PROTOCOL,
+            "status": "verified",
+            "verification_mode": "independent",
+            "boundary": "os-level",
+            "worker_isolation_verified": True,
+            "isolation_method": "docker",
+            "evidence_hashes": {
+                str(case_id): "sha256:" + "e" * 64 for case_id in case_ids
+            },
+        }
+
     def _result(self, mode="execution", **over):
         method = "docker-isolated" if mode in ("execution",) else "harness-routing"
         res = {
+            "result_schema_version": 2,
             "skill": "code-review",
             "evaluation_mode": mode,
             "method": method,
@@ -156,12 +202,14 @@ class ResultFailureTests(unittest.TestCase):
 "target_guidance_present": "ev", "target_absent_in_baseline": "ev",
                           "target_guidance_hash": "sha256:g", "baseline_guidance_absent": "ev",
                          "contamination": "none", "routing_mechanism": None,
-                         "conditions": ["target", "baseline"], "repeats": 3},
+                         "conditions": ["target", "baseline"], "repeats": 3,
+                         "isolation_attestation": self._isolation_attestation(1)},
             "runs": {"target": {"session_id": "g1", "container_id": "cg1", "output_hash": "h",
                                 "selected_skill": "code-review"},
                      "baseline": {"session_id": "b1", "container_id": "cb1", "output_hash": "h"}},
             "cases": [{
                 "case_id": 1,
+                "raw_evidence_hash": "sha256:" + "e" * 64,
                 "outcome": {"category": "skill_only_pass",
                             "measurement_status": "discriminating",
                             "protocol_status": "limited"},
@@ -291,6 +339,25 @@ class ResultFailureTests(unittest.TestCase):
         ve.check_one_result("r.md", res, {"code-review"}, {})
         self.assertTrue(any("OS-level isolation" in e for e in ve.errors))
 
+    def test_valid_requires_structured_isolation_attestation(self):
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"]["status"] = "valid"
+        res["protocol"].pop("isolation_attestation")
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("requires isolation_attestation" in e
+                            for e in ve.errors))
+
+    def test_valid_isolation_attestation_must_bind_case_evidence(self):
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"]["status"] = "valid"
+        res["protocol"]["isolation_attestation"]["evidence_hashes"]["1"] = (
+            "sha256:" + "f" * 64)
+        ve.check_one_result("r.md", res, {"code-review"}, {})
+        self.assertTrue(any("isolation_attestation raw hash does not match"
+                            in e for e in ve.errors))
+
     # --- new Docker execution evidence checks (mode == execution) ---
     def test_execution_shared_container_id_fails(self):
         res = self._result()
@@ -364,6 +431,7 @@ class ResultFailureTests(unittest.TestCase):
             "case_id": 1,
             "natural_task_hash": prompt_hash,
             "fixture_hash": case["fixture"]["content_hash"],
+            "raw_evidence_hash": "sha256:" + "e" * 64,
             "repetitions": [
                 {"rep": 1, "repetition_id": "id1", "runs": {"target": {"session_id": "t1", "container_id": "c1"}, "baseline": {"session_id": "b1", "container_id": "c2"}, "placebo": {"session_id": "p1", "container_id": "c3"}}},
                 {"rep": 2, "repetition_id": "id2", "runs": {"target": {"session_id": "t2", "container_id": "c4"}, "baseline": {"session_id": "b2", "container_id": "c5"}, "placebo": {"session_id": "p2", "container_id": "c6"}}},
@@ -826,6 +894,893 @@ class ResultFailureTests(unittest.TestCase):
         }]
         ve.check_one_result("r.md", res, {"code-review"}, {})
         self.assertTrue(any("must contain 3 complete repetitions" in e for e in ve.errors), ve.errors)
+
+    def test_protocol_requirements_are_mode_specific(self):
+        self.assertEqual(ep.validate_declaration("smoke", ["target"], 1), [])
+        self.assertTrue(ep.validate_declaration("qualification", ["target"], 1))
+        self.assertTrue(ep.validate_declaration(
+            "confirmation", ["target", "baseline", "placebo"], 1))
+        self.assertEqual(
+            ep.validate_declaration("regression", ["candidate", "reference"], 1),
+            [],
+        )
+
+    def test_qualification_ignores_skill_contract_assertions_for_baseline_score(self):
+        """A target-only heading contract cannot manufacture marginal value."""
+        prompt = "Review this pull request and identify correctness problems."
+        case_index = {"code-review": {1: {
+            "prompt": prompt,
+            "fixture": {"content_hash": "sha256:fixture"},
+            "evaluation_modes": ["execution"],
+            "execution": {"assertions": [
+                {"text": "uses the skill-only report headings",
+                 "type": "presentation", "scope": "skill-contract"},
+                {"text": "identifies the real correctness defect",
+                 "type": "behavioral", "scope": "shared-outcome"},
+            ]},
+        }}}
+        res = self._result()
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"] = {
+            "name": "qualification", "status": "valid",
+            "worker_isolation_verified": True,
+            "isolation_attestation": self._isolation_attestation(1),
+            "target_guidance_present": "activated",
+            "target_guidance_hash": "sha256:target",
+            "target_absent_in_baseline": "absent",
+            "baseline_guidance_absent": "absent",
+            "contamination": "none",
+            "conditions": ["target", "baseline"], "repeats": 1,
+        }
+        res["cases"] = [{
+            "case_id": 1,
+            "natural_task_hash": "sha256:" + hashlib.sha256(prompt.encode()).hexdigest(),
+            "fixture_hash": "sha256:fixture",
+            "raw_evidence_hash": "sha256:" + "e" * 64,
+            "repetitions": [{"rep": 1, "repetition_id": "q1", "runs": {
+                "target": {"session_id": "qt", "container_id": "qct"},
+                "baseline": {"session_id": "qb", "container_id": "qcb"},
+            }}],
+            "outcome": {"category": "both_pass",
+                        "measurement_status": "non_discriminating",
+                        "protocol_status": "valid"},
+            "verdict": {"target_pass": True, "baseline_pass": True},
+            "early_stop": {"stopped": True,
+                            "reason": "same shared outcome at n=1",
+                            "next_protocol": "none"},
+            "contract_adherence": "pass",
+            "assertions": [
+                {"assertion": "uses the skill-only report headings",
+                 "scope": "skill-contract",
+                 "target": {"pass": True, "evidence": "headings present"},
+                 "baseline": {"pass": False, "evidence": "correct review without headings"}},
+                {"assertion": "identifies the real correctness defect",
+                 "scope": "shared-outcome",
+                 "target": {"pass": True, "evidence": "defect at app.py:10"},
+                 "baseline": {"pass": True, "evidence": "defect at app.py:10"}},
+            ],
+        }]
+        ve.check_one_result("r.md", res, {"code-review"}, case_index)
+        self.assertEqual(ve.errors, [], ve.errors)
+
+        res["cases"][0]["assertions"].append({
+            "assertion": "invented shared assertion",
+            "scope": "shared-outcome",
+            "target": {"pass": True, "evidence": "invented target evidence"},
+            "baseline": {"pass": False, "evidence": "invented baseline evidence"},
+        })
+        reset()
+        ve.check_one_result("r.md", res, {"code-review"}, case_index)
+        self.assertTrue(any("not declared by the authoritative case" in e
+                            for e in ve.errors), ve.errors)
+        res["cases"][0]["assertions"].pop()
+
+        # A dishonest result that lets the contract-only failure make the
+        # baseline lose must be rejected by the validator.
+        res["cases"][0]["outcome"] = {
+            "category": "skill_only_pass", "measurement_status": "discriminating",
+            "protocol_status": "valid",
+        }
+        res["cases"][0]["verdict"]["baseline_pass"] = False
+        reset()
+        ve.check_one_result("r.md", res, {"code-review"}, case_index)
+        self.assertTrue(any("shared-outcome assertions" in e for e in ve.errors), ve.errors)
+
+    def test_regression_conditions_and_status_are_validated(self):
+        prompt = "Compare the current implementation with the previous revision."
+        case_index = {"code-review": {1: {
+            "prompt": prompt,
+            "fixture": {"content_hash": "sha256:fixture"},
+            "evaluation_modes": ["execution"],
+            "execution": {"assertions": ["preserves the behavior"]},
+        }}}
+        res = self._result(mode="regression")
+        res.update({"method": "docker-isolated",
+                    "candidate_skill_revision": "sha256:candidate",
+                    "reference_skill_revision": "sha256:reference"})
+        res.pop("target_skill_revision", None)
+        res["runtime"]["isolation_method"] = "docker"
+        res["protocol"] = {
+            "name": "regression", "status": "valid",
+            "worker_isolation_verified": True,
+            "isolation_attestation": self._isolation_attestation(1),
+            "candidate_guidance_present": "activated",
+            "reference_guidance_present": "activated",
+            "candidate_guidance_hash": "sha256:candidate-tree",
+            "reference_guidance_hash": "sha256:reference-tree",
+            "conditions": ["candidate", "reference"], "repeats": 1,
+            "contamination": "none",
+        }
+        res["cases"] = [{
+            "case_id": 1,
+            "natural_task_hash": "sha256:" + hashlib.sha256(prompt.encode()).hexdigest(),
+            "fixture_hash": "sha256:fixture",
+            "raw_evidence_hash": "sha256:" + "e" * 64,
+            "repetitions": [{"rep": 1, "repetition_id": "r1", "runs": {
+                "candidate": {"session_id": "rc", "container_id": "rcc"},
+                "reference": {"session_id": "rr", "container_id": "rrc"},
+            }}],
+            "outcome": {"category": "both_pass",
+                        "measurement_status": "non_discriminating",
+                        "protocol_status": "valid",
+                        "regression_status": "preserved_behavior"},
+            "verdict": {"candidate_pass": True, "reference_pass": True},
+            "assertions": [{"assertion": "preserves the behavior",
+                            "candidate": {"pass": True, "evidence": "test passed"},
+                            "reference": {"pass": True, "evidence": "test passed"}}],
+        }]
+        ve.check_one_result("r.md", res, {"code-review"}, case_index)
+        self.assertEqual(ve.errors, [], ve.errors)
+
+        # The same result shape may use neutral worker IDs without a container
+        # or provider-specific field.
+        res["method"] = "harness-adapter"
+        for name, worker in (("candidate", "wc"), ("reference", "wr")):
+            run = res["cases"][0]["repetitions"][0]["runs"][name]
+            run["worker_id"] = worker
+            run.pop("container_id", None)
+        reset()
+        ve.check_one_result("r.md", res, {"code-review"}, case_index)
+        self.assertEqual(ve.errors, [], ve.errors)
+
+    def test_regression_rejects_effectiveness_overclaim(self):
+        ve.validate_regression_claim(
+            "r.md", {"outcome": {"claim": "skill_effective"}}, ve.errors)
+        self.assertTrue(any("skill_effective" in error for error in ve.errors),
+                        ve.errors)
+
+    def test_qualification_n1_non_discriminating_requires_honest_early_stop(self):
+        self.assertEqual(
+            ep.early_stop_recommendation(True, True),
+            {"stopped": True,
+             "reason": "target and baseline both passed shared-outcome criteria at n=1",
+             "next_protocol": "none"},
+        )
+        self.assertEqual(ep.early_stop_recommendation(False, True)["stopped"], True)
+
+
+class HarnessAdapterTests(unittest.TestCase):
+    def tearDown(self):
+        reset()
+
+    def test_command_adapter_normalizes_neutral_response(self):
+        response = {
+            "run_status": "success",
+            "returncode": 0,
+            "worker_id": "worker-1",
+            "session_id": "session-1",
+            "output": "completed",
+            "guidance_identity": "code-review",
+            "guidance_hash": "sha256:guidance",
+            "activation_method": "adapter-defined",
+            "activation_evidence": {
+                "guidance_loaded": True,
+                "context_loaded": True,
+            },
+            "workspace_receipt_path": eha.WORKSPACE_RECEIPT_PATH,
+            "workspace_receipt": "receipt-token",
+        }
+        completed = subprocess.CompletedProcess(
+            ["adapter"], 0, json.dumps(response), "")
+        with unittest.mock.patch.object(eha.subprocess, "run",
+                                        return_value=completed):
+            adapter = eha.CommandHarnessAdapter(["adapter"], name="test")
+            actual = adapter.run({"condition": "candidate"})
+        self.assertEqual(actual["worker_id"], "worker-1")
+        self.assertIsNone(actual["guidance_context_probe"])
+        self.assertTrue(actual["activation_verified"])
+        self.assertEqual(actual["guidance_identity"], "code-review")
+        self.assertEqual(actual["adapter_metadata"]["protocol"],
+                         eha.ADAPTER_PROTOCOL)
+
+    def test_command_adapter_timeout_normalizes_partial_bytes(self):
+        timeout = subprocess.TimeoutExpired(
+            ["adapter"], 1, output=b"partial output", stderr=b"partial error")
+        with unittest.mock.patch.object(eha.subprocess, "run",
+                                        side_effect=timeout):
+            actual = eha.CommandHarnessAdapter(["adapter"]).run({})
+        self.assertEqual(actual["run_status"], "failed")
+        self.assertEqual(actual["stdout"], "partial output")
+        self.assertEqual(actual["stderr"], "partial error")
+        json.dumps(actual)
+
+    def test_command_adapter_requires_argv_and_preserves_literal_arguments(self):
+        with self.assertRaisesRegex(ValueError, "argv list"):
+            eha.CommandHarnessAdapter("python3 adapter.py")
+        parsed = eha.parse_command_argv_json(
+            '["python3", "adapter.py", "; touch should-not-run"]')
+        self.assertEqual(parsed[-1], "; touch should-not-run")
+        with self.assertRaisesRegex(ValueError, "invalid"):
+            eha.parse_command_argv_json("not-json")
+        with self.assertRaisesRegex(ValueError, "JSON argv list"):
+            eha.parse_command_argv_json('{"program": "python3"}')
+        with self.assertRaisesRegex(ValueError, "NUL"):
+            eha.validate_command_argv(["python3", "bad\x00arg"])
+
+        tmp = tempfile.mkdtemp()
+        try:
+            script = os.path.join(tmp, "adapter.py")
+            marker = os.path.join(tmp, "should-not-run")
+            open(script, "w", encoding="utf-8").write(
+                "import json, sys\n"
+                "print(json.dumps({'run_status': 'success', 'returncode': 0,\n"
+                "  'worker_id': 'w', 'session_id': 's', 'output': 'ok',\n"
+                "  'adapter_metadata': {'argv': sys.argv[1:]}}))\n"
+            )
+            literal = f"; touch {marker}"
+            actual = eha.CommandHarnessAdapter(
+                [sys.executable, script, literal]).run({})
+            self.assertEqual(actual["adapter_metadata"]["argv"], [literal])
+            self.assertFalse(os.path.exists(marker))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_command_adapter_rejects_invalid_json_response(self):
+        completed = subprocess.CompletedProcess(["adapter"], 0, "not-json", "")
+        with unittest.mock.patch.object(eha.subprocess, "run",
+                                        return_value=completed):
+            actual = eha.CommandHarnessAdapter(["adapter"]).run({})
+        self.assertEqual(actual["run_status"], "failed")
+        self.assertIn("invalid JSON", actual["reason"])
+
+    def test_neutral_harness_rejects_symlinked_inputs(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            outside = os.path.join(tmp, "outside.txt")
+            open(outside, "w").write("outside\n")
+            skill = os.path.join(tmp, "skill")
+            os.makedirs(os.path.join(skill, "references"))
+            open(os.path.join(skill, "SKILL.md"), "w").write("# guidance\n")
+            os.symlink(outside, os.path.join(skill, "references", "outside.md"))
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                eha.skill_tree_hash(skill)
+            workspace = os.path.join(tmp, "workspace")
+            os.makedirs(workspace)
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                eha.materialize_guidance(skill, workspace)
+
+            fixture = os.path.join(tmp, "fixture")
+            os.makedirs(fixture)
+            os.symlink(outside, os.path.join(fixture, "README.md"))
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                eha.copy_seed(fixture)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_neutral_runner_materializes_guidance_without_harness_path(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            seed = os.path.join(tmp, "seed")
+            os.makedirs(seed)
+            open(os.path.join(seed, "task.txt"), "w").write("task\n")
+            skill = os.path.join(tmp, "skill")
+            os.makedirs(skill)
+            open(os.path.join(skill, "SKILL.md"), "w").write("# guidance\n")
+
+            class FakeAdapter:
+                def run(self, request):
+                    guided = request["guidance"] is not None
+                    receipt = open(os.path.join(
+                        request["workspace"],
+                        request["workspace_receipt_path"]), encoding="utf-8").read()
+                    response = {
+                        "run_status": "success",
+                        "returncode": 0,
+                        "worker_id": "worker-" + request["condition"],
+                        "session_id": "session-" + request["condition"],
+                        "output": "done",
+                        "guidance_identity": request["guidance"].get(
+                            "guidance_identity") if guided else None,
+                        "guidance_hash": request["guidance"].get(
+                            "guidance_hash") if guided else None,
+                        "activation_method": "fake-adapter" if guided else "none",
+                        "activation_evidence": {
+                            "guidance_loaded": guided,
+                            "context_loaded": guided,
+                        },
+                        "activation_verified": guided,
+                        "context_verified": guided,
+                        "workspace_receipt_path": request["workspace_receipt_path"],
+                        "workspace_receipt": receipt,
+                    }
+                    response["canonical_activation_fields_observed"] = True
+                    response["execution_attestation"] = fake_execution_attestation(
+                        request, response)
+                    return response
+
+            repetition, _, workspaces = eha.run_condition_repetition(
+                0, ["target", "baseline"], "do task", seed,
+                {"target": {"skill_name": "sample", "source_dir": skill},
+                 "baseline": None},
+                "test-model", FakeAdapter(), protocol="qualification", case_id=1)
+            self.assertTrue(repetition["starting_task_hashes_match"])
+            self.assertEqual(
+                repetition["workspace_receipt_path"],
+                eha.WORKSPACE_RECEIPT_PATH)
+            for name, condition in repetition["conditions"].items():
+                self.assertEqual(condition["guidance_identity"],
+                                 "sample" if name == "target" else None)
+                self.assertEqual(condition["activation_method"],
+                                 "fake-adapter" if name == "target" else "none")
+                self.assertEqual(condition["workspace_receipt_path"],
+                                 eha.WORKSPACE_RECEIPT_PATH)
+                self.assertEqual(
+                    condition["workspace_receipt_hash"],
+                    repetition["condition_workspace_receipt_hashes"][name])
+                self.assertEqual(
+                    condition["workspace_receipt_hash"],
+                    "sha256:" + hashlib.sha256(
+                        condition["workspace_receipt"].encode()).hexdigest())
+            self.assertEqual(
+                repetition["conditions"]["target"]["guidance_path"],
+                eha.RUNTIME_TREATMENT_PATHS[0])
+            self.assertIsNone(repetition["conditions"]["baseline"]["guidance_path"])
+            self.assertNotEqual(
+                repetition["conditions"]["target"]["starting_full_hash"],
+                repetition["conditions"]["baseline"]["starting_full_hash"])
+            for workspace in workspaces.values():
+                self.assertFalse(os.path.exists(
+                    os.path.join(workspace, ".kilo")))
+                shutil.rmtree(workspace, ignore_errors=True)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_neutral_runner_preserves_failed_artifacts_for_debugging(self):
+        class FailedAdapter:
+            name = "failed-test-adapter"
+
+            def run(self, request):
+                return {
+                    "run_status": "failed",
+                    "returncode": 17,
+                    "worker_id": "failed-" + request["condition"],
+                    "session_id": "failed-session-" + request["condition"],
+                    "output": "",
+                    "reason": "test failure",
+                }
+
+        args = argparse.Namespace(
+            skill="code-review", case_id=1, protocol="smoke",
+            conditions=["target"], placebo_skill=None, model=None, reps=1,
+            preserve_failed_artifacts=False,
+        )
+        evidence = rhe.build_evidence(args, FailedAdapter())
+        self.assertEqual(evidence["result_schema_version"], 3)
+        self.assertEqual(evidence["evidence_protocol_version"], 3)
+        self.assertEqual(evidence["adapter_protocol_version"],
+                         eha.ADAPTER_PROTOCOL)
+        preserved = evidence["preserved_artifacts"]
+        self.assertGreaterEqual(len(preserved), 2)
+        self.assertTrue(all(os.path.exists(path) for path in preserved))
+        self.assertEqual(evidence["repetitions"][0]["conditions"]["target"][
+            "run_status"], "failed")
+        for path in preserved:
+            shutil.rmtree(path, ignore_errors=True)
+
+    def test_regression_materializes_git_revision_with_repository_shape(self):
+        root, resolved = rsre.materialize_skill_revision("HEAD", "code-review")
+        try:
+            self.assertRegex(resolved, r"^[0-9a-f]{40}$")
+            self.assertTrue(os.path.isfile(os.path.join(
+                root, "skills", "code-review", "SKILL.md")))
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_regression_builder_and_neutral_validator_round_trip_without_model(self):
+        candidate_root = reference_root = None
+        try:
+            candidate_root, candidate_revision = rsre.materialize_skill_revision(
+                "HEAD", "code-review")
+            reference_root, reference_revision = rsre.materialize_skill_revision(
+                "HEAD", "code-review")
+
+            class FakeAdapter:
+                name = "test"
+
+                def run(self, request):
+                    guidance = request["guidance"]
+                    receipt = open(os.path.join(
+                        request["workspace"],
+                        request["workspace_receipt_path"]), encoding="utf-8").read()
+                    response = {
+                        "run_status": "success",
+                        "returncode": 0,
+                        "worker_id": "worker-" + request["condition"],
+                        "session_id": "session-" + request["condition"],
+                        "output": "completed",
+                        "guidance_identity": guidance["guidance_identity"],
+                        "guidance_hash": guidance["guidance_hash"],
+                        "activation_method": "fake-adapter",
+                        "activation_evidence": {
+                            "guidance_loaded": True,
+                            "context_loaded": True,
+                        },
+                        "activation_verified": True,
+                        "context_verified": True,
+                        "guidance_path": guidance["guidance_path"],
+                        "guidance_content_hash": guidance["guidance_content_hash"],
+                        "workspace_receipt_path": request["workspace_receipt_path"],
+                        "workspace_receipt": receipt,
+                    }
+                    response["canonical_activation_fields_observed"] = True
+                    response["execution_attestation"] = fake_execution_attestation(
+                        request, response)
+                    return response
+
+            args = argparse.Namespace(skill="code-review", case_id=5,
+                                      model=None, reps=1)
+            with unittest.mock.patch.object(
+                    rsre, "materialize_fixture_seed",
+                    wraps=rsre.materialize_fixture_seed) as materialize:
+                evidence = rsre.build_evidence(
+                    args, candidate_root, reference_root,
+                    candidate_revision, reference_revision, FakeAdapter())
+            self.assertEqual(materialize.call_count, 1)
+            fixture_dir = materialize.call_args.args[0]
+            self.assertEqual(
+                os.path.commonpath((fixture_dir, reference_root)),
+                reference_root)
+            self.assertNotEqual(
+                os.path.commonpath((fixture_dir, candidate_root)),
+                candidate_root)
+            self.assertEqual(evidence["result_schema_version"], 3)
+            self.assertEqual(evidence["evidence_protocol_version"], 3)
+            self.assertEqual(evidence["adapter_protocol_version"],
+                             eha.ADAPTER_PROTOCOL)
+            for key in ("candidate_skill_hash", "reference_skill_hash",
+                        "case_set_hash", "fixture_hash", "runner_version",
+                        "reproduction_status"):
+                self.assertIn(key, evidence)
+            for condition in evidence["repetitions"][0]["conditions"].values():
+                self.assertEqual(
+                    set(condition["attestation_layers"]),
+                    {"adapter_claims", "evaluator_verification",
+                     "independent_attestation"})
+            self.assertEqual(ve.validate_generic_regression_evidence(evidence), [])
+        finally:
+            if candidate_root:
+                shutil.rmtree(candidate_root, ignore_errors=True)
+            if reference_root:
+                shutil.rmtree(reference_root, ignore_errors=True)
+
+    def _neutral_regression_evidence_fixture(self):
+        skill = "code-review"
+        evals_path = os.path.join(ROOT, "skills", skill, "evals", "evals.json")
+        source = json.load(open(evals_path, encoding="utf-8"))
+        case = next(item for item in source["evals"] if item["id"] == 5)
+        fixture = case["fixture"]
+        expected_fixture = (fixture.get("output_hash") or
+                            fixture.get("content_hash"))
+        evals_rel = os.path.relpath(evals_path, ROOT)
+        skill_rel = os.path.dirname(os.path.dirname(evals_rel))
+        fixture_rel = os.path.normpath(os.path.join(skill_rel, fixture["path"]))
+        source_hash = "sha256:" + hashlib.sha256(
+            open(evals_path, "rb").read()).hexdigest()
+        prompt_hash = hashlib.sha256(case["prompt"].encode()).hexdigest()
+        generator_source_hash = None
+        if fixture.get("type") == "generator":
+            generator_source_hash = "sha256:" + hashlib.sha256(
+                open(os.path.join(ROOT, fixture_rel,
+                                  fixture.get("source", "setup.sh")),
+                     "rb").read()).hexdigest()
+        candidate_hash = eha.skill_tree_hash(
+            os.path.join(ROOT, "skills", skill))
+        reference_hash = candidate_hash
+        resolved_revision = rsre.resolve_revision("HEAD")
+        repetition_id = "rep-neutral"
+        case_anchor = {
+            "revision": resolved_revision,
+            "source_path": evals_rel,
+            "source_hash": source_hash,
+            "prompt_hash": prompt_hash,
+            "fixture_type": fixture.get("type"),
+            "fixture_path": fixture_rel,
+            "fixture_hash": expected_fixture,
+            "generator_source_hash": generator_source_hash,
+        }
+
+        def condition(name, worker, session, content_hash):
+            receipt = "receipt-" + name
+            output = "completed"
+            nonce = "nonce-" + name
+            request_hash = "sha256:" + hashlib.sha256(
+                ("request-" + name).encode()).hexdigest()
+            condition = {
+                "repetition_id": repetition_id,
+                "worker_id": worker,
+                "session_id": session,
+                "run_status": "success",
+                "returncode": 0,
+                "starting_task_hash": expected_fixture,
+                "ending_task_hash": expected_fixture,
+                "starting_full_hash": "sha256:full-" + name,
+                "ending_full_hash": "sha256:end-" + name,
+                "output": output,
+                "guidance_probe": "present",
+                "guidance_context_probe": "present",
+                "activation_mechanism": "adapter-defined",
+                "guidance_identity": skill,
+                "guidance_id": skill,
+                "guidance_hash": content_hash,
+                "activation_method": "adapter-defined",
+                "activation_evidence": {
+                    "guidance_loaded": True,
+                    "context_loaded": True,
+                },
+                "canonical_activation_fields_observed": True,
+                "guidance_source": "external_runtime",
+                "activation_verified": True,
+                "context_verified": True,
+                "guidance_path": eha.RUNTIME_TREATMENT_PATHS[0],
+                "guidance_content_hash": content_hash,
+                "workspace_receipt_path": eha.WORKSPACE_RECEIPT_PATH,
+                "workspace_receipt": receipt,
+                "workspace_receipt_hash": "sha256:" + hashlib.sha256(
+                    receipt.encode()).hexdigest(),
+                "attestation_nonce": nonce,
+                "execution_request_hash": request_hash,
+            }
+            condition["execution_observation_hash"] = eha.attestation_observation_hash(
+                condition)
+            condition["execution_attestation"] = {
+                "protocol": eha.EXECUTION_ATTESTATION_PROTOCOL,
+                "status": "verified",
+                "confidence": "independently_verified",
+                "verification_mode": "independent",
+                "source": "worker",
+                "worker_id": worker,
+                "session_id": session,
+                "nonce": nonce,
+                "request_hash": request_hash,
+                "observation_hash": condition["execution_observation_hash"],
+                "workspace_receipt_hash": condition["workspace_receipt_hash"],
+                "output_hash": "sha256:" + hashlib.sha256(
+                    output.encode()).hexdigest(),
+                "returncode": 0,
+            }
+            return condition
+
+        evidence = {
+            "evidence_type": "regression",
+            "protocol": "regression",
+            "harness": {"name": "test", "adapter_protocol": eha.ADAPTER_PROTOCOL},
+            "skill": skill,
+            "case_id": 5,
+            "conditions": ["candidate", "reference"],
+            "candidate_revision": resolved_revision,
+            "reference_revision": resolved_revision,
+            "fixture_revision": resolved_revision,
+            "case_anchors": {
+                "candidate": dict(case_anchor),
+                "reference": dict(case_anchor),
+            },
+            "candidate_skill_source_path": "skills/code-review",
+            "reference_skill_source_path": "skills/code-review",
+            "candidate_skill_content_hash": candidate_hash,
+            "reference_skill_content_hash": reference_hash,
+            "candidate_guidance_path": eha.RUNTIME_TREATMENT_PATHS[0],
+            "reference_guidance_path": eha.RUNTIME_TREATMENT_PATHS[0],
+            "fixture_source_path": evals_rel,
+            "fixture_path": fixture_rel,
+            "fixture_source_hash": source_hash,
+            "expected_fixture_hash": expected_fixture,
+            "canonical_task_seed_hash": expected_fixture,
+            "runtime_treatment_paths": list(eha.RUNTIME_TREATMENT_PATHS),
+            "repetitions": [{
+                "rep": 1,
+                "repetition_id": repetition_id,
+                "natural_task_hash": prompt_hash,
+                "natural_task_identical_across_conditions": True,
+                "condition_workspace_ids": {"candidate": "w1", "reference": "w2"},
+                "condition_workspace_receipt_hashes": {
+                    "candidate": "sha256:" + hashlib.sha256(
+                        b"receipt-candidate").hexdigest(),
+                    "reference": "sha256:" + hashlib.sha256(
+                        b"receipt-reference").hexdigest(),
+                },
+                "workspace_receipt_path": eha.WORKSPACE_RECEIPT_PATH,
+                "conditions": {
+                    "candidate": condition("candidate", "w1", "s1", candidate_hash),
+                    "reference": condition("reference", "w2", "s2", reference_hash),
+                },
+            }],
+        }
+        return evidence
+
+    def test_neutral_regression_evidence_does_not_require_kilo_fields(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        self.assertEqual(ve.validate_generic_regression_evidence(evidence), [])
+        evidence["candidate_skill_content_hash"] = "sha256:" + "0" * 64
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("materialized Git revision" in error for error in errors), errors)
+        evidence["candidate_skill_content_hash"] = evidence["reference_skill_content_hash"]
+        evidence["repetitions"][0]["conditions"]["candidate"][
+            "context_verified"] = False
+        self.assertTrue(any("context_verified must be true" in error
+                            for error in ve.validate_generic_regression_evidence(evidence)))
+
+    def test_neutral_regression_binds_revision_local_case_anchors(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        evidence["case_anchors"]["candidate"]["source_hash"] = "sha256:" + "c" * 64
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("case_anchors.candidate.source_hash" in error
+                            for error in errors), errors)
+
+        evidence = self._neutral_regression_evidence_fixture()
+        evidence["fixture_revision"] = "not-the-reference-revision"
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("fixture_revision" in error for error in errors), errors)
+
+    def test_neutral_regression_uses_recorded_revision_anchors(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        candidate_anchor = dict(evidence["case_anchors"]["candidate"])
+        reference_anchor = dict(evidence["case_anchors"]["reference"])
+        for anchor, label in ((candidate_anchor, "candidate"),
+                              (reference_anchor, "reference")):
+            anchor["source_path"] = (
+                f"skills/code-review/evals/historical-{label}.json")
+            anchor["source_hash"] = "sha256:" + label[0] * 64
+            anchor["fixture_path"] = (
+                f"skills/code-review/evals/fixtures/historical-{label}")
+        evidence["case_anchors"] = {
+            "candidate": candidate_anchor,
+            "reference": reference_anchor,
+        }
+        evidence["fixture_source_path"] = reference_anchor["source_path"]
+        evidence["fixture_path"] = reference_anchor["fixture_path"]
+        evidence["fixture_source_hash"] = reference_anchor["source_hash"]
+        with unittest.mock.patch.object(
+                ve, "_regression_case_anchor",
+                side_effect=[candidate_anchor, reference_anchor]):
+            self.assertEqual(
+                ve.validate_generic_regression_evidence(evidence), [])
+
+    def test_neutral_regression_requires_bound_workspace_receipts(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        evidence["repetitions"][0]["conditions"]["reference"][
+            "workspace_receipt"] = "receipt-candidate"
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("workspace receipt does not match" in error
+                            for error in errors), errors)
+
+        evidence = self._neutral_regression_evidence_fixture()
+        candidate_receipt_hash = evidence["repetitions"][0][
+            "condition_workspace_receipt_hashes"]["candidate"]
+        evidence["repetitions"][0]["conditions"]["reference"][
+            "workspace_receipt_hash"] = candidate_receipt_hash
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("workspace receipt hash is not bound" in error
+                            for error in errors), errors)
+
+    def test_neutral_regression_rejects_forged_guidance_identity(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        evidence["repetitions"][0]["conditions"]["reference"][
+            "guidance_hash"] = "sha256:" + "f" * 64
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("guidance_hash does not match" in error
+                            for error in errors), errors)
+
+    def test_neutral_regression_accepts_adapter_declared_evidence(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        for condition in evidence["repetitions"][0]["conditions"].values():
+            condition["execution_attestation"]["confidence"] = "adapter_declared"
+        self.assertEqual(ve.validate_generic_regression_evidence(evidence), [])
+
+    def test_neutral_regression_attestation_layers_are_recomputed(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        repetition = evidence["repetitions"][0]
+        for name, condition in repetition["conditions"].items():
+            condition["attestation_layers"] = eha.build_attestation_layers(
+                condition,
+                expected_receipt_hash=repetition[
+                    "condition_workspace_receipt_hashes"][name],
+                expected_guidance_id="code-review",
+                expected_guidance_hash=condition["guidance_hash"],
+                guided=True,
+            )
+        self.assertEqual(ve.validate_generic_regression_evidence(evidence), [])
+        evidence["repetitions"][0]["conditions"]["candidate"][
+            "attestation_layers"]["adapter_claims"]["guidance_loaded"] = False
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("adapter_claims.guidance_loaded" in error
+                            for error in errors), errors)
+
+    def test_adapter_cannot_self_certify_execution(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        for condition in evidence["repetitions"][0]["conditions"].values():
+            condition["execution_attestation"]["confidence"] = "adapter_declared"
+            condition["execution_verified"] = True
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("adapter execution_verified=true" in error
+                            for error in errors), errors)
+
+    def test_adapter_isolation_claim_requires_independent_attestation(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        repetition = evidence["repetitions"][0]
+        condition = repetition["conditions"]["candidate"]
+        condition["execution_attestation"]["confidence"] = "adapter_declared"
+        condition["attestation_layers"] = eha.build_attestation_layers(
+            condition,
+            expected_receipt_hash=repetition[
+                "condition_workspace_receipt_hashes"]["candidate"],
+            expected_guidance_id="code-review",
+            expected_guidance_hash=condition["guidance_hash"],
+            guided=True,
+        )
+        condition["attestation_layers"]["adapter_claims"][
+            "isolation_verified"] = True
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("isolation_verified requires independent_attestation"
+                            in error for error in errors), errors)
+
+    def test_neutral_regression_rejects_unverified_execution_claim(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        for condition in evidence["repetitions"][0]["conditions"].values():
+            condition["execution_attestation"]["confidence"] = "adapter_declared"
+        evidence["execution_verified"] = True
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("execution_verified=true" in error for error in errors),
+                        errors)
+
+    def test_neutral_regression_accepts_runtime_verified_execution_claim(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        for condition in evidence["repetitions"][0]["conditions"].values():
+            attestation = condition["execution_attestation"]
+            attestation["confidence"] = "runtime_verified"
+            attestation["runtime_evidence"] = {
+                "worker_id": condition["worker_id"],
+                "session_id": condition["session_id"],
+                "observation_hash": condition["execution_observation_hash"],
+            }
+        evidence["protocol"] = {
+            "name": "regression", "execution_verified": True}
+        self.assertEqual(ve.validate_generic_regression_evidence(evidence), [])
+
+    def test_neutral_regression_rejects_forged_runtime_attestation(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        attestation = evidence["repetitions"][0]["conditions"]["candidate"][
+            "execution_attestation"]
+        attestation["confidence"] = "runtime_verified"
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("runtime_evidence" in error for error in errors),
+                        errors)
+
+    def test_neutral_regression_requires_bound_execution_attestation(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        evidence["repetitions"][0]["conditions"]["reference"][
+            "execution_attestation"]["nonce"] = "wrong-nonce"
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("execution_attestation nonce is not bound" in error
+                            for error in errors), errors)
+
+    def test_neutral_regression_binds_observed_probes(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        evidence["repetitions"][0]["conditions"]["reference"][
+            "guidance_probe"] = "absent"
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("execution observation is not evaluator-bound" in error
+                            for error in errors), errors)
+
+    def test_neutral_regression_rejects_unanchored_metadata(self):
+        skill = "code-review"
+        evals_path = os.path.join(ROOT, "skills", skill, "evals", "evals.json")
+        case = next(item for item in json.load(open(evals_path, encoding="utf-8"))["evals"]
+                    if item["id"] == 5)
+        expected_fixture = (case["fixture"].get("output_hash")
+                            or case["fixture"].get("content_hash"))
+        evidence = {
+            "evidence_type": "regression",
+            "protocol": "regression",
+            "harness": {"adapter_protocol": eha.ADAPTER_PROTOCOL},
+            "skill": skill,
+            "case_id": 5,
+            "candidate_revision": rsre.resolve_revision("HEAD"),
+            "reference_revision": rsre.resolve_revision("HEAD"),
+            "candidate_skill_source_path": "outside",
+            "reference_skill_source_path": "skills/code-review",
+            "candidate_skill_content_hash": "sha256:candidate",
+            "reference_skill_content_hash": "sha256:reference",
+            "conditions": ["candidate", "reference"],
+            "expected_fixture_hash": expected_fixture,
+            "fixture_source_path": "skills/code-review/evals/evals.json",
+            "fixture_path": os.path.normpath(os.path.join(
+                "skills/code-review", case["fixture"]["path"])),
+            "fixture_source_hash": "sha256:source",
+            "repetitions": [],
+        }
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("candidate_skill_source_path" in error for error in errors), errors)
+
+        evidence["candidate_skill_source_path"] = "skills/code-review"
+        evidence["expected_fixture_hash"] = None
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("frozen content/output hash" in error for error in errors), errors)
+
+        evidence["expected_fixture_hash"] = expected_fixture
+        evidence["candidate_revision"] = "f" * 40
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("existing Git commit SHA" in error for error in errors), errors)
+        self.assertTrue(any("INVALID_REPRODUCTION_ENVIRONMENT" in error
+                            for error in errors), errors)
+
+    def test_neutral_regression_v3_requires_immutable_metadata(self):
+        evidence = self._neutral_regression_evidence_fixture()
+        evidence.update({
+            "result_schema_version": 3,
+            "evidence_protocol_version": 3,
+            "adapter_protocol_version": eha.ADAPTER_PROTOCOL,
+            "reproduction_status": "reproducible",
+            "runner_version": rsre.REGRESSION_RUNNER_VERSION,
+            "candidate_skill_hash": evidence["candidate_skill_content_hash"],
+            "reference_skill_hash": evidence["reference_skill_content_hash"],
+            "fixture_hash": evidence["expected_fixture_hash"],
+            "case_set_hash": rsre.case_set_hash(
+                evidence["case_anchors"]["candidate"],
+                evidence["case_anchors"]["reference"]),
+        })
+        self.assertEqual(ve.validate_generic_regression_evidence(evidence), [])
+        del evidence["evidence_protocol_version"]
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("evidence_protocol_version=3" in error
+                            for error in errors), errors)
+        evidence["evidence_protocol_version"] = 3
+        del evidence["repetitions"][0]["conditions"]["candidate"][
+            "activation_evidence"]
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("canonical activation_evidence" in error
+                            for error in errors), errors)
+        evidence["repetitions"][0]["conditions"]["candidate"][
+            "activation_evidence"] = {
+                "guidance_loaded": True,
+                "context_loaded": True,
+            }
+        del evidence["runner_version"]
+        errors = ve.validate_generic_regression_evidence(evidence)
+        self.assertTrue(any("immutable metadata runner_version" in error
+                            for error in errors), errors)
+
+    def test_neutral_execution_rejects_unsafe_skill_name(self):
+        errors = ve.validate_generic_execution_evidence({
+            "evidence_type": "execution",
+            "protocol": "qualification",
+            "harness": {"adapter_protocol": eha.ADAPTER_PROTOCOL},
+            "skill": "../code-review",
+            "case_id": 1,
+        })
+        self.assertTrue(any("safe skill name" in error for error in errors), errors)
+
+    def test_neutral_runner_rejects_external_placebo_skill(self):
+        args = argparse.Namespace(
+            skill="code-review",
+            case_id=5,
+            protocol="confirmation",
+            conditions=["target", "baseline", "placebo"],
+            placebo_skill="/tmp/external-guidance",
+            model=None,
+            reps=3,
+        )
+        with self.assertRaisesRegex(ValueError, "invalid placebo skill name"):
+            rhe.build_evidence(args, object())
 
 
 class EvidenceValidationTests(unittest.TestCase):
@@ -1331,11 +2286,32 @@ class GeneratorTests(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_generator_invocation_is_shell_free(self):
+        tmp = tempfile.mkdtemp()
+        work = None
+        try:
+            open(os.path.join(tmp, "setup.sh"), "w").write(
+                "#!/usr/bin/env bash\necho static > out.txt\n")
+            with unittest.mock.patch.object(eh.subprocess, "check_call") as check_call:
+                work, _ = eh.run_generator(tmp)
+            check_call.assert_called_once()
+            argv = check_call.call_args.args[0]
+            self.assertEqual(argv, ["bash", "setup.sh"])
+            self.assertFalse(check_call.call_args.kwargs["shell"])
+            with self.assertRaisesRegex(ValueError, "no shell syntax"):
+                eh.run_generator(tmp, "setup.sh", "bash setup.sh && touch pwned")
+        finally:
+            if work:
+                shutil.rmtree(work, ignore_errors=True)
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_fixture_source_hash_mismatch_fails(self):
         # Item 4: a changed generator source without an updated source_hash fails.
         tmp = tempfile.mkdtemp()
         try:
-            fxdir = os.path.join(tmp, "files")
+            skill_root = os.path.join(tmp, "skill")
+            fxdir = os.path.join(skill_root, "files")
+            os.makedirs(os.path.join(skill_root, "evals"))
             os.makedirs(fxdir)
             open(os.path.join(fxdir, "setup.sh"), "w").write(
                 "#!/usr/bin/env bash\nset -e\necho hi > a.txt\n")
@@ -1344,10 +2320,28 @@ class GeneratorTests(unittest.TestCase):
                   "output_hash": "sha256:" + "0" * 64,
                   "content_hash": "sha256:" + "0" * 64}
             c = {"id": 1, "evaluation_modes": ["routing"], "fixture": fx}
-            ve.check_fixture("x/evals.json", "x/evals.json", c, "x case 1")
+            fx["path"] = "files"
+            ve.check_fixture(os.path.join(skill_root, "evals", "evals.json"),
+                             "skill/evals/evals.json", c, "x case 1")
             self.assertTrue(any("source_hash mismatch" in e for e in ve.errors))
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_fixture_path_cannot_escape_skill_root(self):
+        fx = {
+            "status": "ready",
+            "type": "committed",
+            "path": "../../outside-fixture",
+            "content_hash": "sha256:" + "0" * 64,
+        }
+        ve.check_fixture(
+            os.path.join(ROOT, "skills", "code-review", "evals", "evals.json"),
+            "skills/code-review/evals/evals.json",
+            {"id": 1, "evaluation_modes": ["execution"], "fixture": fx},
+            "code-review case 1",
+        )
+        self.assertTrue(any("must remain under the skill directory" in error
+                            for error in ve.errors), ve.errors)
 
     def test_generator_git_hash_includes_untracked(self):
         # Item 3: the content hash must cover the full working tree (untracked files
@@ -1388,17 +2382,21 @@ class GeneratorTests(unittest.TestCase):
     def test_catalog_md_leak_in_fixture(self):
         tmp = tempfile.mkdtemp()
         try:
-            os.makedirs(os.path.join(tmp, "files"))
-            open(os.path.join(tmp, "files", "catalog.md"), "w").write("leak")
-            open(os.path.join(tmp, "files", "x.txt"), "w").write("ok")
+            skill_root = os.path.join(tmp, "skill")
+            files = os.path.join(skill_root, "files")
+            os.makedirs(os.path.join(skill_root, "evals"))
+            os.makedirs(files)
+            open(os.path.join(files, "catalog.md"), "w").write("leak")
+            open(os.path.join(files, "x.txt"), "w").write("ok")
             c = base_case(1, "matching", ["routing", "execution"],
                           routing_context=routing_ctx(),
                           routing=routing_exp(),
                           execution=exec_exp(),
                           fixture={"status": "ready", "type": "committed",
-                                   "path": os.path.join(tmp, "files"),
+                                   "path": "files",
                                    "content_hash": "sha256:" + "0" * 64})
-            ve.check_case(fake_path(), "x/evals.json", c)
+            ve.check_case(os.path.join(skill_root, "evals", "evals.json"),
+                          "skill/evals/evals.json", c)
             self.assertTrue(any("catalog.md" in e for e in ve.errors))
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
@@ -3614,6 +4612,61 @@ class HoldoutInvocationTests(unittest.TestCase):
                 rc.run_case_set(bad, None, "kilo")
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+class CommittedEvaluationArtifactIntegrationTests(unittest.TestCase):
+    """Exercise the repository's committed result files as a corpus."""
+
+    def test_all_committed_artifacts_are_readable_and_validated(self):
+        reset()
+        result_dir = os.path.join(ROOT, "docs", "evaluations", "results")
+        artifacts = sorted(glob.glob(os.path.join(result_dir, "*.md")))
+        self.assertTrue(artifacts, "expected committed evaluation artifacts")
+
+        original_evals_dir = ve.EVALS_DIR
+        try:
+            skill_names, case_index = ve.check_eval_files()
+            ve.check_results(skill_names, case_index)
+            parsed_blocks = 0
+            for path in artifacts:
+                text = open(path, encoding="utf-8",
+                            errors="replace").read()
+                blocks = ve.extract_result_json(text)
+                if os.path.basename(path) not in ve.HISTORICAL:
+                    self.assertTrue(
+                        blocks,
+                        f"non-historical artifact has no result-json: {path}")
+                parsed_blocks += len(blocks)
+                for block in blocks:
+                    self.assertIsInstance(block, dict)
+                    if block.get("evaluation_mode") == "regression":
+                        self.assertTrue(block.get("case_revision"))
+                        self.assertTrue(block.get("fixture_revision"))
+            self.assertGreater(parsed_blocks, 0)
+            self.assertEqual(ve.errors, [], ve.errors)
+        finally:
+            ve.EVALS_DIR = original_evals_dir
+            reset()
+
+
+class RegressionSemanticsTests(unittest.TestCase):
+    def test_regression_labels_are_observations(self):
+        self.assertEqual(
+            ve.regression_status_for_verdict(True, False),
+            ("candidate_only_pass", "observed_candidate_only_pass"),
+        )
+        self.assertEqual(
+            ve.regression_status_for_verdict(False, True),
+            ("reference_only_pass", "observed_reference_only_pass"),
+        )
+        self.assertEqual(
+            ve.regression_status_for_verdict(True, True),
+            ("both_pass", "observed_both_pass"),
+        )
+        self.assertEqual(
+            ve.regression_status_for_verdict(False, False),
+            ("both_fail", "observed_both_fail"),
+        )
 
 
 class ExpectedRouteNullTests(unittest.TestCase):

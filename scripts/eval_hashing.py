@@ -29,9 +29,17 @@ hashing). ``content_hash`` mirrors ``output_hash`` so the rest of the validator
 can treat generators uniformly. The canonical worker-visible materialization is
 ``materialize_fixture_seed``; ``canonical_hash`` / ``verify_generator_deterministic``
 both defer to it so frozen hashes always describe exactly what workers receive.
+
+``run_generator`` accepts only the constrained ``<interpreter> <source>`` argv
+form and invokes it with ``shell=False``. This shell-free argv contract prevents
+command injection through the invocation string; it does not prevent the
+generator itself from executing arbitrary code and is not a sandbox or other
+OS security boundary. Generator source must therefore be trusted or executed by
+an externally supplied OS-contained adapter.
 """
 import hashlib
 import os
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -50,15 +58,15 @@ def sanitize_env():
     """
     env = dict(os.environ)
     # Neutral HOME / XDG so git never reads ~/.gitconfig or ~/.config.
-    sandbox = tempfile.mkdtemp(prefix="eval-fixture-sandbox-")
-    env["HOME"] = sandbox
-    env["XDG_CONFIG_HOME"] = sandbox
-    env["XDG_CACHE_HOME"] = sandbox
+    sanitized_home = tempfile.mkdtemp(prefix="eval-fixture-home-")
+    env["HOME"] = sanitized_home
+    env["XDG_CONFIG_HOME"] = sanitized_home
+    env["XDG_CACHE_HOME"] = sanitized_home
     # Force git to ignore any global/system configuration.
     env["GIT_CONFIG_GLOBAL"] = "/dev/null"
     env["GIT_CONFIG_SYSTEM"] = "/dev/null"
     env["GIT_CONFIG_NOSYSTEM"] = "1"
-    env["GIT_CEILING_DIRECTORIES"] = sandbox
+    env["GIT_CEILING_DIRECTORIES"] = sanitized_home
     # Remove any inherited identity / credential material.
     for key in (
         "EMAIL", "USER", "NAME", "LOGNAME",
@@ -67,11 +75,34 @@ def sanitize_env():
         "GH_TOKEN", "GITHUB_TOKEN", "GIT_SSH_COMMAND", "EDITOR", "VISUAL",
     ):
         env.pop(key, None)
-    return env, sandbox
+    return env, sanitized_home
 
 
 def _sha256_of(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def _generator_argv(source: str, invocation: str) -> list[str]:
+    """Return a shell-free argv for the constrained generator contract."""
+
+    if not isinstance(source, str) or not source.strip():
+        raise ValueError("generator source must be a non-empty path")
+    if not isinstance(invocation, str) or not invocation.strip():
+        raise ValueError("generator invocation must be a non-empty command")
+    try:
+        argv = shlex.split(invocation)
+    except ValueError as exc:
+        raise ValueError(f"generator invocation is not valid argv: {exc}") from exc
+    if len(argv) != 2 or argv[1] != source:
+        raise ValueError(
+            "generator invocation must be '<interpreter> <source>' with no shell syntax"
+        )
+    interpreter = os.path.basename(argv[0])
+    if interpreter not in {"bash", "sh", "python", "python3"}:
+        raise ValueError(
+            "generator invocation interpreter must be bash, sh, python, or python3"
+        )
+    return argv
 
 
 def _is_excluded(rel, exclude):
@@ -359,6 +390,11 @@ def run_generator(fixture_dir: str, source: str = "setup.sh",
                   invocation: str = "bash setup.sh"):
     """Run a generator in a sanitized temp dir; return (output_dir, hash).
 
+    ``invocation`` is parsed as a shell-free ``argv`` and must name the supplied
+    ``source`` as its only argument. Shell-free parsing prevents command
+    injection, while environment sanitization only normalizes provenance; neither
+    provides OS-level containment or prevents arbitrary generator code execution.
+
     The returned ``output_dir`` is the GENERATED workspace and still contains the
     generator source (e.g. ``setup.sh``). It is the caller's responsibility to
     strip evaluator-only generator source before presenting the task to a worker
@@ -366,7 +402,8 @@ def run_generator(fixture_dir: str, source: str = "setup.sh",
     workspace INCLUDING the generator source; the worker-visible hash is produced
     by ``materialize_fixture_seed`` and excludes it.
     """
-    env, sandbox = sanitize_env()
+    argv = _generator_argv(source, invocation)
+    env, sanitized_home = sanitize_env()
     work = tempfile.mkdtemp(prefix="eval-gen-")
     try:
         # Copy the generator directory (minus any previous .git) into the work dir.
@@ -380,14 +417,15 @@ def run_generator(fixture_dir: str, source: str = "setup.sh",
             else:
                 shutil.copy2(src, dst)
         subprocess.check_call(
-            invocation, shell=True, cwd=work, env=env,
+            argv, shell=False, cwd=work, env=env,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         h = _generator_output_hash(work)
         return work, h
     finally:
-        # The sanitized HOME/XDG sandbox is host-scoped and must never leak.
-        shutil.rmtree(sandbox, ignore_errors=True)
+        # The sanitized HOME/XDG directory normalizes provenance only; it is
+        # not an OS sandbox and must never be allowed to leak.
+        shutil.rmtree(sanitized_home, ignore_errors=True)
 
 
 def source_hash_of(source_path: str) -> str:
@@ -457,15 +495,15 @@ def materialize_fixture_seed(fixture_dir: str, ftype: str,
     Returns ``(seed_dir, hash)`` where ``hash`` is a git-aware content hash of
     the seed. The returned ``seed_dir`` is a fresh temp dir the caller owns.
     """
-    sandbox = tempfile.mkdtemp(prefix="eval-seed-")
+    seed_dir = tempfile.mkdtemp(prefix="eval-seed-")
     if ftype == "generator":
         work, _h = run_generator(fixture_dir, source, invocation)
         try:
-            shutil.copytree(work, sandbox, symlinks=True, dirs_exist_ok=True)
+            shutil.copytree(work, seed_dir, symlinks=True, dirs_exist_ok=True)
             # Remove the generator source so it is not worker-visible.
             gen_names = [n for n in os.listdir(fixture_dir) if n != ".git"]
             for n in gen_names:
-                p = os.path.join(sandbox, n)
+                p = os.path.join(seed_dir, n)
                 if os.path.isdir(p) and not os.path.islink(p):
                     shutil.rmtree(p, ignore_errors=True)
                 elif os.path.exists(p):
@@ -473,8 +511,8 @@ def materialize_fixture_seed(fixture_dir: str, ftype: str,
         finally:
             shutil.rmtree(work, ignore_errors=True)
     else:
-        shutil.copytree(fixture_dir, sandbox, symlinks=True, dirs_exist_ok=True)
-    return sandbox, hash_workspace(sandbox)
+        shutil.copytree(fixture_dir, seed_dir, symlinks=True, dirs_exist_ok=True)
+    return seed_dir, hash_workspace(seed_dir)
 
 
 def canonical_hash(path: str, ftype: str, source: str = "setup.sh",

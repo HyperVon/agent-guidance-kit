@@ -18,20 +18,63 @@ import hashlib
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from eval_hashing import (HASH_PREFIX, canonical_hash, source_hash_of,
                           verify_generator_deterministic)
+from evaluation_protocols import (ALLOWED_ASSERTION_SCOPES, PROTOCOL_NAMES,
+                                  EVIDENCE_PROTOCOL_VERSION,
+                                  LEGACY_RESULT_REGRESSION_STATUSES,
+                                  REGRESSION_STATUSES, RESULT_SCHEMA_VERSION,
+                                  get_protocol,
+                                  is_safe_skill_name, legacy_protocol_name,
+                                  protocol_name, resolve_path_within,
+                                  validate_declaration)
+from evaluation.regression import (
+    INVALID_REPRODUCTION_ENVIRONMENT,
+    REGRESSION_RUNNER_VERSION,
+    REPRODUCTION_STATUSES,
+    case_set_hash,
+    normalize_regression_status,
+)
+from validators.attestation import (
+    ATTESTATION_CONFIDENCE_LEVELS,
+    is_strong_confidence,
+    validate_attestation_layers,
+    validate_condition_execution_claim,
+    validate_execution_attestation,
+    validate_execution_verified_claim,
+)
+from validators.evidence import validate_workspace_receipt
+from validators.execution import (
+    expected_guidance_identity,
+    validate_guidance_observation,
+)
+from validators.regression import (
+    regression_status_for_verdict,
+    validate_regression_claim,
+)
+from validators.routing import validate_selected_skill_decision
 
 try:
     import run_execution_eval as execution_runner
 except ImportError:  # pragma: no cover - direct library import fallback
     execution_runner = None
 try:
+    import evaluation_harness as harness_runner
+except ImportError:  # pragma: no cover - direct library import fallback
+    harness_runner = None
+try:
     import run_catalog_routing_eval as catalog_runner
 except ImportError:  # pragma: no cover - direct library import fallback
     catalog_runner = None
+try:
+    import run_skill_regression_eval as regression_runner
+except ImportError:  # pragma: no cover - direct library import fallback
+    regression_runner = None
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EVALS_DIR = os.path.join(ROOT, "docs", "evaluations")
@@ -39,6 +82,90 @@ SKILLS_GLOB = os.path.join(ROOT, "skills", "*", "evals", "evals.json")
 # Repository-level evaluation corpora (shared cross-skill cases and holdouts).
 CONFUSION_GLOB = os.path.join(ROOT, "evaluations", "confusion-sets", "*.json")
 HOLDOUT_GLOB = os.path.join(ROOT, "evaluations", "holdout", "*.json")
+
+
+def _git_commit_exists(value):
+    """Return whether a resolved SHA names a commit in the current repo."""
+
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{40}", value):
+        return False
+    try:
+        subprocess.run(
+            ["git", "-C", ROOT, "cat-file", "-e", f"{value}^{{commit}}"],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    return True
+
+
+def _skill_hash_at_revision(revision, skill):
+    """Materialize one revision's skill tree and return its guidance hash."""
+
+    if regression_runner is None or harness_runner is None:
+        raise ValueError("Git regression hashing helpers are unavailable")
+    root, _resolved = regression_runner.materialize_skill_revision(
+        revision, skill)
+    try:
+        return harness_runner.skill_tree_hash(
+            os.path.join(root, "skills", skill))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def _regression_case_anchor(revision, skill, case_id):
+    """Read one case/fixture anchor from the requested Git revision."""
+
+    if regression_runner is None:
+        raise ValueError("Git regression materializer is unavailable")
+    root, resolved = regression_runner.materialize_skill_revision(
+        revision, skill)
+    try:
+        skill_dir = os.path.join(root, "skills", skill)
+        evals_path = os.path.join(skill_dir, "evals", "evals.json")
+        raw = open(evals_path, "rb").read()
+        source = json.loads(raw.decode("utf-8"))
+        case = next((item for item in source.get("evals", [])
+                     if item.get("id") == case_id), None)
+        if case is None:
+            raise ValueError(f"case {case_id} is not present in {resolved}")
+        if "execution" not in case.get("evaluation_modes", []):
+            raise ValueError(f"case {case_id} is not an execution case in {resolved}")
+        fixture = case.get("fixture") or {}
+        fixture_type = fixture.get("type")
+        expected_fixture_hash = (
+            fixture.get("output_hash") if fixture_type == "generator"
+            else fixture.get("content_hash")
+        )
+        if not expected_fixture_hash:
+            raise ValueError(f"case {case_id} fixture has no frozen hash in {resolved}")
+        fixture_path = resolve_path_within(skill_dir, fixture.get("path"))
+        if fixture_path is None:
+            raise ValueError(f"case {case_id} fixture escapes the skill directory")
+        generator_source_hash = None
+        if fixture_type == "generator":
+            source_path = resolve_path_within(
+                fixture_path, fixture.get("source", "setup.sh"))
+            if source_path is None or not os.path.isfile(source_path):
+                raise ValueError(f"case {case_id} generator source is missing")
+            generator_source_hash = HASH_PREFIX + hashlib.sha256(
+                open(source_path, "rb").read()).hexdigest()
+        return {
+            "revision": resolved,
+            "source_path": f"skills/{skill}/evals/evals.json",
+            "source_hash": HASH_PREFIX + hashlib.sha256(raw).hexdigest(),
+            "prompt_hash": hashlib.sha256(
+                case.get("prompt", "").encode()).hexdigest(),
+            "fixture_type": fixture_type,
+            "fixture_path": os.path.normpath(os.path.join(
+                f"skills/{skill}", fixture.get("path", ""))),
+            "fixture_hash": expected_fixture_hash,
+            "generator_source_hash": generator_source_hash,
+        }
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
 
 # Case classification: the design intent of a case, independent of its
 # ``kind``. ``smoke`` cases are obvious sanity checks (keep them cheap, do not
@@ -61,15 +188,18 @@ ALLOWED_KINDS = {"matching", "neighboring", "ambiguous", "edge"}
 #       - "routing"           : legacy / harness-integrated routing
 #       - "catalog-routing"   : Layer A — model-as-classifier over a neutral catalog
 #       - "harness-routing"   : Layer C — optional harness-integration routing
-#   * execution        : Layer B — Docker-isolated target vs baseline vs placebo efficacy
+#   * execution        : Layer B — post-activation condition comparison
 ROUTING_MODES = {"routing", "catalog-routing", "harness-routing"}
 EXEC_MODES = {"execution"}
-ALLOWED_MODES = ROUTING_MODES | EXEC_MODES
+REGRESSION_MODES = {"regression"}
+ALLOWED_MODES = ROUTING_MODES | EXEC_MODES | REGRESSION_MODES
 ALLOWED_FIXTURE_STATUS = {"ready", "designed_only"}
 ALLOWED_FIXTURE_TYPES = {"committed", "generator"}
 KIND_COUNTS = {"matching": 2, "neighboring": 1, "ambiguous": 1, "edge": 1}
 ALLOWED_OUTCOME = {"skill_only_pass", "baseline_only_pass", "both_pass",
                    "both_fail", "placebo_only_pass", "non_discriminating",
+                   "candidate_only_pass", "reference_only_pass",
+                   "single_condition_pass", "single_condition_fail",
                    "invalid", "not_run"}
 ALLOWED_MEASUREMENT = {"discriminating", "non_discriminating", "inconclusive"}
 ALLOWED_PROTOCOL = {"valid", "limited", "contaminated", "invalid", "not_run"}
@@ -77,11 +207,16 @@ ALLOWED_PROTOCOL = {"valid", "limited", "contaminated", "invalid", "not_run"}
 # presentation/process preferences. Soft preferences must not be graded as
 # hard pass/fail correctness.
 ALLOWED_ASSERTION_TYPES = {"behavioral", "quality", "presentation"}
+ALLOWED_ASSERTION_SCOPES = set(ALLOWED_ASSERTION_SCOPES)
 # Isolation methods that are NOT valid production isolation. A run claiming
 # protocol.status == "valid" must use real OS-level isolation (container/gvisor/
 # sandbox with a verified boundary), not instruction-only / prompt-only wording.
 LIMITED_ISOLATION = ("instruction-only", "prompt-only", "no sandbox", "none",
                      "n/a", "unknown")
+ISOLATION_ATTESTATION_PROTOCOL = (
+    "agent-guidance-kit.isolation-attestation/v1")
+EXECUTION_ATTESTATION_PROTOCOL = (
+    "agent-guidance-kit.execution-attestation/v1")
 
 
 def _case_supports_mode(case, mode):
@@ -91,6 +226,10 @@ def _case_supports_mode(case, mode):
         return False
     if mode in modes:
         return True
+    # Revision comparisons reuse the execution case and change only the
+    # guidance condition (candidate vs reference).
+    if mode in REGRESSION_MODES:
+        return "execution" in modes
     # Catalog- and harness-routing are routing-family variants; existing eval
     # catalogs may declare their shared mode simply as ``routing``.
     return mode in ROUTING_MODES and "routing" in modes
@@ -327,6 +466,9 @@ def check_assertion_types(ex, tag):
                 err(f"{tag}: assertion object missing 'type'")
             elif at not in ALLOWED_ASSERTION_TYPES:
                 err(f"{tag}: bad assertion type '{at}'")
+            scope = a.get("scope", "shared-outcome")
+            if scope not in ALLOWED_ASSERTION_SCOPES:
+                err(f"{tag}: bad assertion scope '{scope}'")
 
 
 def skill_of(f):
@@ -350,7 +492,11 @@ def check_fixture(f, rel, c, tag):
     if not p:
         err(f"{tag}: ready fixture missing path")
         return
-    fpath = os.path.join(os.path.dirname(os.path.dirname(f)), p)
+    skill_root = os.path.dirname(os.path.dirname(f))
+    fpath = resolve_path_within(skill_root, p)
+    if fpath is None:
+        err(f"{tag}: fixture path must remain under the skill directory: {p}")
+        return
     if not os.path.exists(fpath):
         err(f"{tag}: fixture path missing: {p}")
         return
@@ -363,7 +509,10 @@ def check_fixture(f, rel, c, tag):
         return
     if ftype == "generator":
         src = fx.get("source", "setup.sh")
-        src_path = os.path.join(fpath, src)
+        src_path = resolve_path_within(fpath, src)
+        if src_path is None:
+            err(f"{tag}: generator source path must remain under the fixture: {src}")
+            return
         if not fx.get("source_hash", "").startswith(HASH_PREFIX):
             err(f"{tag}: generator missing source_hash")
         if not fx.get("output_hash", "").startswith(HASH_PREFIX):
@@ -496,6 +645,50 @@ def check_real_result(base, text, skill_names, case_index):
         check_one_result(base, res, skill_names, case_index)
 
 
+def _validate_isolation_attestation(base, res, cases, status):
+    """Require structured, raw-evidence-bound isolation for valid comparisons."""
+
+    if (status != "valid" or
+            res.get("evaluation_mode") not in (EXEC_MODES | REGRESSION_MODES)):
+        return
+    protocol = res.get("protocol") or {}
+    attestation = protocol.get("isolation_attestation")
+    if not isinstance(attestation, dict):
+        err(f"{base}: valid comparison requires isolation_attestation")
+        return
+    if attestation.get("protocol") != ISOLATION_ATTESTATION_PROTOCOL:
+        err(f"{base}: isolation_attestation protocol is unsupported")
+    if attestation.get("status") != "verified":
+        err(f"{base}: isolation_attestation must be verified")
+    if attestation.get("verification_mode") != "independent":
+        err(f"{base}: isolation_attestation must use independent verification")
+    if attestation.get("boundary") != "os-level":
+        err(f"{base}: valid comparison requires an os-level isolation boundary")
+    if attestation.get("worker_isolation_verified") is not True:
+        err(f"{base}: isolation_attestation must verify worker isolation")
+    runtime = res.get("runtime") or {}
+    if attestation.get("isolation_method") != runtime.get("isolation_method"):
+        err(f"{base}: isolation_attestation does not match isolation_method")
+    evidence_hashes = attestation.get("evidence_hashes")
+    if not isinstance(evidence_hashes, dict):
+        err(f"{base}: isolation_attestation must bind raw evidence hashes")
+        return
+    expected_case_keys = {str(case.get("case_id")) for case in cases
+                          if isinstance(case, dict)}
+    if set(evidence_hashes) != expected_case_keys:
+        err(f"{base}: isolation_attestation evidence hashes do not cover every case")
+    for case in cases:
+        if not isinstance(case, dict):
+            continue
+        case_id = str(case.get("case_id"))
+        raw_hash = case.get("raw_evidence_hash")
+        if not isinstance(raw_hash, str) or not re.fullmatch(
+                r"sha256:[0-9a-f]{64}", raw_hash):
+            err(f"{base} case {case.get('case_id')}: valid comparison requires raw_evidence_hash")
+        elif evidence_hashes.get(case_id) != raw_hash:
+            err(f"{base} case {case.get('case_id')}: isolation_attestation raw hash does not match case evidence")
+
+
 def check_one_result(base, res, skill_names, case_index):
     skill = res.get("skill")
     if skill not in skill_names:
@@ -503,12 +696,17 @@ def check_one_result(base, res, skill_names, case_index):
     mode = res.get("evaluation_mode")
     if mode not in ALLOWED_MODES:
         err(f"{base}: evaluation_mode '{mode}' invalid")
-    for key in ("method", "case_revision", "fixture_revision", "target_skill_revision"):
+    identity_keys = ["method", "case_revision", "fixture_revision"]
+    if mode in REGRESSION_MODES:
+        identity_keys.extend(["candidate_skill_revision", "reference_skill_revision"])
+    else:
+        identity_keys.append("target_skill_revision")
+    for key in identity_keys:
         if not res.get(key):
             err(f"{base}: missing identity field '{key}'")
     method = res.get("method")
-    if method not in {"docker-isolated", "harness-routing"}:
-        err(f"{base}: method '{method}' invalid; expected docker-isolated or harness-routing")
+    if method not in {"docker-isolated", "harness-adapter", "harness-routing"}:
+        err(f"{base}: method '{method}' invalid; expected harness-adapter, docker-isolated, or harness-routing")
     rt = res.get("runtime")
     if rt is None:
         rt = {}
@@ -535,10 +733,22 @@ def check_one_result(base, res, skill_names, case_index):
     elif not isinstance(runs, dict):
         err(f"{base}: result runs must be an object")
         runs = {}
-    for condition in ("target", "baseline", "placebo"):
+    for condition in ("target", "baseline", "placebo", "candidate", "reference"):
         if condition in runs and not isinstance(runs[condition], dict):
             err(f"{base}: top-level runs.{condition} must be an object")
     status = pr.get("status")
+    if mode in REGRESSION_MODES:
+        validate_regression_claim(base, res, errors)
+    execution_verified = pr.get("execution_verified")
+    if execution_verified is not None and not isinstance(execution_verified, bool):
+        err(f"{base}: protocol.execution_verified must be boolean when present")
+    confidence = pr.get("attestation_confidence")
+    if (confidence is not None and
+            confidence not in ATTESTATION_CONFIDENCE_LEVELS):
+        err(f"{base}: protocol.attestation_confidence is unsupported")
+    if execution_verified is True and not is_strong_confidence(confidence):
+        err(f"{base}: execution_verified=true requires runtime or independent attestation confidence")
+    _validate_isolation_attestation(base, res, cases, status)
     if status not in ALLOWED_PROTOCOL:
         err(f"{base}: protocol.status '{status}' invalid")
     if status == "valid" and not cases:
@@ -555,14 +765,15 @@ def check_one_result(base, res, skill_names, case_index):
     if mode in EXEC_MODES:
         if not pr.get("target_guidance_present"):
             err(f"{base}: execution result missing target_guidance_present evidence")
-        if not pr.get("target_absent_in_baseline"):
+        smoke_protocol = pr.get("name") == "smoke"
+        if not smoke_protocol and not pr.get("target_absent_in_baseline"):
             err(f"{base}: execution result missing target_absent_in_baseline evidence (target absence unverified)")
         if not pr.get("target_guidance_hash"):
             err(f"{base}: execution result missing target_guidance_hash (mounted guidance unverified)")
-        if not pr.get("baseline_guidance_absent"):
+        if not smoke_protocol and not pr.get("baseline_guidance_absent"):
             err(f"{base}: execution result missing baseline_guidance_absent evidence (baseline received no guidance)")
-        # Docker execution: the target and baseline workers must run in distinct
-        # fresh containers, not a shared process.
+        # A strict adapter must provide distinct worker boundaries; the legacy
+        # Docker path reports these as container IDs.
         # Top-level container IDs: for multi-case with per-case reps, top-level is optional
         has_per_case_reps_early = False
         if res.get("evaluation_mode") == "execution":
@@ -581,25 +792,80 @@ def check_one_result(base, res, skill_names, case_index):
             if not isinstance(target_run, dict) or not isinstance(
                     baseline_run, dict):
                 err(f"{base}: execution target/baseline runs must be objects")
-                g_cid = b_cid = None
+                g_worker = b_worker = None
             else:
-                g_cid = target_run.get("container_id")
-                b_cid = baseline_run.get("container_id")
-            if not g_cid or not b_cid:
-                err(f"{base}: execution result must record distinct target/baseline container_ids")
-            elif g_cid == b_cid:
-                err(f"{base}: target and baseline share a container_id (contamination)")
-    strict_execution = mode in EXEC_MODES and status == "valid"
-    required_conditions = ("target", "baseline")
+                g_worker = target_run.get("worker_id") or target_run.get("container_id")
+                b_worker = baseline_run.get("worker_id") or baseline_run.get("container_id")
+            if smoke_protocol:
+                if not g_worker:
+                    err(f"{base}: smoke execution result must record a target worker_id/container_id")
+            elif not g_worker or not b_worker:
+                err(f"{base}: execution result must record distinct target/baseline worker_id or container_id")
+            elif g_worker == b_worker:
+                err(f"{base}: target and baseline share a container_id/worker_id (contamination)")
+    if mode in REGRESSION_MODES:
+        for key in ("candidate_guidance_present", "reference_guidance_present",
+                    "candidate_guidance_hash", "reference_guidance_hash"):
+            if status == "valid" and not pr.get(key):
+                err(f"{base}: regression result missing {key} evidence")
+    explicit_protocol = protocol_name(pr)
+    legacy_protocol = legacy_protocol_name(pr, mode)
+    selected_protocol = explicit_protocol or legacy_protocol
+    if explicit_protocol is not None and explicit_protocol not in PROTOCOL_NAMES:
+        err(f"{base}: unknown evaluation protocol {explicit_protocol!r}")
+    result_schema_version = res.get("result_schema_version")
+    if (status == "valid" and explicit_protocol in PROTOCOL_NAMES and
+            result_schema_version not in (2, 3)):
+        err(f"{base}: protocol-declared valid results must set result_schema_version=2 or 3")
+    if status == "valid" and result_schema_version == RESULT_SCHEMA_VERSION:
+        if res.get("evidence_protocol_version") != EVIDENCE_PROTOCOL_VERSION:
+            err(f"{base}: result schema v3 requires evidence_protocol_version=3")
+        if method == "harness-adapter":
+            adapter_version = res.get("adapter_protocol_version")
+            if not adapter_version:
+                err(f"{base}: harness-adapter result schema v3 requires adapter_protocol_version")
+    if (status == "valid" and mode in REGRESSION_MODES and
+            result_schema_version == 3):
+        for key in ("candidate_skill_hash", "reference_skill_hash",
+                    "case_set_hash", "fixture_hash", "runner_version",
+                    "reproduction_status"):
+            if not isinstance(res.get(key), str) or not res[key].strip():
+                err(f"{base}: result schema v3 regression is missing {key}")
+        if res.get("runner_version") != REGRESSION_RUNNER_VERSION:
+            err(f"{base}: result schema v3 runner_version is unsupported")
+        if res.get("reproduction_status") != "reproducible":
+            err(f"{base}: {INVALID_REPRODUCTION_ENVIRONMENT}: result is not reproducible")
+    if mode in REGRESSION_MODES and status == "valid" and explicit_protocol != "regression":
+        err(f"{base}: valid regression result must declare protocol.name='regression'")
+    if mode in EXEC_MODES and status == "valid" and explicit_protocol is None and legacy_protocol is None:
+        err(f"{base}: new valid execution results must declare protocol.name; only the legacy strict confirmation shape may omit it")
+
+    strict_comparison = mode in (EXEC_MODES | REGRESSION_MODES) and status == "valid"
+    if selected_protocol in PROTOCOL_NAMES:
+        required_conditions = tuple(get_protocol(selected_protocol).required_conditions)
+    elif mode in REGRESSION_MODES:
+        required_conditions = ("candidate", "reference")
+    else:
+        required_conditions = ("target", "baseline")
     declared_repeats = None
     global_identity = (
-        {"repetition_id": set(), "session_id": set(), "container_id": set()}
-        if strict_execution else None)
-    if mode in EXEC_MODES:
+        {"repetition_id": set(), "session_id": set(), "container_id": set(),
+         "worker_id": set()}
+        if strict_comparison else None)
+    if mode in (EXEC_MODES | REGRESSION_MODES):
         declared_conditions = pr.get("conditions")
-        if strict_execution:
+        if strict_comparison and selected_protocol in PROTOCOL_NAMES:
+            for protocol_error in validate_declaration(
+                    selected_protocol, declared_conditions, pr.get("repeats")):
+                err(f"{base}: {protocol_error}")
+            if isinstance(declared_conditions, list):
+                required_conditions = tuple(
+                    condition for condition in declared_conditions
+                    if isinstance(condition, str)
+                )
+        elif strict_comparison:
             if not isinstance(declared_conditions, list):
-                err(f"{base}: valid execution result must declare protocol.conditions")
+                err(f"{base}: valid comparison result must declare protocol.conditions")
             else:
                 non_string = [condition for condition in declared_conditions
                                if not isinstance(condition, str)]
@@ -608,19 +874,18 @@ def check_one_result(base, res, skill_names, case_index):
                         f"condition names, got {non_string!r}")
                 else:
                     unknown = set(declared_conditions) - {
-                        "target", "baseline", "placebo"}
+                        "target", "baseline", "placebo", "candidate", "reference"}
                     if unknown:
                         err(f"{base}: protocol.conditions contains unknown "
                             f"condition(s) {sorted(unknown)!r}")
                     if not set(declared_conditions) >= set(required_conditions):
-                        err(f"{base}: valid execution result protocol.conditions "
-                            "must include target and baseline")
-                    if "placebo" in declared_conditions:
-                        required_conditions += ("placebo",)
+                        err(f"{base}: protocol.conditions is missing required "
+                            f"condition(s) {sorted(set(required_conditions) - set(declared_conditions))!r}")
+                    required_conditions = tuple(declared_conditions)
             declared_repeats = pr.get("repeats")
             if not isinstance(declared_repeats, int) or isinstance(
                     declared_repeats, bool) or declared_repeats < 1:
-                err(f"{base}: valid execution result must declare a positive "
+                err(f"{base}: valid comparison result must declare a positive "
                     "integer protocol.repeats")
                 declared_repeats = None
         else:
@@ -630,7 +895,7 @@ def check_one_result(base, res, skill_names, case_index):
         # A committed case may still carry placebo data even when an older
         # result omitted protocol.conditions. Treat that as a declared placebo
         # for strict verdict validation rather than silently dropping it.
-        if strict_execution and "placebo" not in required_conditions:
+        if strict_comparison and mode in EXEC_MODES and "placebo" not in required_conditions:
             has_placebo = False
             for c in cases:
                 if not isinstance(c, dict):
@@ -663,7 +928,7 @@ def check_one_result(base, res, skill_names, case_index):
     # runs are authoritative. If per-case repetitions are present, top-level is optional.
     # Detect if this is a multi-case result with per-case repetitions
     has_per_case_reps = False
-    if res.get("evaluation_mode") == "execution":
+    if res.get("evaluation_mode") in (EXEC_MODES | REGRESSION_MODES):
         for cs in cases:
             if isinstance(cs, dict) and isinstance(
                     cs.get("repetitions"), list) and cs.get("repetitions"):
@@ -682,21 +947,24 @@ def check_one_result(base, res, skill_names, case_index):
             if g.get("session_id") and b.get("session_id") and g["session_id"] == b["session_id"]:
                 err(f"{base}: top-level target and baseline share a session_id (contamination)")
     else:
-        g = runs.get("target")
-        b = runs.get("baseline")
+        left_name, right_name = (("candidate", "reference")
+                                 if mode in REGRESSION_MODES
+                                 else ("target", "baseline"))
+        g = runs.get(left_name)
+        b = runs.get(right_name)
         if g is None:
             g = {}
         if b is None:
             b = {}
         if not isinstance(g, dict) or not isinstance(b, dict):
-            err(f"{base}: top-level target/baseline runs must be objects")
+            err(f"{base}: top-level {left_name}/{right_name} runs must be objects")
         elif not g.get("session_id") or not b.get("session_id"):
-            err(f"{base}: result must record distinct target/baseline session_ids")
+            err(f"{base}: result must record distinct {left_name}/{right_name} session_ids")
         elif g["session_id"] == b["session_id"]:
-            err(f"{base}: target and baseline share a session_id (contamination)")
+            err(f"{base}: {left_name} and {right_name} share a session_id (contamination)")
     # Multi-case execution results must use per-case natural_task_hash; a single
     # top-level protocol.natural_task_hash cannot represent several different prompts.
-    if mode in EXEC_MODES and status == "valid":
+    if mode in (EXEC_MODES | REGRESSION_MODES) and status == "valid":
         has_top_task_hash = "natural_task_hash" in pr
         top_task_hash = pr.get("natural_task_hash")
         if len(cases) > 1 and has_top_task_hash:
@@ -718,12 +986,14 @@ def check_one_result(base, res, skill_names, case_index):
             outcome = cs.get("outcome")
             cat = (outcome.get("category")
                    if isinstance(outcome, dict) else None)
-            if cat in ("skill_only_pass", "baseline_only_pass", "both_pass"):
+            if cat in ("skill_only_pass", "baseline_only_pass", "both_pass",
+                       "candidate_only_pass", "reference_only_pass"):
                 err(f"{base} case {cs.get('case_id')}: {status} result cannot claim a success outcome ({cat})")
     for cs in cases:
         check_result_case(
             base, cs, skill, mode, case_index,
-            strict_execution=strict_execution,
+            strict_execution=strict_comparison,
+            protocol_name=selected_protocol,
             require_authoritative_case=(status == "valid"),
             protocol_status=status,
             required_conditions=required_conditions,
@@ -734,6 +1004,7 @@ def check_one_result(base, res, skill_names, case_index):
 
 def check_result_case(base, cs, skill, mode, case_index, *,
                       strict_execution=False,
+                      protocol_name=None,
                       require_authoritative_case=False,
                       protocol_status=None,
                       required_conditions=("target", "baseline"),
@@ -762,62 +1033,84 @@ def check_result_case(base, cs, skill, mode, case_index, *,
     elif protocol_status in ALLOWED_PROTOCOL and oc.get("protocol_status") != protocol_status:
         err(f"{base} case {cid}: outcome.protocol_status must match "
             f"top-level protocol.status ({protocol_status!r})")
-    # outcome <-> verdict consistency (verdict booleans are required for every mode)
+    # Outcome <-> verdict consistency. Legacy routing/execution results use
+    # target/baseline(/placebo); revision results use candidate/reference; a
+    # smoke may intentionally contain only the target condition.
     verdict = cs.get("verdict")
     if verdict is None:
         verdict = {}
     elif not isinstance(verdict, dict):
         err(f"{base} case {cid}: verdict must be an object")
         verdict = {}
-    gp = verdict.get("target_pass")
-    bp = verdict.get("baseline_pass")
-    pp = verdict.get("placebo_pass")
-    if not isinstance(gp, bool) or not isinstance(bp, bool):
-        err(f"{base} case {cid}: missing verdict.target_pass/baseline_pass booleans")
-        return
-    requires_placebo = "placebo" in required_conditions
-    if requires_placebo and not isinstance(pp, bool):
-        err(f"{base} case {cid}: valid placebo comparison requires "
-            "verdict.placebo_pass boolean")
-    expect = None
-    if gp and not bp:
-        # skill_only_pass requires placebo to fail (or not be run)
-        if pp is False or (pp is None and not requires_placebo):
-            expect = "skill_only_pass"
-        elif pp is True:
-            expect = "non_discriminating"
-    elif bp and not gp:
-        # baseline_only_pass: placebo status doesn't change the category
-        expect = "baseline_only_pass"
-    elif gp and bp:
-        # target and baseline both pass: non_discriminating when placebo also
-        # passes (every condition wins, benchmark is ceiling-effected); otherwise
-        # both_pass (benchmark at least separates real guidance from placebo).
-        if pp is True:
-            expect = "non_discriminating"
-        elif pp is False or (pp is None and not requires_placebo):
-            expect = "both_pass"
-    elif not gp and not bp:
-        if pp is False or (pp is None and not requires_placebo):
-            expect = "both_fail"
-        elif pp is True:
-            expect = "placebo_only_pass"
-    if expect and cat != expect:
-        err(f"{base} case {cid}: outcome.category '{cat}' inconsistent with verdict (expected {expect})")
+    if mode in REGRESSION_MODES:
+        gp = verdict.get("candidate_pass")
+        bp = verdict.get("reference_pass")
+        if not isinstance(gp, bool) or not isinstance(bp, bool):
+            err(f"{base} case {cid}: regression verdict requires candidate_pass/reference_pass booleans")
+            return
+        expect, regression_status = regression_status_for_verdict(gp, bp)
+        if cat != expect:
+            err(f"{base} case {cid}: outcome.category '{cat}' inconsistent with regression verdict (expected {expect})")
+        reported_status = oc.get("regression_status")
+        if reported_status not in (REGRESSION_STATUSES |
+                                   LEGACY_RESULT_REGRESSION_STATUSES):
+            err(f"{base} case {cid}: regression result requires outcome.regression_status")
+        elif normalize_regression_status(reported_status) != regression_status:
+            err(f"{base} case {cid}: regression_status '{reported_status}' does not match observed candidate/reference verdict (expected {regression_status})")
+    else:
+        gp = verdict.get("target_pass")
+        bp = verdict.get("baseline_pass")
+        pp = verdict.get("placebo_pass")
+        requires_baseline = "baseline" in required_conditions
+        requires_placebo = "placebo" in required_conditions
+        if not isinstance(gp, bool):
+            err(f"{base} case {cid}: missing verdict.target_pass boolean")
+            return
+        if requires_baseline and not isinstance(bp, bool):
+            err(f"{base} case {cid}: missing verdict.baseline_pass boolean")
+            return
+        if requires_placebo and not isinstance(pp, bool):
+            err(f"{base} case {cid}: valid placebo comparison requires verdict.placebo_pass boolean")
+        if not requires_baseline:
+            if cat != ("single_condition_pass" if gp else "single_condition_fail"):
+                err(f"{base} case {cid}: smoke result category must describe its single target condition")
+        else:
+            expect = None
+            if gp and not bp:
+                if pp is False or (pp is None and not requires_placebo):
+                    expect = "skill_only_pass"
+                elif pp is True:
+                    expect = "non_discriminating"
+            elif bp and not gp:
+                expect = "baseline_only_pass"
+            elif gp and bp:
+                if pp is True:
+                    expect = "non_discriminating"
+                elif pp is False or (pp is None and not requires_placebo):
+                    expect = "both_pass"
+            elif not gp and not bp:
+                if pp is False or (pp is None and not requires_placebo):
+                    expect = "both_fail"
+                elif pp is True:
+                    expect = "placebo_only_pass"
+            if expect and cat != expect:
+                err(f"{base} case {cid}: outcome.category '{cat}' inconsistent with verdict (expected {expect})")
 
-    if mode in EXEC_MODES:
-        measurement = oc.get("measurement_status")
-        controls = [bp]
-        if requires_placebo:
-            controls.append(pp)
-        if measurement == "discriminating":
-            if gp is not True or any(control is not False for control in controls):
-                err(f"{base} case {cid}: discriminating measurement requires "
-                    "target_pass=true and every declared control to fail")
-        elif measurement == "non_discriminating":
-            if gp is True and all(control is False for control in controls):
-                err(f"{base} case {cid}: non_discriminating measurement cannot "
-                    "claim a unique target advantage")
+        if mode in EXEC_MODES:
+            measurement = oc.get("measurement_status")
+            if not requires_baseline:
+                if measurement == "discriminating":
+                    err(f"{base} case {cid}: a single-condition smoke cannot claim a discriminating comparison")
+            else:
+                controls = [bp]
+                if requires_placebo:
+                    controls.append(pp)
+                if measurement == "discriminating":
+                    if gp is not True or any(control is not False for control in controls):
+                        err(f"{base} case {cid}: discriminating measurement requires target_pass=true and every declared control to fail")
+                elif measurement == "non_discriminating":
+                    if gp is True and all(control is False for control in controls):
+                        err(f"{base} case {cid}: non_discriminating measurement cannot claim a unique target advantage")
 
     if require_authoritative_case:
         authoritative = case_index.get(skill, {}).get(cid)
@@ -835,6 +1128,7 @@ def check_result_case(base, cs, skill, mode, case_index, *,
         check_exec_result_case(
             base, cs, skill, case_index, cid,
             strict=strict_execution,
+            protocol_name=protocol_name,
             required_conditions=required_conditions,
             declared_repeats=declared_repeats,
             global_identity=global_identity,
@@ -907,11 +1201,27 @@ def check_routing_result_case(base, cs, skill, case_index, cid, gp, bp):
             f"absent={sel_a!r}->{exp_absent!r}, fallbacks={fallbacks!r})")
 
 
+def _assertion_text(assertion):
+    if isinstance(assertion, str):
+        return assertion
+    if isinstance(assertion, dict):
+        return assertion.get("text") or assertion.get("assertion")
+    return None
+
+
+def _assertion_scope(assertion):
+    """Legacy strings and unscoped objects are safe shared-outcome criteria."""
+    if isinstance(assertion, dict):
+        return assertion.get("scope", "shared-outcome")
+    return "shared-outcome"
+
+
 def check_exec_result_case(base, cs, skill, case_index, cid, *, strict=False,
+                           protocol_name=None,
                            required_conditions=("target", "baseline"),
                            declared_repeats=None,
                            global_identity=None):
-    """Execution results grade frozen assertions with evidence on both conditions."""
+    """Grade execution or revision assertions and enforce scope fairness."""
     # Per-case provenance is mandatory for protocol-valid execution results.
     # Limited/invalid records may remain compact, but any fields they do carry
     # are still checked. This keeps historical records readable without allowing
@@ -949,7 +1259,10 @@ def check_exec_result_case(base, cs, skill, case_index, cid, *, strict=False,
             if expected_fixture and fh != expected_fixture:
                 err(f"{base} case {cid}: fixture_hash does not match frozen fixture hash")
         raw_hash = cs.get("raw_evidence_hash")
-        if raw_hash is not None and not re.fullmatch(
+        if strict and (not isinstance(raw_hash, str) or not re.fullmatch(
+                r"sha256:[0-9a-f]{64}", raw_hash)):
+            err(f"{base} case {cid}: valid comparison requires raw_evidence_hash")
+        elif raw_hash is not None and not re.fullmatch(
                 r"sha256:[0-9a-f]{64}", str(raw_hash)):
             err(f"{base} case {cid}: raw_evidence_hash must be a SHA-256 digest")
     else:
@@ -964,7 +1277,10 @@ def check_exec_result_case(base, cs, skill, case_index, cid, *, strict=False,
             err(f"{base} case {cid}: missing cases[].fixture_hash "
                 "(per-case frozen fixture hash required)")
         raw_hash = cs.get("raw_evidence_hash")
-        if raw_hash is not None and not re.fullmatch(
+        if strict and (not isinstance(raw_hash, str) or not re.fullmatch(
+                r"sha256:[0-9a-f]{64}", raw_hash)):
+            err(f"{base} case {cid}: valid comparison requires raw_evidence_hash")
+        elif raw_hash is not None and not re.fullmatch(
                 r"sha256:[0-9a-f]{64}", str(raw_hash)):
             err(f"{base} case {cid}: raw_evidence_hash must be a SHA-256 digest")
     # Repetitions provenance: a valid execution case must carry the declared
@@ -1020,6 +1336,7 @@ def check_exec_result_case(base, cs, skill, case_index, cid, *, strict=False,
                     err(f"{base} case {cid} rep{rep_idx} {cond}: run must be an object")
                     continue
                 sid = cr.get("session_id")
+                worker_id = cr.get("worker_id") or cr.get("container_id")
                 cid_ = cr.get("container_id")
                 if not isinstance(sid, str) or not sid.strip():
                     err(f"{base} case {cid} rep{rep_idx} {cond}: missing session_id")
@@ -1031,16 +1348,20 @@ def check_exec_result_case(base, cs, skill, case_index, cid, *, strict=False,
                         if sid in global_identity["session_id"]:
                             err(f"{base} case {cid} rep{rep_idx} {cond}: duplicate session_id {sid!r} across cases")
                         global_identity["session_id"].add(sid)
-                if not isinstance(cid_, str) or not cid_.strip():
-                    err(f"{base} case {cid} rep{rep_idx} {cond}: missing container_id")
-                elif cid_ in seen_cids:
-                    err(f"{base} case {cid} rep{rep_idx} {cond}: duplicate container_id {cid_!r} (spliced or shared execution)")
+                if not isinstance(worker_id, str) or not worker_id.strip():
+                    err(f"{base} case {cid} rep{rep_idx} {cond}: missing worker_id/container_id")
+                elif worker_id in seen_cids:
+                    err(f"{base} case {cid} rep{rep_idx} {cond}: duplicate worker_id/container_id {worker_id!r} (spliced or shared execution)")
                 else:
-                    seen_cids.add(cid_)
+                    seen_cids.add(worker_id)
                     if global_identity is not None:
-                        if cid_ in global_identity["container_id"]:
-                            err(f"{base} case {cid} rep{rep_idx} {cond}: duplicate container_id {cid_!r} across cases")
-                        global_identity["container_id"].add(cid_)
+                        if worker_id in global_identity["worker_id"]:
+                            err(f"{base} case {cid} rep{rep_idx} {cond}: duplicate worker_id/container_id {worker_id!r} across cases")
+                        global_identity["worker_id"].add(worker_id)
+                        if cid_:
+                            if cid_ in global_identity["container_id"]:
+                                err(f"{base} case {cid} rep{rep_idx} {cond}: duplicate container_id {cid_!r} across cases")
+                            global_identity["container_id"].add(cid_)
             if strict and isinstance(rid, str) and rid.strip() and \
                     global_identity is not None:
                 if rid in global_identity["repetition_id"]:
@@ -1060,19 +1381,43 @@ def check_exec_result_case(base, cs, skill, case_index, cid, *, strict=False,
     frozen = []
     if skill in case_index and cid in case_index[skill]:
         frozen = case_index[skill][cid].get("execution", {}).get("assertions", [])
-    graded_texts = [a.get("assertion") for a in assertions
+    frozen_by_text = {
+        text: assertion for assertion in frozen
+        if (text := _assertion_text(assertion))
+    }
+    graded_texts = [_assertion_text(a) for a in assertions
                     if isinstance(a, dict)]
     for fa in frozen:
-        if fa not in graded_texts:
-            err(f"{base} case {cid}: frozen assertion missing from graded result: {fa[:60]}")
+        fa_text = _assertion_text(fa)
+        if fa_text not in graded_texts:
+            err(f"{base} case {cid}: frozen assertion missing from graded result: {str(fa_text)[:60]}")
+    if strict and frozen:
+        seen_graded = set()
+        for graded_text in graded_texts:
+            if graded_text in seen_graded:
+                err(f"{base} case {cid}: duplicate assertion in graded result: {str(graded_text)[:60]}")
+            seen_graded.add(graded_text)
+            if graded_text not in frozen_by_text:
+                err(f"{base} case {cid}: assertion is not declared by the authoritative case: {str(graded_text)[:60]}")
+    condition_names = tuple(required_conditions)
+    scored_assertions = []
     for a in assertions:
         if not isinstance(a, dict):
             err(f"{base} case {cid}: assertion entry must be an object")
             continue
-        for cond in required_conditions:
+        text = _assertion_text(a)
+        expected = frozen_by_text.get(text)
+        scope = _assertion_scope(a)
+        if scope not in ALLOWED_ASSERTION_SCOPES:
+            err(f"{base} case {cid}: invalid assertion scope {scope!r}")
+        elif expected is not None and scope != _assertion_scope(expected):
+            err(f"{base} case {cid}: assertion scope for {str(text)[:60]!r} does not match the frozen case definition")
+        if protocol_name == "qualification" and scope in get_protocol("qualification").scored_scopes:
+            scored_assertions.append(a)
+        for cond in condition_names:
             if cond not in a:
                 err(f"{base} case {cid}: assertion missing {cond} grade")
-        for cond in ("target", "baseline", "placebo"):
+        for cond in condition_names:
             if cond not in a:
                 continue
             g = a.get(cond)
@@ -1085,6 +1430,37 @@ def check_exec_result_case(base, cs, skill, case_index, cid, *, strict=False,
                 err(f"{base} case {cid}: assertion missing {cond}.pass")
             elif g["pass"] is True and not str(g.get("evidence", "")).strip():
                 err(f"{base} case {cid}: passing {cond} assertion has no evidence")
+
+    # Qualification verdicts are recomputed from only common-denominator
+    # assertions. A target-only contract assertion is retained for the
+    # contract report but can never make the baseline lose marginal-value
+    # credit.
+    if protocol_name == "qualification":
+        if not scored_assertions:
+            err(f"{base} case {cid}: qualification must contain at least one shared-outcome or universal-safety assertion")
+        else:
+            shared_passes = {}
+            for cond in ("target", "baseline"):
+                grades = [a.get(cond, {}).get("pass") for a in scored_assertions
+                          if isinstance(a.get(cond), dict)]
+                if grades and all(isinstance(value, bool) for value in grades):
+                    shared_passes[cond] = all(grades)
+            verdict = cs.get("verdict") or {}
+            for cond in ("target", "baseline"):
+                key = f"{cond}_pass"
+                if cond in shared_passes and verdict.get(key) != shared_passes[cond]:
+                    err(f"{base} case {cid}: {key} must be calculated from shared-outcome assertions; skill-contract assertions cannot change marginal-value scoring")
+        repeats = declared_repeats
+        early_stop = cs.get("early_stop")
+        measurement = (cs.get("outcome") or {}).get("measurement_status")
+        if repeats == 1 and measurement == "non_discriminating":
+            if not isinstance(early_stop, dict) or early_stop.get("stopped") is not True:
+                err(f"{base} case {cid}: n=1 non_discriminating qualification must record early_stop.stopped=true")
+            elif not str(early_stop.get("reason", "")).strip():
+                err(f"{base} case {cid}: early_stop.reason is required")
+        elif early_stop is not None:
+            if not isinstance(early_stop, dict) or not isinstance(early_stop.get("stopped"), bool):
+                err(f"{base} case {cid}: early_stop must contain a boolean stopped field")
 
 
 # --------------------------------------------------------------------------
@@ -1104,6 +1480,9 @@ def _execution_source_anchor(evidence, errs):
     case_id = evidence.get("case_id")
     if not isinstance(skill, str) or not skill:
         errs.append("execution evidence missing skill")
+        return None
+    if not is_safe_skill_name(skill):
+        errs.append("execution evidence skill must be a single safe skill name")
         return None
     if not isinstance(case_id, int):
         errs.append("execution evidence missing integer case_id")
@@ -1183,6 +1562,293 @@ def _placebo_source_anchor(evidence, anchor, errs):
                         "match the current placebo skill discovery tree")
 
 
+def validate_generic_execution_evidence(evidence):
+    """Validate execution evidence emitted through the neutral adapter."""
+
+    errs = []
+    if evidence.get("evidence_type") != "execution":
+        errs.append(f"expected evidence_type 'execution', got {evidence.get('evidence_type')!r}")
+    protocol = evidence.get("protocol")
+    protocol_name_value = (protocol.get("name") if isinstance(protocol, dict)
+                           else protocol)
+    if protocol_name_value not in {"smoke", "qualification", "confirmation"}:
+        errs.append("neutral execution evidence must declare smoke, qualification, or confirmation protocol")
+    harness = evidence.get("harness")
+    if not isinstance(harness, dict) or harness.get("adapter_protocol") != (
+            "agent-guidance-kit.harness-adapter/v1"):
+        errs.append("neutral execution evidence must identify the harness adapter protocol")
+    _validate_neutral_evidence_versions(evidence, harness, errs)
+    anchor = _execution_source_anchor_generic(evidence, errs)
+    if anchor is None:
+        return errs
+    repetitions = evidence.get("repetitions") or []
+    conditions = evidence.get("conditions")
+    for error in validate_declaration(protocol_name_value, conditions,
+                                      len(repetitions)):
+        errs.append(error)
+    if not isinstance(conditions, list):
+        return errs
+    allowed = {"target", "baseline", "placebo"}
+    unknown = set(conditions) - allowed
+    if unknown:
+        errs.append(f"neutral execution evidence has unknown condition(s): {sorted(unknown)!r}")
+    expected_fixture = anchor["expected_fixture_hash"]
+    seed = evidence.get("canonical_task_seed_hash")
+    if not seed:
+        errs.append("neutral execution evidence missing canonical_task_seed_hash")
+    elif expected_fixture and seed != expected_fixture:
+        errs.append("neutral execution canonical seed does not match frozen fixture")
+    # Runtime treatment paths are adapter metadata. The neutral contract binds
+    # guidance by identity and does not interpret where a harness loads it.
+    if not anchor["expected_fixture_hash"]:
+        errs.append("execution evidence current fixture has no frozen content/output hash")
+    elif not isinstance(evidence.get("expected_fixture_hash"), str) or not evidence.get("expected_fixture_hash").strip():
+        errs.append("execution evidence missing expected_fixture_hash for frozen content/output hash")
+    elif evidence.get("expected_fixture_hash") != anchor["expected_fixture_hash"]:
+        errs.append("execution evidence expected_fixture_hash does not match current frozen fixture hash")
+    target_guidance_id, target_guidance_hash = expected_guidance_identity(
+        evidence, "target")
+    if target_guidance_id != evidence.get("skill"):
+        errs.append("neutral execution target guidance_id does not match the skill identity")
+    if not target_guidance_hash:
+        errs.append("neutral execution evidence missing target_guidance_hash")
+    elif (evidence.get("target_skill_content_hash") is not None and
+          evidence.get("target_skill_content_hash") != target_guidance_hash):
+        errs.append("neutral execution target guidance hash does not match target skill content hash")
+    if "baseline" in conditions:
+        if not evidence.get("target_absent_in_baseline"):
+            errs.append("neutral execution evidence missing target_absent_in_baseline")
+        if not evidence.get("baseline_guidance_absent"):
+            errs.append("neutral execution evidence missing baseline_guidance_absent")
+    if "placebo" in conditions:
+        placebo, placebo_hash = expected_guidance_identity(evidence, "placebo")
+        if not placebo:
+            errs.append("neutral execution evidence missing placebo_guidance_id")
+        if not placebo_hash:
+            errs.append("neutral execution evidence missing placebo_guidance_hash")
+        if placebo == evidence.get("skill"):
+            errs.append("neutral execution placebo skill must differ from target")
+        if not is_safe_skill_name(placebo):
+            errs.append("neutral execution placebo skill must be a single safe skill name")
+        elif harness_runner is not None and isinstance(placebo, str):
+            placebo_path = os.path.join(ROOT, "skills", placebo)
+            current_placebo_hash = harness_runner.skill_tree_hash(placebo_path)
+            if placebo_hash != current_placebo_hash:
+                errs.append("neutral execution placebo guidance hash does not match the current skill")
+
+    seen_repetitions = set()
+    seen_workers = set()
+    seen_sessions = set()
+    attestation_confidences = []
+    require_canonical = evidence.get("result_schema_version") == RESULT_SCHEMA_VERSION
+    expected_task_hash = hashlib.sha256(
+        anchor["case"].get("prompt", "").encode()).hexdigest()
+    for repetition in repetitions:
+        tag = f"rep{repetition.get('rep')}"
+        rid = repetition.get("repetition_id")
+        if not isinstance(rid, str) or not rid.strip():
+            errs.append(f"{tag}: missing repetition_id")
+        elif rid in seen_repetitions:
+            errs.append(f"{tag}: duplicate repetition_id")
+        else:
+            seen_repetitions.add(rid)
+        if repetition.get("natural_task_hash") != expected_task_hash:
+            errs.append(f"{tag}: natural_task_hash does not match current case prompt")
+        if repetition.get("natural_task_identical_across_conditions") is not True:
+            errs.append(f"{tag}: natural_task_identical_across_conditions must be true")
+        cmap = repetition.get("conditions") or {}
+        if set(cmap) != set(conditions):
+            errs.append(f"{tag}: condition evidence does not match declared conditions")
+            continue
+        starts = []
+        workers = []
+        sessions = []
+        workspaces = (repetition.get("condition_workspace_ids") or {}).values()
+        if len(set(workspaces)) != len(conditions):
+            errs.append(f"{tag}: condition workspace ids are not distinct")
+        receipt_hashes = repetition.get("condition_workspace_receipt_hashes")
+        if (not isinstance(receipt_hashes, dict) or
+                set(receipt_hashes) != set(conditions)):
+            errs.append(f"{tag}: condition workspace receipt hashes are incomplete")
+            receipt_hashes = {}
+        if (repetition.get("workspace_receipt_path") !=
+                getattr(harness_runner, "WORKSPACE_RECEIPT_PATH", None)):
+            errs.append(f"{tag}: workspace receipt path is not the neutral receipt path")
+        for name in conditions:
+            cmeta = cmap.get(name) or {}
+            ctag = f"{tag} {name}"
+            if cmeta.get("repetition_id") != rid:
+                errs.append(f"{ctag}: repetition_id does not match parent repetition")
+            required_fields = (
+                "worker_id", "session_id", "run_status", "returncode",
+                "starting_task_hash", "ending_task_hash",
+                "starting_full_hash", "ending_full_hash",
+                "workspace_receipt", "workspace_receipt_path",
+                "workspace_receipt_hash", "attestation_nonce",
+                "execution_request_hash", "execution_observation_hash",
+                "execution_attestation")
+            if not require_canonical:
+                required_fields += ("guidance_probe", "guidance_context_probe")
+            for key in required_fields:
+                if key not in cmeta:
+                    errs.append(f"{ctag}: missing {key}")
+            _validate_workspace_receipt(
+                cmeta, receipt_hashes.get(name), ctag, errs)
+            confidence = _validate_execution_attestation(
+                cmeta, receipt_hashes.get(name), ctag, errs)
+            attestation_confidences.append(confidence)
+            validate_condition_execution_claim(cmeta, confidence, ctag, errs)
+            if cmeta.get("run_status") != "success" or cmeta.get("returncode") != 0:
+                errs.append(f"{ctag}: failed condition is not evidence")
+            if not (cmeta.get("output") or "").strip():
+                errs.append(f"{ctag}: empty model output")
+            if expected_fixture and cmeta.get("starting_task_hash") != expected_fixture:
+                errs.append(f"{ctag}: starting task hash does not match frozen seed")
+            starts.append(cmeta.get("starting_task_hash"))
+            worker = cmeta.get("worker_id")
+            session = cmeta.get("session_id")
+            workers.append(worker)
+            sessions.append(session)
+            if not worker or not session:
+                errs.append(f"{ctag}: worker_id and session_id are required")
+            if worker in seen_workers:
+                errs.append(f"{ctag}: duplicate worker_id across repetitions")
+            if session in seen_sessions:
+                errs.append(f"{ctag}: duplicate session_id across repetitions")
+            if worker:
+                seen_workers.add(worker)
+            if session:
+                seen_sessions.add(session)
+            guided = name != "baseline"
+            expected_id, expected_hash = expected_guidance_identity(evidence, name)
+            validate_guidance_observation(
+                cmeta, expected_id, expected_hash, ctag, errs, guided=guided,
+                require_canonical=require_canonical)
+            validate_attestation_layers(
+                cmeta, receipt_hashes.get(name), expected_id, expected_hash,
+                ctag, errs, guided=guided)
+        if len(set(workers)) != len(conditions):
+            errs.append(f"{tag}: conditions do not have distinct worker_ids")
+        if len(set(sessions)) != len(conditions):
+            errs.append(f"{tag}: conditions do not have distinct session_ids")
+        if len(set(starts)) != 1:
+            errs.append(f"{tag}: condition starting task hashes differ")
+    validate_execution_verified_claim(evidence, attestation_confidences, errs)
+    return errs
+
+
+def _execution_source_anchor_generic(evidence, errs):
+    """Resolve common current-source anchors without a harness-specific hash."""
+
+    skill = evidence.get("skill")
+    case_id = evidence.get("case_id")
+    if not isinstance(skill, str) or not skill:
+        errs.append("execution evidence missing skill")
+        return None
+    if not is_safe_skill_name(skill):
+        errs.append("execution evidence skill must be a single safe skill name")
+        return None
+    if not isinstance(case_id, int):
+        errs.append("execution evidence missing integer case_id")
+        return None
+    evals_path = os.path.join(ROOT, "skills", skill, "evals", "evals.json")
+    if not os.path.isfile(evals_path):
+        errs.append(f"execution evidence skill evals not found: {skill}")
+        return None
+    try:
+        source = json.load(open(evals_path, encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        errs.append(f"execution source evals unreadable: {exc}")
+        return None
+    case = next((item for item in source.get("evals", [])
+                 if item.get("id") == case_id), None)
+    if case is None:
+        errs.append("execution evidence case_id is not present in the current skill evals")
+        return None
+    if "execution" not in case.get("evaluation_modes", []):
+        errs.append("execution evidence case is not an execution case")
+    fixture = case.get("fixture") or {}
+    expected = (fixture.get("output_hash")
+                if fixture.get("type") == "generator"
+                else fixture.get("content_hash"))
+    evals_rel = os.path.relpath(evals_path, ROOT)
+    skill_rel = os.path.dirname(os.path.dirname(evals_rel))
+    fixture_rel = os.path.normpath(
+        os.path.join(skill_rel, fixture.get("path", "")))
+    source_hash = HASH_PREFIX + hashlib.sha256(
+        open(evals_path, "rb").read()).hexdigest()
+    if evidence.get("fixture_source_path") != evals_rel:
+        errs.append("execution evidence fixture_source_path does not match current evals path")
+    if evidence.get("fixture_path") != fixture_rel:
+        errs.append("execution evidence fixture_path does not match current fixture path")
+    if evidence.get("fixture_source_hash") != source_hash:
+        errs.append("execution evidence fixture_source_hash does not match current evals.json")
+    if not expected:
+        errs.append("execution evidence current fixture has no frozen content/output hash")
+    elif evidence.get("expected_fixture_hash") != expected:
+        errs.append("execution evidence expected_fixture_hash does not match current frozen fixture hash")
+    if harness_runner is not None:
+        current_hash = harness_runner.skill_tree_hash(os.path.join(ROOT, skill_rel))
+        reported_hash = (evidence.get("target_guidance_hash") or
+                         evidence.get("target_skill_content_hash"))
+        if reported_hash != current_hash:
+            errs.append("execution evidence target_guidance_hash does not match "
+                        "the current target guidance identity")
+    return {"skill": skill, "case_id": case_id, "case": case,
+            "fixture": fixture, "expected_fixture_hash": expected,
+            "evals_path": evals_path, "evals_rel": evals_rel,
+            "fixture_rel": fixture_rel, "source_hash": source_hash}
+
+
+def _validate_neutral_evidence_versions(
+    evidence: dict,
+    harness: object,
+    errs: list[str],
+) -> None:
+    """Keep result, evidence, and adapter protocol versions distinct."""
+
+    schema = evidence.get("result_schema_version")
+    if schema is None:
+        return
+    if (not isinstance(schema, int) or isinstance(schema, bool) or
+            schema not in (2, RESULT_SCHEMA_VERSION)):
+        errs.append("neutral evidence result_schema_version must be 2 or 3")
+        return
+    if schema < RESULT_SCHEMA_VERSION:
+        return
+    if evidence.get("evidence_protocol_version") != EVIDENCE_PROTOCOL_VERSION:
+        errs.append(
+            "neutral evidence schema v3 requires evidence_protocol_version=3"
+        )
+    adapter_protocol = harness.get("adapter_protocol") if isinstance(
+        harness, dict) else None
+    if evidence.get("adapter_protocol_version") != adapter_protocol:
+        errs.append(
+            "neutral evidence schema v3 adapter_protocol_version must match "
+            "harness.adapter_protocol"
+        )
+
+
+def _validate_workspace_receipt(cmeta, expected_hash, ctag, errs):
+    """Compatibility wrapper for the focused evidence validator."""
+
+    expected_path = (harness_runner.WORKSPACE_RECEIPT_PATH
+                     if harness_runner is not None else None)
+    validate_workspace_receipt(
+        cmeta, expected_hash, ctag, errs, expected_path=expected_path)
+
+
+def _validate_execution_attestation(cmeta, expected_receipt_hash, ctag, errs):
+    """Compatibility wrapper for the focused attestation validator."""
+
+    observation_hash_fn = (harness_runner.attestation_observation_hash
+                            if harness_runner is not None else
+                            lambda _cmeta: None)
+    return validate_execution_attestation(
+        cmeta, expected_receipt_hash, ctag, errs,
+        observation_hash_fn=observation_hash_fn)
+
+
 def validate_execution_evidence(evidence):
     """Validate a Docker execution-evidence file from run_execution_eval.py.
 
@@ -1208,6 +1874,11 @@ def validate_execution_evidence(evidence):
     treatment trees cannot invalidate seed equality; the full-filesystem hashes
     are recorded separately.
     """
+    harness = evidence.get("harness")
+    if (isinstance(harness, dict) and
+            harness.get("adapter_protocol") == "agent-guidance-kit.harness-adapter/v1"):
+        return validate_generic_execution_evidence(evidence)
+
     errs = []
     et = evidence.get("evidence_type")
     if et != "execution":
@@ -1224,9 +1895,24 @@ def validate_execution_evidence(evidence):
         errs.append("execution evidence has no repetitions")
         return errs
     conds = evidence.get("conditions") or ["target", "baseline"]
-    if not set(conds) >= {"target", "baseline"}:
-        errs.append(f"execution evidence conditions {conds!r} must include "
-                    f"'target' and 'baseline' (placebo optional)")
+    raw_protocol = evidence.get("protocol")
+    evidence_protocol = (
+        raw_protocol.get("name") if isinstance(raw_protocol, dict)
+        else raw_protocol if isinstance(raw_protocol, str) else None
+    )
+    if evidence_protocol is not None:
+        for protocol_error in validate_declaration(
+                evidence_protocol, conds, len(reps)):
+            errs.append(protocol_error)
+        protocol_def = get_protocol(evidence_protocol)
+        required_conditions = set(protocol_def.required_conditions) if protocol_def else {"target", "baseline"}
+    else:
+        # Existing local evidence predates protocol.name and is retained under
+        # the old target/baseline(/placebo) contract.
+        required_conditions = {"target", "baseline"}
+    if not set(conds) >= required_conditions:
+        errs.append(f"execution evidence conditions {conds!r} do not include "
+                    f"required condition(s) {sorted(required_conditions)!r}")
         return errs
     for extra in set(conds) - {"target", "baseline", "placebo"}:
         errs.append(f"unknown condition {extra!r} in evidence")
@@ -1403,25 +2089,26 @@ def validate_execution_evidence(evidence):
         elif t.get("activation_events"):
             errs.append(f"{tag} target: activation_events present while "
                         f"skill_tool_invoked is false")
-        b = cmap.get("baseline") or {}
-        if b.get("activation_mechanism") != "none":
-            errs.append(f"{tag} baseline: activation_mechanism != 'none' "
-                        f"(baseline must not have activated guidance)")
-        if b.get("skill_kilo_path"):
-            errs.append(f"{tag} baseline: skill_kilo_path is set "
-                        f"(baseline must not receive the target skill)")
-        if b.get("skill_probe") != "absent":
-            errs.append(f"{tag} baseline: skill_probe != 'absent' "
+        if "baseline" in conds:
+            b = cmap.get("baseline") or {}
+            if b.get("activation_mechanism") != "none":
+                errs.append(f"{tag} baseline: activation_mechanism != 'none' "
+                            f"(baseline must not have activated guidance)")
+            if b.get("skill_kilo_path"):
+                errs.append(f"{tag} baseline: skill_kilo_path is set "
+                            f"(baseline must not receive the target skill)")
+            if b.get("skill_probe") != "absent":
+                errs.append(f"{tag} baseline: skill_probe != 'absent' "
                             f"(baseline leaked a .kilo/skills treatment tree)")
-        if b.get("skill_context_probe") != "none":
-            errs.append(f"{tag} baseline: skill_context_probe != 'none' "
-                        f"(baseline must not export activated guidance)")
-        if b.get("skill_tool_invoked"):
-            errs.append(f"{tag} baseline: skill_tool_invoked is true "
-                        f"(baseline must have no skill activation)")
-        if b.get("activation_events"):
-            errs.append(f"{tag} baseline: activation_events present "
-                        f"(baseline must have no skill activation)")
+            if b.get("skill_context_probe") != "none":
+                errs.append(f"{tag} baseline: skill_context_probe != 'none' "
+                            f"(baseline must not export activated guidance)")
+            if b.get("skill_tool_invoked"):
+                errs.append(f"{tag} baseline: skill_tool_invoked is true "
+                            f"(baseline must have no skill activation)")
+            if b.get("activation_events"):
+                errs.append(f"{tag} baseline: activation_events present "
+                            f"(baseline must have no skill activation)")
         if "placebo" in conds:
             p = cmap.get("placebo") or {}
             if p.get("activation_mechanism") != "kilo-command-skill":
@@ -1481,6 +2168,436 @@ def validate_execution_evidence(evidence):
         if not wids or len(set(wids)) != len(conds):
             errs.append(f"{tag}: condition workspace ids not distinct "
                         f"(shared mutable fixture)")
+    return errs
+
+
+def validate_regression_evidence(evidence):
+    """Validate candidate/reference raw evidence without treating either as baseline."""
+
+    harness = evidence.get("harness")
+    if (isinstance(harness, dict) and
+            harness.get("adapter_protocol") == "agent-guidance-kit.harness-adapter/v1"):
+        return validate_generic_regression_evidence(evidence)
+
+    errs = []
+    if evidence.get("evidence_type") != "regression":
+        errs.append(f"expected evidence_type 'regression', got {evidence.get('evidence_type')!r}")
+    if evidence.get("protocol") not in ("regression", {"name": "regression"}):
+        errs.append("regression evidence must declare protocol 'regression'")
+    skill = evidence.get("skill")
+    case_id = evidence.get("case_id")
+    if not isinstance(skill, str) or not skill:
+        errs.append("regression evidence missing skill")
+        return errs
+    if not isinstance(case_id, int):
+        errs.append("regression evidence missing integer case_id")
+        return errs
+    evals_path = os.path.join(ROOT, "skills", skill, "evals", "evals.json")
+    if not os.path.isfile(evals_path):
+        errs.append(f"regression evidence skill evals not found: {skill}")
+        return errs
+    try:
+        source = json.load(open(evals_path, encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        errs.append(f"regression source evals unreadable: {exc}")
+        return errs
+    case = next((item for item in source.get("evals", [])
+                 if item.get("id") == case_id), None)
+    if case is None:
+        errs.append("regression evidence case_id is not present in current skill evals")
+        return errs
+    if "execution" not in case.get("evaluation_modes", []):
+        errs.append("regression evidence case is not an execution case")
+    fixture = case.get("fixture") or {}
+    expected_fixture = (fixture.get("output_hash") if fixture.get("type") == "generator"
+                        else fixture.get("content_hash"))
+    evals_rel = os.path.relpath(evals_path, ROOT)
+    skill_rel = os.path.dirname(os.path.dirname(evals_rel))
+    fixture_rel = os.path.normpath(os.path.join(skill_rel, fixture.get("path", "")))
+    source_hash = HASH_PREFIX + hashlib.sha256(open(evals_path, "rb").read()).hexdigest()
+    if evidence.get("fixture_source_path") != evals_rel:
+        errs.append("regression evidence fixture_source_path does not match current evals path")
+    if evidence.get("fixture_path") != fixture_rel:
+        errs.append("regression evidence fixture_path does not match current fixture path")
+    if evidence.get("fixture_source_hash") != source_hash:
+        errs.append("regression evidence fixture_source_hash does not match current evals.json")
+    if expected_fixture and evidence.get("expected_fixture_hash") != expected_fixture:
+        errs.append("regression evidence expected_fixture_hash does not match frozen fixture hash")
+    for key in ("candidate_revision", "reference_revision",
+                "candidate_skill_content_hash", "reference_skill_content_hash"):
+        if not isinstance(evidence.get(key), str) or not evidence[key].strip():
+            errs.append(f"regression evidence missing {key}")
+    for key in ("candidate_revision", "reference_revision"):
+        if not re.fullmatch(r"[0-9a-f]{40}", str(evidence.get(key, ""))):
+            errs.append(f"regression evidence {key} must be a resolved Git commit SHA")
+    expected_skill_source = f"skills/{skill}"
+    for key in ("candidate_skill_source_path", "reference_skill_source_path"):
+        if evidence.get(key) != expected_skill_source:
+            errs.append(f"regression evidence {key} does not match the current skill")
+    conditions = evidence.get("conditions")
+    if conditions != ["candidate", "reference"]:
+        errs.append(f"regression evidence conditions must be ['candidate', 'reference'], got {conditions!r}")
+    repetitions = evidence.get("repetitions") or []
+    for error in validate_declaration("regression", conditions, len(repetitions)):
+        errs.append(error)
+    expected_task_hash = hashlib.sha256(case.get("prompt", "").encode()).hexdigest()
+    expected_seed = evidence.get("expected_fixture_hash")
+    seed = evidence.get("canonical_task_seed_hash")
+    if not seed:
+        errs.append("regression evidence missing canonical_task_seed_hash")
+    elif expected_seed and seed != expected_seed:
+        errs.append("regression canonical_task_seed_hash does not match frozen fixture")
+    runtime_paths = evidence.get("runtime_treatment_paths")
+    if execution_runner is not None and runtime_paths != list(execution_runner.RUNTIME_TREATMENT_PATHS):
+        errs.append("regression evidence runtime_treatment_paths do not match the canonical runner")
+
+    seen_repetitions = set()
+    seen_sessions = set()
+    seen_containers = set()
+    for repetition in repetitions:
+        tag = f"rep{repetition.get('rep')}"
+        rid = repetition.get("repetition_id")
+        if not isinstance(rid, str) or not rid.strip():
+            errs.append(f"{tag}: missing repetition_id")
+        elif rid in seen_repetitions:
+            errs.append(f"{tag}: duplicate repetition_id")
+        else:
+            seen_repetitions.add(rid)
+        if repetition.get("natural_task_hash") != expected_task_hash:
+            errs.append(f"{tag}: natural_task_hash does not match current case prompt")
+        if repetition.get("natural_task_identical_across_conditions") is not True:
+            errs.append(f"{tag}: natural_task_identical_across_conditions must be true")
+        cmap = repetition.get("conditions") or {}
+        if set(cmap) != {"candidate", "reference"}:
+            errs.append(f"{tag}: candidate/reference condition evidence is incomplete")
+            continue
+        starts = []
+        workspaces = []
+        for name in ("candidate", "reference"):
+            cmeta = cmap.get(name) or {}
+            ctag = f"{tag} {name}"
+            if cmeta.get("repetition_id") != rid:
+                errs.append(f"{ctag}: repetition_id does not match parent repetition")
+            for key in ("container_id", "session_id", "run_status", "returncode",
+                        "starting_task_hash", "ending_task_hash",
+                        "starting_full_hash", "ending_full_hash",
+                        "skill_probe", "skill_context_probe"):
+                if key not in cmeta:
+                    errs.append(f"{ctag}: missing {key}")
+            if cmeta.get("run_status") != "success" or cmeta.get("returncode") != 0:
+                errs.append(f"{ctag}: failed condition is not evidence")
+            if not (cmeta.get("output") or "").strip():
+                errs.append(f"{ctag}: empty model output")
+            if expected_seed and cmeta.get("starting_task_hash") != expected_seed:
+                errs.append(f"{ctag}: starting task hash does not match frozen seed")
+            starts.append(cmeta.get("starting_task_hash"))
+            workspaces.append((cmeta.get("container_id"), cmeta.get("session_id"),
+                               cmeta.get("skill_kilo_path")))
+            expected_hash_key = f"{name}_skill_content_hash"
+            if cmeta.get("activation_mechanism") != "kilo-command-skill":
+                errs.append(f"{ctag}: guidance was not activated through kilo-command-skill")
+            if cmeta.get("skill_command") != f"{skill}:skill":
+                errs.append(f"{ctag}: skill command does not match the compared skill")
+            if cmeta.get("skill_kilo_path") != f".kilo/skills/{skill}":
+                errs.append(f"{ctag}: skill discovery path is incorrect")
+            if cmeta.get("skill_content_hash") != evidence.get(expected_hash_key):
+                errs.append(f"{ctag}: skill content hash does not match the revision anchor")
+            if cmeta.get("skill_probe") != "present":
+                errs.append(f"{ctag}: skill probe did not confirm a present tree")
+            if cmeta.get("skill_context_probe") != "present":
+                errs.append(f"{ctag}: skill context probe did not confirm activation")
+        if len({item[0] for item in workspaces}) != 2:
+            errs.append(f"{tag}: candidate/reference containers are not distinct")
+        if len({item[1] for item in workspaces}) != 2:
+            errs.append(f"{tag}: candidate/reference sessions are not distinct")
+        if len({item[2] for item in workspaces}) != 1:
+            errs.append(f"{tag}: candidate/reference discovery paths differ unexpectedly")
+        if len(set(starts)) != 1:
+            errs.append(f"{tag}: candidate/reference starting task hashes differ")
+        workspace_ids = (repetition.get("condition_workspace_ids") or {}).values()
+        if len(set(workspace_ids)) != 2:
+            errs.append(f"{tag}: candidate/reference workspace ids are not distinct")
+        for cmeta in cmap.values():
+            sid = cmeta.get("session_id")
+            cid = cmeta.get("container_id")
+            if sid in seen_sessions:
+                errs.append(f"{tag}: duplicate session_id across repetitions")
+            if cid in seen_containers:
+                errs.append(f"{tag}: duplicate container_id across repetitions")
+            if sid:
+                seen_sessions.add(sid)
+            if cid:
+                seen_containers.add(cid)
+    return errs
+
+
+def validate_generic_regression_evidence(evidence):
+    """Validate regression evidence from a harness-neutral adapter.
+
+    Unlike the historical Docker evidence path, this validator requires only
+    worker/session identity and adapter-provided guidance/context probes.  A
+    container, image, CLI name, or provider is optional and may be recorded as
+    adapter metadata when available. Case and fixture provenance is resolved
+    from the recorded candidate/reference Git revisions, not from the current
+    checkout. The reference revision supplies the shared worker-visible fixture;
+    candidate fixture declarations are retained as provenance and are never
+    executed by this validator.
+    """
+
+    errs = []
+    if evidence.get("evidence_type") != "regression":
+        errs.append(f"expected evidence_type 'regression', got {evidence.get('evidence_type')!r}")
+    protocol = evidence.get("protocol")
+    protocol_name_value = (protocol.get("name") if isinstance(protocol, dict)
+                           else protocol)
+    if protocol_name_value != "regression":
+        errs.append("regression evidence must declare protocol 'regression'")
+    harness = evidence.get("harness")
+    if not isinstance(harness, dict) or harness.get("adapter_protocol") != (
+            "agent-guidance-kit.harness-adapter/v1"):
+        errs.append("regression evidence must identify the harness adapter protocol")
+    _validate_neutral_evidence_versions(evidence, harness, errs)
+    skill = evidence.get("skill")
+    case_id = evidence.get("case_id")
+    if not isinstance(skill, str) or not skill:
+        errs.append("regression evidence missing skill")
+        return errs
+    if not is_safe_skill_name(skill):
+        errs.append("regression evidence skill must be a single safe skill name")
+        return errs
+    if not isinstance(case_id, int):
+        errs.append("regression evidence missing integer case_id")
+        return errs
+    schema_version = evidence.get("result_schema_version")
+    immutable_metadata_required = (
+        isinstance(schema_version, int) and not isinstance(schema_version, bool)
+        and schema_version >= 3
+    )
+    if "reproduction_status" in evidence:
+        reproduction_status = evidence.get("reproduction_status")
+        if reproduction_status not in REPRODUCTION_STATUSES:
+            errs.append(
+                f"{INVALID_REPRODUCTION_ENVIRONMENT}: regression evidence has "
+                f"unsupported reproduction_status {reproduction_status!r}"
+            )
+        elif reproduction_status != "reproducible":
+            errs.append(
+                f"{INVALID_REPRODUCTION_ENVIRONMENT}: regression evidence did "
+                f"not reproduce exactly ({reproduction_status})"
+            )
+    elif immutable_metadata_required:
+        errs.append("regression evidence missing reproduction_status")
+    for key in ("candidate_revision", "reference_revision",
+                "candidate_skill_content_hash", "reference_skill_content_hash"):
+        if not isinstance(evidence.get(key), str) or not evidence[key].strip():
+            errs.append(f"regression evidence missing {key}")
+    if immutable_metadata_required:
+        for key in ("runner_version", "case_set_hash", "fixture_hash",
+                    "candidate_skill_hash", "reference_skill_hash"):
+            if not isinstance(evidence.get(key), str) or not evidence[key].strip():
+                errs.append(f"regression evidence missing immutable metadata {key}")
+        if evidence.get("runner_version") != REGRESSION_RUNNER_VERSION:
+            errs.append(
+                "regression evidence runner_version does not match the "
+                "validator-supported runner version"
+            )
+    expected_skill_source = f"skills/{skill}"
+    for key in ("candidate_skill_source_path", "reference_skill_source_path"):
+        if evidence.get(key) != expected_skill_source:
+            errs.append(f"regression evidence {key} does not match the current skill")
+    for key in ("candidate_revision", "reference_revision"):
+        if not _git_commit_exists(evidence.get(key)):
+            errs.append(
+                f"{INVALID_REPRODUCTION_ENVIRONMENT}: regression evidence "
+                f"{key} must be an existing Git commit SHA"
+            )
+    revision_anchors = {}
+    for label, revision_key in (("candidate", "candidate_revision"),
+                                ("reference", "reference_revision")):
+        revision = evidence.get(revision_key)
+        if not _git_commit_exists(revision):
+            continue
+        try:
+            revision_anchors[label] = _regression_case_anchor(
+                revision, skill, case_id)
+        except Exception as exc:  # fail closed with anchored evidence error
+            errs.append(
+                f"{INVALID_REPRODUCTION_ENVIRONMENT}: regression evidence "
+                f"{label} case anchor could not be read: {exc}"
+            )
+    if set(revision_anchors) != {"candidate", "reference"}:
+        errs.append(
+            f"{INVALID_REPRODUCTION_ENVIRONMENT}: both exact candidate and "
+            "reference case anchors are required"
+        )
+        return errs
+    case_anchors = evidence.get("case_anchors")
+    if not isinstance(case_anchors, dict):
+        errs.append("regression evidence must include candidate/reference case_anchors")
+        case_anchors = {}
+    anchor_keys = ("revision", "source_path", "source_hash", "prompt_hash",
+                   "fixture_type", "fixture_path", "fixture_hash",
+                   "generator_source_hash")
+    for label in ("candidate", "reference"):
+        expected_anchor = revision_anchors[label]
+        reported_anchor = case_anchors.get(label)
+        if not isinstance(reported_anchor, dict):
+            errs.append(f"regression evidence missing case_anchors.{label}")
+            continue
+        if reported_anchor.get("revision") != expected_anchor["revision"]:
+            errs.append(f"regression evidence case_anchors.{label}.revision is not resolved")
+        for key in anchor_keys[1:]:
+            if reported_anchor.get(key) != expected_anchor.get(key):
+                errs.append(
+                    f"regression evidence case_anchors.{label}.{key} does not match its Git revision"
+                )
+    candidate_anchor = revision_anchors["candidate"]
+    reference_anchor = revision_anchors["reference"]
+    if candidate_anchor["prompt_hash"] != reference_anchor["prompt_hash"]:
+        errs.append("candidate/reference regression prompts differ")
+    if evidence.get("fixture_revision") != reference_anchor["revision"]:
+        errs.append("regression evidence fixture_revision must identify the reference Git revision")
+    if evidence.get("fixture_source_path") != reference_anchor["source_path"]:
+        errs.append("regression evidence fixture_source_path does not match the reference evals path")
+    if evidence.get("fixture_path") != reference_anchor["fixture_path"]:
+        errs.append("regression evidence fixture_path does not match the reference fixture path")
+    if evidence.get("fixture_source_hash") != reference_anchor["source_hash"]:
+        errs.append("regression evidence fixture_source_hash does not match the reference evals.json")
+    expected_fixture = reference_anchor["fixture_hash"]
+    if not isinstance(evidence.get("expected_fixture_hash"), str) or not evidence.get("expected_fixture_hash").strip():
+        errs.append("regression evidence missing expected_fixture_hash for frozen content/output hash")
+    elif evidence.get("expected_fixture_hash") != expected_fixture:
+        errs.append("regression evidence expected_fixture_hash does not match the reference frozen fixture hash")
+    if "fixture_hash" in evidence and evidence.get("fixture_hash") != expected_fixture:
+        errs.append("regression evidence fixture_hash does not match the reference frozen fixture hash")
+    if ("candidate_skill_hash" in evidence and
+            evidence.get("candidate_skill_hash") != evidence.get(
+                "candidate_skill_content_hash")):
+        errs.append("regression evidence candidate_skill_hash does not match candidate_skill_content_hash")
+    if ("reference_skill_hash" in evidence and
+            evidence.get("reference_skill_hash") != evidence.get(
+                "reference_skill_content_hash")):
+        errs.append("regression evidence reference_skill_hash does not match reference_skill_content_hash")
+    expected_case_set_hash = case_set_hash(
+        revision_anchors["candidate"], revision_anchors["reference"])
+    if "case_set_hash" in evidence and evidence.get("case_set_hash") != expected_case_set_hash:
+        errs.append("regression evidence case_set_hash does not match revision-local case anchors")
+    revision_hashes = {}
+    for revision_key, hash_key in (
+            ("candidate_revision", "candidate_skill_content_hash"),
+            ("reference_revision", "reference_skill_content_hash")):
+        revision = evidence.get(revision_key)
+        if not _git_commit_exists(revision):
+            continue
+        if revision not in revision_hashes:
+            try:
+                revision_hashes[revision] = _skill_hash_at_revision(
+                    revision, skill)
+            except Exception as exc:  # fail closed with anchored evidence error
+                errs.append(f"regression evidence {revision_key} could not hash the Git revision: {exc}")
+                revision_hashes[revision] = None
+        if revision_hashes[revision] != evidence.get(hash_key):
+            errs.append(f"regression evidence {hash_key} does not match the materialized Git revision")
+    conditions = evidence.get("conditions")
+    if conditions != ["candidate", "reference"]:
+        errs.append("regression evidence conditions must be ['candidate', 'reference']")
+    repetitions = evidence.get("repetitions") or []
+    for error in validate_declaration("regression", conditions, len(repetitions)):
+        errs.append(error)
+    expected_task_hash = reference_anchor["prompt_hash"]
+    expected_seed = evidence.get("expected_fixture_hash")
+    seed = evidence.get("canonical_task_seed_hash")
+    if not seed:
+        errs.append("regression evidence missing canonical_task_seed_hash")
+    elif expected_seed and seed != expected_seed:
+        errs.append("regression canonical_task_seed_hash does not match frozen fixture")
+    seen_repetitions = set()
+    seen_workers = set()
+    seen_sessions = set()
+    attestation_confidences = []
+    require_canonical = evidence.get("result_schema_version") == RESULT_SCHEMA_VERSION
+    for repetition in repetitions:
+        tag = f"rep{repetition.get('rep')}"
+        rid = repetition.get("repetition_id")
+        if not isinstance(rid, str) or not rid.strip():
+            errs.append(f"{tag}: missing repetition_id")
+        elif rid in seen_repetitions:
+            errs.append(f"{tag}: duplicate repetition_id")
+        else:
+            seen_repetitions.add(rid)
+        if repetition.get("natural_task_hash") != expected_task_hash:
+            errs.append(f"{tag}: natural_task_hash does not match the anchored case prompt")
+        if repetition.get("natural_task_identical_across_conditions") is not True:
+            errs.append(f"{tag}: natural_task_identical_across_conditions must be true")
+        cmap = repetition.get("conditions") or {}
+        if set(cmap) != {"candidate", "reference"}:
+            errs.append(f"{tag}: candidate/reference condition evidence is incomplete")
+            continue
+        starts = []
+        workspace_ids = (repetition.get("condition_workspace_ids") or {}).values()
+        if len(set(workspace_ids)) != 2:
+            errs.append(f"{tag}: candidate/reference workspace ids are not distinct")
+        receipt_hashes = repetition.get("condition_workspace_receipt_hashes")
+        if (not isinstance(receipt_hashes, dict) or
+                set(receipt_hashes) != {"candidate", "reference"}):
+            errs.append(f"{tag}: condition workspace receipt hashes are incomplete")
+            receipt_hashes = {}
+        if (repetition.get("workspace_receipt_path") !=
+                getattr(harness_runner, "WORKSPACE_RECEIPT_PATH", None)):
+            errs.append(f"{tag}: workspace receipt path is not the neutral receipt path")
+        for name in ("candidate", "reference"):
+            cmeta = cmap.get(name) or {}
+            ctag = f"{tag} {name}"
+            if cmeta.get("repetition_id") != rid:
+                errs.append(f"{ctag}: repetition_id does not match parent repetition")
+            required_fields = (
+                "worker_id", "session_id", "run_status", "returncode",
+                "starting_task_hash", "ending_task_hash",
+                "starting_full_hash", "ending_full_hash",
+                "workspace_receipt", "workspace_receipt_path",
+                "workspace_receipt_hash", "attestation_nonce",
+                "execution_request_hash", "execution_observation_hash",
+                "execution_attestation")
+            if not require_canonical:
+                required_fields += ("guidance_probe", "guidance_context_probe")
+            for key in required_fields:
+                if key not in cmeta:
+                    errs.append(f"{ctag}: missing {key}")
+            _validate_workspace_receipt(
+                cmeta, receipt_hashes.get(name), ctag, errs)
+            confidence = _validate_execution_attestation(
+                cmeta, receipt_hashes.get(name), ctag, errs)
+            attestation_confidences.append(confidence)
+            validate_condition_execution_claim(cmeta, confidence, ctag, errs)
+            if cmeta.get("run_status") != "success" or cmeta.get("returncode") != 0:
+                errs.append(f"{ctag}: failed condition is not evidence")
+            if not (cmeta.get("output") or "").strip():
+                errs.append(f"{ctag}: empty model output")
+            if expected_seed and cmeta.get("starting_task_hash") != expected_seed:
+                errs.append(f"{ctag}: starting task hash does not match frozen seed")
+            starts.append(cmeta.get("starting_task_hash"))
+            worker_id = cmeta.get("worker_id")
+            session_id = cmeta.get("session_id")
+            if not worker_id or not session_id:
+                errs.append(f"{ctag}: worker_id and session_id are required")
+            if worker_id in seen_workers:
+                errs.append(f"{ctag}: duplicate worker_id across repetitions")
+            if session_id in seen_sessions:
+                errs.append(f"{ctag}: duplicate session_id across repetitions")
+            if worker_id:
+                seen_workers.add(worker_id)
+            if session_id:
+                seen_sessions.add(session_id)
+            expected_id, expected_hash = expected_guidance_identity(evidence, name)
+            validate_guidance_observation(
+                cmeta, expected_id, expected_hash, ctag, errs, guided=True,
+                require_canonical=require_canonical)
+            validate_attestation_layers(
+                cmeta, receipt_hashes.get(name), expected_id, expected_hash,
+                ctag, errs, guided=True)
+        if len(set(starts)) != 1:
+            errs.append(f"{tag}: candidate/reference starting task hashes differ")
+    validate_execution_verified_claim(evidence, attestation_confidences, errs)
     return errs
 
 
@@ -1580,12 +2697,13 @@ def validate_catalog_routing_evidence(evidence):
                                 f"match=True (false pass)")
                 continue
             decision = r.get("decision") or {}
-            if "selected_skill" not in decision:
-                errs.append(f"{rep_tag}: success but decision missing "
-                            f"'selected_skill'")
+            decision_errors = validate_selected_skill_decision(
+                decision, set(valid_actions))
+            for decision_error in decision_errors:
+                errs.append(f"{rep_tag}: {decision_error}")
+            if (not isinstance(decision, dict) or
+                    "selected_skill" not in decision):
                 continue
-            if decision.get("action") not in valid_actions:
-                errs.append(f"{rep_tag}: invalid action {decision.get('action')!r}")
             sel = decision.get("selected_skill")
             act = decision.get("action")
             if sel is not None and sel not in catalogs.get(name, set()):
@@ -1889,6 +3007,9 @@ def check_evidence_dir(ev_dir=None):
         basename = os.path.basename(f)
         if et == "execution":
             for e in validate_execution_evidence(data):
+                err(f"{rel}: {e}")
+        elif et == "regression":
+            for e in validate_regression_evidence(data):
                 err(f"{rel}: {e}")
         elif et in ("confusion-set", "holdout"):
             # Case-set evidence has a top-level cases/aggregate schema. The

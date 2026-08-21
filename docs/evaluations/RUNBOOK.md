@@ -20,6 +20,58 @@ fix this file, do not weaken `SKILL.md`.
 > only as `protocol_status: exploratory` / `invalid` historical evidence and must
 > not be read as protocol-valid proof.
 
+## 0. Development loop and harness boundary
+
+The portable skills are the product. Use the cheapest experiment that answers
+the current question:
+
+1. static case/skill validation;
+2. one-repetition `smoke` when runner mechanics need checking;
+3. one-repetition `regression` for routine skill edits;
+4. one-repetition `qualification` when the question is marginal value against
+   a no-skill condition;
+5. explicit `confirmation` only for important, high-risk, conflicting, or
+   publication-bound claims.
+
+The protocol is not tied to Kilo, Docker, a model provider, or any particular
+agent CLI. New execution and regression runs use the JSON harness adapter
+contract in [harness-adapter.md](harness-adapter.md), governed by the
+[canonical protocol specification](protocol-spec.md). The adapter supplies the
+worker/session boundary and proves guidance activation; the evaluator supplies
+the task seed, hashes, condition comparison, and validation. Docker/Kilo is a
+retained optional adapter for the strict historical confirmation path.
+
+For a routine revision comparison, use:
+
+```bash
+python3 scripts/run_skill_regression_eval.py \
+  --skill code-review --reference <previous-sha> --candidate HEAD \
+  --case-id 5 --reps 1 \
+  --harness-command-json '["python3","path/to/adapter.py"]'
+```
+
+For a fair target-vs-baseline qualification, use the same adapter boundary:
+
+```bash
+python3 scripts/run_harness_eval.py \
+  --skill code-review --case-id 5 --protocol qualification --reps 1 \
+  --harness-command-json '["python3","path/to/adapter.py"]'
+```
+
+The adapter argv is JSON-encoded and passed without shell interpretation. It
+receives one JSON request on stdin and returns one JSON response on stdout. It
+must apply the same activation policy to candidate and reference and must not
+rewrite guidance before context; the concrete mechanism and placement remain
+adapter-defined. Use `--preserve-failed-artifacts` when retaining artifacts for
+successful-run debugging is useful; failed conditions preserve their seed and
+workspaces automatically. The runner never silently escalates to placebo or
+n=3.
+
+When a result contains both `shared-outcome` and `skill-contract` assertions,
+qualification verdicts are recomputed from shared-outcome and
+universal-safety assertions only. A baseline cannot lose marginal-value credit
+for target-only headings, terminology, workflow, or reporting rules.
+
 ## 1. Evaluation goals (three distinct concerns)
 
 Keep these separate at all times:
@@ -168,9 +220,64 @@ captured harness-selection log at Layer C. Catalog routing results inform whethe
 descriptions are distinct enough to warrant a harness-routing experiment — they
 do not themselves measure the harness router.
 
-## 4. Execution-efficacy protocol (Layer B, Docker-isolated)
+## 4. Execution-efficacy protocol (Layer B, harness-neutral)
 
 Goal: measure the skill's marginal value once it is legitimately active.
+
+The default implementation is the JSON harness adapter described in
+`docs/evaluations/harness-adapter.md`. Use `scripts/run_harness_eval.py` for
+smoke, qualification, or explicitly requested confirmation. The evaluator
+creates independent condition workspaces and verifies task hashes; the adapter
+starts the worker, reports generic guidance identity and activation/context
+verification, and returns a workspace receipt read from the requested
+workspace plus an execution attestation bound to the evaluator's nonce,
+request, output, and return code. `adapter_declared` attestation confidence is
+valid limited evidence; only an adapter that proves the stronger runtime or
+independent boundary may claim `execution_verified`, and only an adapter that
+proves an OS-level isolation boundary may claim `valid`.
+
+Neutral evidence now makes the trust chain explicit with three optional
+condition-level layers: `adapter_claims` (what the adapter says),
+`evaluator_verification` (what the evaluator recomputes from receipts,
+identities, and response shape), and `independent_attestation` (an optional
+external/runtime source). Consistency checking does not turn the first layer
+into independent proof.
+
+The normal development workflow is a one-repetition regression comparison or
+qualification. Do not add placebo or repetitions automatically. If a stronger
+claim needs the retained Docker/Kilo procedure, run it explicitly as the
+optional adapter below.
+
+For a neutral regression, `scripts/run_skill_regression_eval.py` reads and
+anchors the case declaration from both revisions, but materializes the frozen
+task only from the reference revision. The candidate fixture and any generator
+source are recorded as revision-local provenance and are never executed by the
+regression evaluator. `fixture_revision` therefore names the reference Git
+revision, and the validator resolves both `case_anchors` entries from their
+recorded revisions rather than from the current checkout. A changed historical
+candidate fixture is consequently visible in evidence without changing the
+task supplied to either worker.
+
+New regression evidence also records the candidate/reference skill hashes,
+`case_set_hash`, shared `fixture_hash`, `runner_version`, and
+`reproduction_status`. If the exact Git history or revision-local case cannot
+be resolved, the validator reports `INVALID_REPRODUCTION_ENVIRONMENT`; it does
+not silently use the current checkout or record a pass.
+
+The canonical lifecycle is:
+
+```text
+activation_verified -> execution_attested -> isolation_verified -> protocol_valid
+```
+
+`execution_verified` is a strong execution-attestation claim, not an alias for
+`protocol.status: valid`; isolation remains a separate gate.
+
+### 4a. Optional strict Docker/Kilo adapter
+
+The following concrete procedure is retained for strict confirmation artifacts;
+its Docker image, CLI, model gateway, and discovery path are not requirements
+of the core protocol.
 
   1. Run **fresh, independent Docker containers** from a reusable image
     (`Dockerfile.eval`, built as `kilo-eval:local`) — one per condition:
@@ -187,9 +294,13 @@ Goal: measure the skill's marginal value once it is legitimately active.
      worker's cwd); it is a *separate* copy per condition, so no worker can
      mutate another's state.
      - **Generator fixtures are evaluator-only.** The generator (`setup.sh`) is run
-       under a sanitized environment (`eval_hashing.run_generator`) and its source is
-       then **stripped** from the seed the worker sees. The worker must never read
-       the generator source / answer key.
+       under a sanitized environment (`eval_hashing.run_generator`) using a
+       constrained shell-free argv, and its source is then **stripped** from the
+       seed the worker sees. Shell-free argv prevents command injection through
+       the invocation string; it does not prevent arbitrary code execution and is
+       not a sandbox or OS security boundary. Untrusted generator code belongs
+       behind an externally supplied OS-contained adapter.
+       The worker must never read the generator source / answer key.
      - **Layer B is a POST-ACTIVATION experiment.** It answers "once guidance is
        active, does it improve task execution?" — it does NOT test whether Kilo's
        router chooses to activate the guidance (that is routing: Layer A/C).
@@ -461,6 +572,18 @@ independent dimensions:
 A `both_pass` case means something very different from `both_fail`; preserve the
 distinction.
 
+For candidate/reference comparisons, use observation-only labels:
+
+| Label | Meaning |
+| --- | --- |
+| `OBSERVED_CANDIDATE_ONLY_PASS` | candidate passed; reference failed |
+| `OBSERVED_REFERENCE_ONLY_PASS` | reference passed; candidate failed |
+| `OBSERVED_BOTH_PASS` | both passed |
+| `OBSERVED_BOTH_FAIL` | both failed |
+
+These labels describe one observed comparison, not a statistical conclusion.
+Repeated independent runs are required before claiming improvement.
+
 Protocol-valid execution result blocks additionally declare `protocol.conditions`
 and `protocol.repeats`. Each case carries its own task and fixture hashes plus one
 complete `repetitions[]` entry per declared repetition, with unique execution
@@ -480,11 +603,10 @@ scoring.
   each assertion decision, plus the required metadata (see `result-schema.md`):
   case/fixture/target-skill revisions, harness + version, model, reasoning
   effort, tool/network policy, worker/session IDs, actual working directory,
-   isolation/boundary verification, loaded-guidance evidence (target) and
-   explicit target-absence evidence (baseline), per-assertion grades with
-  evidence, `skill_pass`/`baseline_pass`/`better`, protocol + measurement +
-  outcome status, human-review notes, timing/token data, and contamination
-  notes.
+  isolation/boundary verification, loaded-guidance evidence (target) and
+  explicit target-absence evidence (baseline), per-assertion grades with
+  evidence, condition verdicts, protocol + measurement + outcome status,
+  human-review notes, timing/token data, and contamination notes.
 - **Cleanup (only after evidence is preserved):** delete disposable worker
   sandboxes once both outputs are graded and the raw copy is safely in the
   ignored evidence dir. Never delete the evidence dir.
@@ -510,16 +632,20 @@ scoring.
 
 ## 12. Current recommended protocol (summary)
 
-A **protocol-valid execution run is now achievable** in this CLI environment:
+A **protocol-valid execution run is harness-neutral**. Use the following
+development sequence:
 
-- **Layer B (execution) uses real OS containment** via `Dockerfile.eval` →
-  `kilo-eval:local`. Each worker runs in a fresh container with `HOME=/home/eval`,
-  a deterministic non-attributable git identity, **no** host `~/.gitconfig`/
-  `~/.ssh`/GH_TOKEN, and **no mounted Kilo auth store**. Free models are reached
-  through anonymous Kilo Gateway access (`kilo/tencent/hy3:free`) — absence of an
-  `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` does NOT mean no provider. This makes
-  `protocol.status: valid` with `isolation_method: docker` possible (the weaker
-  instruction-only `limited` method is no longer required for execution).
+- **Static checks first.** Validate the skill, frozen case, fixture, and
+  assertion scopes without launching a model.
+- **Regression for routine edits.** Compare candidate/reference revisions at
+  n=1 with `scripts/run_skill_regression_eval.py` and the caller's harness
+  adapter. Both sides contain the same skill; neither is a no-skill baseline.
+- **Qualification for marginal value.** Use `scripts/run_harness_eval.py` with
+  target/baseline at n=1 and a shared-outcome rubric. Record an honest early
+  stop when the result is non-discriminating or the target clearly fails.
+- **Confirmation only by explicit choice.** The retained Docker/Kilo path below
+  is one optional strict adapter; another OS-contained adapter may support the
+  same `valid` status if it proves the equivalent boundary and evidence.
 - **Layer A (catalog-discriminability)** — the portable model-as-classifier proxy,
   not a harness-routing measurement: a fresh model call over a generated neutral
   catalog (no harness, no tools) that returns a structured `{"selected_skill": ...}`.
@@ -529,7 +655,7 @@ A **protocol-valid execution run is now achievable** in this CLI environment:
   expose the selected skill as evidence; such cases fall back to Layer A or are
   marked `not_run`.
 
-For a protocol-valid run today:
+For any execution run:
 
 1. Build **frozen committed fixtures** per case (`fixture.status: "ready"` +
    `content_hash`); otherwise mark `designed_only`.
@@ -537,22 +663,11 @@ For a protocol-valid run today:
    model-as-classifier) over a confusion set; use Layer C harness-routing when the
    harness exposes selection evidence. Catalog accuracy never substitutes for a
    captured harness-selection log.
-3. **Execution cases:** fresh Docker containers from **independent seed copies** (one
-   per condition — `target` gets the target skill's `SKILL.md` at its Kilo
-   discovery location `.kilo/skills/<name>/` ACTIVATED via `kilo run --command
-   <name>:skill`, `baseline` gets none, optional `placebo` gets irrelevant
-   guidance activated through the same mechanism),
-   anonymous free model, `--auto` so the worker executes, distinct container/session
-   IDs, identical natural-task hash across conditions, and per-rep starting/ending
-   TASK-state hashes (excluding `.kilo`) plus separate full-filesystem hashes
-   recorded.
-4. Neutral names; no condition labels visible to workers; run
-   `scripts/docker_isolation_preflight.py` before scoring (must pass all boundary
-   checks, including the discovery-path presence/absence/hash probes).
-5. Fresh containers; equivalent settings; at least 3 repetitions for any confirmed
-   efficacy claim.
- 6. A repetition whose Docker/Kilo run failed is recorded `run_status="failed"` and
-    the validator rejects the evidence — never silently accepted. Grade with quoted
-    evidence; retain raw evidence in the ignored `.eval-evidence/` dir; validate with
-    `python3 scripts/validate_evaluations.py --check-evidence`.
- 7. Resolve all contradictions with `SKILL.md` and `isolation-protocol.md`.
+3. Use one fresh worker/session per declared condition, identical natural task
+   hashes, independent workspace IDs, and explicit guidance/context probes.
+4. Keep `shared-outcome`/`universal-safety` assertions separate from
+   `skill-contract` assertions. Never let target-only contract requirements
+   lower a no-skill baseline's qualification score.
+5. Treat failed/partial adapter responses as invalid evidence. Grade with
+   quoted evidence; retain raw evidence in `.eval-evidence/`; validate with
+   `python3 scripts/validate_evaluations.py --check-evidence`.
