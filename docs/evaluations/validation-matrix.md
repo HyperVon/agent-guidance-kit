@@ -137,8 +137,8 @@ regressions. Holdout: pre-change baseline 21/21 and post-change 21/21 — genera
 held at ceiling; holdout cases were not folded into development data. Layer C remains
 `not_run` (catalog discriminability is a proxy, not harness routing). Ambiguous-null
 capture behavior in design-change/investigation/skill-maintenance sets is recorded as an
-explicit observation, untuned. Execution rows unchanged: 4/26 validated, 3/26
-discriminating at n=1 (see the rerun section below).
+explicit observation, untuned. Execution rows: 4/26 validated; at the current measurement
+points 2/26 discriminating and 2/26 non-discriminating (see below).
 
 ## Current state — 2026-08-22 (post-runner-fix reruns)
 
@@ -147,16 +147,28 @@ could not enumerate a ~0733 workspace root; X propagation checked only S_IXUSR; 
 failures were swallowed) and added a container-side workspace enumeration probe to the
 isolation preflight. All three qualification pilots were re-run under the corrected runner
 (same protocol class: qualification, target/baseline, n=1, fresh workers, blind randomized
-grading): security-review 4/4 vs 3/4, review-feedback-resolution 4/4 vs 2/4,
-git-github-workflow 4/4 vs 3/4 — all three again discriminating at n=1 (rows above link the
-rerun result files; the pre-fix result files remain as historical records). Direction
-unchanged on every skill; margins narrowed on two (baseline variance). Layer A
-`review-family` confusion set is complete (48 observations): a one-directional
-`code-review` → `security-review` misroute and `architecture-review` over-clarify remain the
-concrete description-fix candidates. Remaining: other three confusion sets + holdout
-(Layer A), repeats/placebo before any efficacy claim, Layer C still blocked.
+grading). Final current-head outcomes (rows above link these result files; pre-fix files
+remain as historical records):
+
+- `git-github-workflow`: 4/4 vs 3/4 — discriminating, margin narrowed.
+- `review-feedback-resolution`: 4/4 vs 2/4 — discriminating, margin narrowed.
+- `security-review`: an interim post-fix run reproduced 4/4 vs 3/4, but the current-head
+  rerun ([rerun 2](results/security-review-qualification-n1-rerun2.md)) measured
+  **3/4 vs 2/4, both_fail / non-discriminating** — the target sample quoted fixture token
+  literals verbatim. Three n=1 samples for this case disagree on direction; none is an
+  efficacy claim.
+
+Layer A then completed all four confusion sets and fixed the two development-evidence
+candidates (`code-review` → `security-review`, `architecture-review` over-clarify) with the
+holdout flat at ceiling pre/post (21/21 both) — see the Layer A section above. Remaining:
+repeats/placebo before any efficacy claim, Layer C still blocked.
 
 ## Current state — 2026-08-22
+
+> **Superseded snapshot:** this paragraph records the original PR-#56-era batch only. The
+> current measurement points are in the sections above (`security-review` now links its
+> non-discriminating rerun 2; totals are 2 discriminating / 2 non-discriminating).
+
 Runner portability fixed for native Linux Docker (PR #56) and the pipeline re-proven end-to-end on this host: smoke (`code-review` case 5) plus three protocol-valid qualification runs, all discriminating at n=1 (security-review 4/4 vs 3/4; review-feedback-resolution 4/4 vs 0/4; git-github-workflow 4/4 vs 2/4 — baseline committed through a red/skipped gate). Rows above link the new result files; the historical exploratory pilots remain preserved under their original names. Layer A `review-family` confusion set is complete (48 observations): a one-directional `code-review` → `security-review` misroute (3 of the 6 expected-`code-review` observations selected `security-review`; no case intends `security-review`) and `architecture-review` over-clarify (3 explicit nulls) are the first concrete description-fix candidates. Remaining: other three confusion sets + holdout (Layer A), repeats/placebo before any efficacy claim, Layer C still blocked.
 
 ## Legend
