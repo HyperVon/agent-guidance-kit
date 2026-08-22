@@ -473,6 +473,8 @@ def _copy_seed(src):
     # The bind mount hides the image's /work/task ownership. Make only this
     # disposable worker copy writable so the non-root container user can apply
     # task changes; the canonical fixture and source skill remain untouched.
+    # Directories also need the traverse bit: on Linux the container uid may
+    # differ from the host uid, and write-without-execute still denies entry.
     for root, dirs, files in os.walk(dst, followlinks=False):
         for name in [*dirs, *files]:
             path = os.path.join(root, name)
@@ -480,11 +482,15 @@ def _copy_seed(src):
                 continue
             try:
                 mode = os.stat(path, follow_symlinks=False).st_mode
-                os.chmod(path, mode | stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH)
+                extra = stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
+                if stat.S_ISDIR(mode):
+                    extra |= stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+                os.chmod(path, mode | extra)
             except OSError:
                 pass
     os.chmod(dst, os.stat(dst).st_mode |
-             stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH)
+             stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH |
+             stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     return dst
 
 
