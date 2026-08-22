@@ -216,10 +216,14 @@ def require_free_model(model, allow_paid):
 
 
 def _mkdtemp(prefix):
+    # 0700 on the base dir keeps other local users from reaching the mounted
+    # workspaces through the host filesystem (the workspace leaves themselves
+    # must stay open so a non-root container uid can write). Docker mounts by
+    # path as root, and macOS virtiofs sharing is path-based, so neither needs
+    # these dirs group/world traversable.
     os.makedirs(SHARED_TMP, exist_ok=True)
-    d = tempfile.mkdtemp(prefix=prefix, dir=SHARED_TMP)
-    os.chmod(d, 0o755)
-    return d
+    os.chmod(SHARED_TMP, 0o700)
+    return tempfile.mkdtemp(prefix=prefix, dir=SHARED_TMP)
 
 
 def materialize_kilo_skill(source_skill_dir, skill_name, workspace):
@@ -482,8 +486,13 @@ def _copy_seed(src):
                 continue
             try:
                 mode = os.stat(path, follow_symlinks=False).st_mode
-                extra = stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
-                if stat.S_ISDIR(mode):
+                # a+rwX semantics: every entry readable/writable by the
+                # container uid regardless of the host umask it was created
+                # under; directories and already-executable files also get
+                # the execute bits (directories need traverse, not just write).
+                extra = (stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH |
+                         stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH)
+                if stat.S_ISDIR(mode) or mode & stat.S_IXUSR:
                     extra |= stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
                 os.chmod(path, mode | extra)
             except OSError:
