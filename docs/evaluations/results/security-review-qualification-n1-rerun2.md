@@ -22,8 +22,10 @@ the injected guidance body; the outcome difference is therefore sample variance,
 effect of the description change — which is itself the instability the confirmation
 protocol (placebo, n≥3) exists to expose.
 
-**Frozen measurement point:** repository head `ef08298` (runner fix `c48961b` plus the
-routing-description commit); worker image `kilo-eval:local`, Kilo CLI pinned at 7.4.22, model
+**Frozen measurement point:** runner fix `c48961b` plus the routing-description edits
+present in the working tree at run time (binding anchored by the recorded
+`target_skill_revision` tree hash `sha256:81dbbdd6…`); worker image `kilo-eval:local`,
+Kilo CLI pinned at 7.4.22, model
 `kilo/tencent/hy3:free`, reasoning effort high. Distinct containers/sessions from one
 hash-verified pristine seed; target tree probed present and hash-matched; baseline probed absent.
 
