@@ -341,8 +341,9 @@ original result files are preserved unchanged as pre-fix historical records.
   ([rerun](results/git-github-workflow-qualification-n1-rerun1.md)); direction unchanged,
   margin narrowed (baseline again committed through the unrunnable verification gate).
 
-All three remain single-repetition pilot observations, **not** efficacy claims. Two
-independent n=1 comparisons now agree on direction per skill, but each run is still
+All three remain single-repetition pilot observations, **not** efficacy claims. The two
+discriminating skills agree in direction across their original and rerun comparisons;
+`security-review`'s three samples disagree (see above), and every run is still
 qualification n=1.
 
 **Evidence retention status:** every committed result binds its case to a SHA-256
