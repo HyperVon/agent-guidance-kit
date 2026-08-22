@@ -471,14 +471,40 @@ def _snapshot(workspace):
     return {"vcs": "files", "listing": files}
 
 
+def _apply_a_rw_x(mode):
+    """Return ``mode`` with ``a+rwX`` applied.
+
+    Adds read and write bits for user/group/other. Adds execute bits only for
+    directories (traverse) and files that ALREADY have at least one execute
+    bit set (any of user/group/other). Ordinary non-executable files never
+    become executable.
+    """
+    has_any_exec = mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    extra = (stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH |
+             stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH)
+    if stat.S_ISDIR(mode) or has_any_exec:
+        extra |= stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+    return mode | extra
+
+
 def _copy_seed(src):
+    """Copy the pristine seed into a fresh disposable worker workspace.
+
+    Every directory and file under the copy — INCLUDING the workspace root
+    itself — receives the same coherent ``a+rwX`` policy so a container uid
+    that differs from the host uid can read, write, traverse, AND ENUMERATE
+    the workspace (``mkdtemp`` creates the root 0700; without the read bits a
+    non-owner uid gets a write/traverse-only directory it cannot list).
+    Symlinks are skipped. Failures are raised, never swallowed: an
+    inaccessible workspace would silently invalidate the experimental
+    condition, so the runner must fail before any worker is launched.
+    """
     dst = _mkdtemp(prefix="kilo-workspace-")
     shutil.copytree(src, dst, symlinks=True, dirs_exist_ok=True)
     # The bind mount hides the image's /work/task ownership. Make only this
-    # disposable worker copy writable so the non-root container user can apply
-    # task changes; the canonical fixture and source skill remain untouched.
-    # Directories also need the traverse bit: on Linux the container uid may
-    # differ from the host uid, and write-without-execute still denies entry.
+    # disposable worker copy accessible to the non-root container user; the
+    # canonical fixture and source skill remain untouched.
+    failures = []
     for root, dirs, files in os.walk(dst, followlinks=False):
         for name in [*dirs, *files]:
             path = os.path.join(root, name)
@@ -486,20 +512,23 @@ def _copy_seed(src):
                 continue
             try:
                 mode = os.stat(path, follow_symlinks=False).st_mode
-                # a+rwX semantics: every entry readable/writable by the
-                # container uid regardless of the host umask it was created
-                # under; directories and already-executable files also get
-                # the execute bits (directories need traverse, not just write).
-                extra = (stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH |
-                         stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH)
-                if stat.S_ISDIR(mode) or mode & stat.S_IXUSR:
-                    extra |= stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
-                os.chmod(path, mode | extra)
-            except OSError:
-                pass
-    os.chmod(dst, os.stat(dst).st_mode |
-             stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH |
-             stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+                os.chmod(path, _apply_a_rw_x(mode))
+            except OSError as exc:
+                failures.append(f"{path}: chmod a+rwX failed: {exc}")
+    try:
+        # The root gets the SAME a+rwX policy as every descendant (the old
+        # implementation added only write+execute here, leaving a 0733 root
+        # that a non-owner container uid could traverse but never list).
+        mode = os.stat(dst).st_mode
+        os.chmod(dst, _apply_a_rw_x(mode))
+    except OSError as exc:
+        failures.append(f"{dst}: chmod a+rwX failed: {exc}")
+    if failures:
+        shutil.rmtree(dst, ignore_errors=True)
+        raise PermissionError(
+            "cannot prepare worker workspace with required a+rwX "
+            "accessibility; refusing to launch workers on an invalid "
+            "condition: " + "; ".join(failures))
     return dst
 
 

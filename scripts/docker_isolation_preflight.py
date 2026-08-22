@@ -18,6 +18,16 @@ Starts worker containers and asserts, from INSIDE the container, that:
     * ``references/`` is available when the skill ships one;
     * the mounted fixture arrived (/work/task/MARKER).
 
+  WORKSPACE condition (runner `_copy_seed` workspace, read-write mount):
+    * the workspace ROOT is ENUMERABLE by the container's non-host uid
+      (``ls -A /work/task``) — the Linux/Docker uid-mapping regression guard;
+    * expected task files are readable;
+    * subdirectories are traversable and their files readable;
+    * new files can be created and existing files modified.
+
+    This probe exercises container/workspace mechanics directly and does not
+    depend on model behavior.
+
 Layer B activates guidance through ``kilo run --command <skill>:skill``, which
 resolves against this discovery tree; mere file presence is NOT activation, but
 the tree must exist and be byte-identical to the frozen skill for the command
@@ -41,11 +51,18 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from eval_hashing import source_hash_of
+from run_execution_eval import _copy_seed
 
 SHARED_TMP = os.path.join(ROOT, ".docker-tmp")
 
 FIXTURE_MOUNT = "/work/task"
 KILO_DISCOVERY_DIR = "/work/task/.kilo/skills"
+
+# Files the workspace probe expects to find/traverse/create. These names are
+# probe mechanics, not task content; the probe never depends on model behavior.
+PROBE_SUBDIR = "expected-subdir"
+PROBE_INNER_FILE = "inner-file.txt"
+PROBE_NEW_FILE = ".preflight-write-probe"
 
 
 def probe_script(target_skill, expected_hash, guidance_present, refs_expected):
@@ -182,6 +199,87 @@ def run_probe(image, target_skill, fixture_dir, expected_hash,
     return json.loads(out[start:end + 1])
 
 
+def workspace_probe_script():
+    """In-container workspace mechanics probe (no model involvement).
+
+    Verifies that the disposable worker workspace the runner prepared through
+    ``_copy_seed`` is fully usable by the container's non-host uid: the root
+    can be ENUMERATED (the Linux/Docker regression this guards against — a
+    write/traverse-only root cannot be listed), expected task files are
+    readable, subdirectories are traversable, and new files can be created.
+    """
+    return r"""
+set -e
+report=$(mktemp)
+check() { # name ok detail
+  printf '{"name": "%s", "ok": %s, "detail": "%s"}\n' "$1" "$2" "$3" >> "$report"
+}
+WORKER_UID=$(id -u)
+
+# 1. The workspace ROOT must be listable (ls -la /work/task equivalence).
+if LISTING=$(ls -A __FIXTURE_MOUNT__ 2>&1); then
+  COUNT=$(printf '%s\n' "$LISTING" | grep -c . || true)
+  check "task_root_enumerable" true "$COUNT entries as uid $WORKER_UID"
+else
+  check "task_root_enumerable" false "ls failed as uid $WORKER_UID: $LISTING"
+fi
+
+# 2. Expected task files must be readable.
+if CONTENT=$(cat __FIXTURE_MOUNT__/MARKER 2>&1); then
+  check "task_file_readable" true "MARKER read as uid $WORKER_UID"
+else
+  check "task_file_readable" false "read failed: $CONTENT"
+fi
+
+# 3. Subdirectories must be traversable and their contents listable/readable.
+if SUB_LISTING=$(ls -A __FIXTURE_MOUNT__/__PROBE_SUBDIR__ 2>&1) \
+   && SUB_CONTENT=$(cat __FIXTURE_MOUNT__/__PROBE_SUBDIR__/__PROBE_INNER__ 2>&1); then
+  check "subdir_traversable" true "listed and read inner file"
+else
+  check "subdir_traversable" false "subdir probe failed: $SUB_LISTING $SUB_CONTENT"
+fi
+
+# 4. New files must be creatable in the workspace root.
+if echo probe > __FIXTURE_MOUNT__/__PROBE_NEW__ 2>/dev/null \
+   && [ -f __FIXTURE_MOUNT__/__PROBE_NEW__ ]; then
+  check "file_creatable" true "created __PROBE_NEW__ as uid $WORKER_UID"
+else
+  check "file_creatable" false "could not create __PROBE_NEW__ as uid $WORKER_UID"
+fi
+
+# 5. Existing task files must be modifiable (runner normalizes a+rwX).
+if printf 'x' >> __FIXTURE_MOUNT__/MARKER 2>/dev/null; then
+  check "file_writable" true "appended to MARKER as uid $WORKER_UID"
+else
+  check "file_writable" false "could not modify MARKER as uid $WORKER_UID"
+fi
+
+echo "["
+sed -e '$!s/$/,/' "$report"
+echo "]"
+""" .replace("__FIXTURE_MOUNT__", FIXTURE_MOUNT) \
+    .replace("__PROBE_SUBDIR__", PROBE_SUBDIR) \
+    .replace("__PROBE_INNER__", PROBE_INNER_FILE) \
+    .replace("__PROBE_NEW__", PROBE_NEW_FILE)
+
+
+def run_workspace_probe(image, workspace_dir):
+    """Mount a disposable _copy_seed workspace READ-WRITE and probe it."""
+    cmd = ["docker", "run", "--rm", "--entrypoint", "bash",
+           "-v", f"{workspace_dir}:{FIXTURE_MOUNT}"]
+    cmd += [image, "-c", workspace_probe_script()]
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    out = proc.stdout
+    start = out.find("[")
+    end = out.rfind("]")
+    if start == -1 or end == -1:
+        print("WORKSPACE PROBE FAILED TO PARSE OUTPUT")
+        print(out)
+        print(proc.stderr)
+        return None
+    return json.loads(out[start:end + 1])
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--image", default="kilo-eval:local")
@@ -190,6 +288,10 @@ def main():
     args = ap.parse_args()
 
     os.makedirs(SHARED_TMP, exist_ok=True)
+    # Keep the shared staging parent private to the evaluator (same policy as
+    # the runner's _mkdtemp); Docker mounts by path as root, so the restrictive
+    # parent never blocks container access to mounted leaves.
+    os.chmod(SHARED_TMP, 0o700)
     tmp = tempfile.mkdtemp(prefix="kilo-preflight-", dir=SHARED_TMP)
     os.chmod(tmp, 0o755)
     fixture = args.fixture or tmp
@@ -244,6 +346,29 @@ def main():
 
     report("baseline", base_report)
     report("target", target_report)
+
+    # Workspace mechanics probe (Linux/Docker uid-mapping regression): mount a
+    # disposable workspace prepared by the runner's actual `_copy_seed`
+    # READ-WRITE and verify, as the container's non-host uid, that the root is
+    # ENUMERABLE, task files readable, subdirs traversable, and writes work.
+    # This probes container/workspace mechanics directly; it never depends on
+    # model behavior.
+    print("=== WORKSPACE probe (_copy_seed workspace, non-owner container uid) ===")
+    ws_source = tempfile.mkdtemp(prefix="kilo-preflight-src-", dir=SHARED_TMP)
+    os.chmod(ws_source, 0o700)
+    open(os.path.join(ws_source, "MARKER"), "w").close()
+    os.makedirs(os.path.join(ws_source, PROBE_SUBDIR))
+    with open(os.path.join(ws_source, PROBE_SUBDIR, PROBE_INNER_FILE), "w") as fh:
+        fh.write("inner\n")
+    ws_copy = None
+    try:
+        ws_copy = _copy_seed(ws_source)
+        workspace_report = run_workspace_probe(args.image, ws_copy)
+    finally:
+        if ws_copy:
+            shutil.rmtree(ws_copy, ignore_errors=True)
+        shutil.rmtree(ws_source, ignore_errors=True)
+    report("workspace", workspace_report)
 
     print(f"\nIsolation preflight: {passed}/{total} checks passed")
     if failures:

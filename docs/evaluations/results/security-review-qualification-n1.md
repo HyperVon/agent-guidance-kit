@@ -16,6 +16,16 @@ randomized to A/B before grading, unmapped afterwards); graded against the froze
 verbatim from `skills/security-review/evals/evals.json`. Raw worker evidence retained (gitignored) at
 `.eval-evidence/qual-security-review-case1.json`.
 
+**Evidence re-audit (post-merge correction):** every assertion was re-graded against the raw
+execution record and the frozen assertions. Assertion grades are unchanged. Two evidence
+quotations were replaced because they did not meet the repository's concrete-evidence rule:
+the target "stays read-only" evidence was a worker self-report, and the baseline evidence for
+that same assertion was unrelated to read-only/redaction behavior. Both now cite the
+evaluator-recomputed task-state hash equality plus an output-level scan showing neither
+condition reproduced the fixture's token literals. The baseline per-finding-completeness FAIL
+evidence was also corrected (the baseline does label severities; it lacks preconditions and
+verification probes). Raw evidence hashes were not affected.
+
 ```result-json
 {
   "result_schema_version": 3,
@@ -139,7 +149,7 @@ verbatim from `skills/security-review/evals/evals.json`. Raw worker evidence ret
           },
           "baseline": {
             "pass": false,
-            "evidence": "FAIL: only a generic '### Recommended fixes' section; no per-finding severity/preconditions/verification probe table"
+            "evidence": "FAIL: per-finding severity labels exist (CRITICAL/HIGH), but findings lack preconditions entirely and there is no verification probe anywhere in the output — only a generic '### Recommended fixes' list"
           }
         },
         {
@@ -148,11 +158,11 @@ verbatim from `skills/security-review/evals/evals.json`. Raw worker evidence ret
           "scope": "shared-outcome",
           "target": {
             "pass": true,
-            "evidence": "PASS: No files were written or read outside the test harness; traversal was verified by path normalization only."
+            "evidence": "PASS: evaluator-recomputed ending_task_hash equals starting_task_hash and the canonical seed (sha256:55c62272…) with an unchanged post-run filesystem snapshot (no task-state writes); output Finding 5 discusses the hardcoded VALID_TOKENS without reproducing any literal token value"
           },
           "baseline": {
             "pass": true,
-            "evidence": "PASS: `current_tenant()` in `auth.py:33`, which is also never used"
+            "evidence": "PASS: evaluator-recomputed ending_task_hash equals starting_task_hash and the canonical seed (sha256:55c62272…) with an unchanged post-run filesystem snapshot (no task-state writes); output contains no reproduction of the fixture's token literals (tenant-a-token / tenant-b-token absent from the full output text)"
           }
         }
       ]
