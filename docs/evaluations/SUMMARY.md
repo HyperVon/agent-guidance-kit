@@ -275,6 +275,38 @@ execution result.
   Therefore this follow-up contains no new target, baseline, placebo, or
   efficacy result claim.
 
+## Qualification batch (2026-08-22)
+
+First evaluation batch on a native Linux Docker host, after fixing the runner's
+seed-copy permission handling for uid-mapped container runtimes (PR #56: directory
+traverse bits, a+rwX normalization, `0700` staging directory — found by the
+mandatory fresh-context adversarial review of the portability fix).
+
+- **Smoke re-proven** end-to-end (`code-review` case 5): target and baseline both
+  succeeded in distinct containers/sessions from one hash-verified seed; target
+  guidance probe and context probe present, baseline probe absent;
+  `--check-evidence` passed.
+- **Three protocol-valid qualification runs** (Docker, target/baseline, n=1,
+  fresh-context blind grading over randomized labels), each recorded in a
+  committed result file with the full v3 `result-json` schema:
+  - `security-review` case 1 — target 4/4, baseline 3/4
+    ([results](results/security-review-qualification-n1.md));
+  - `review-feedback-resolution` case 1 — target 4/4, baseline 0/4
+    ([results](results/review-feedback-resolution-qualification-n1.md));
+  - `git-github-workflow` case 1 — target 4/4, baseline 2/4; the baseline
+    committed through a red/skipped verification gate while the target treated
+    the gate as a blocker
+    ([results](results/git-github-workflow-qualification-n1.md)).
+  These are single-repetition pilot observations, **not** efficacy claims.
+- **Layer A started:** `review-family` confusion set complete (15 cases, 48
+  observations at 3 reps, free model): a one-directional boundary misroute —
+  all 3 errors are expected-`code-review` observations selecting
+  `security-review` (`security-review` precision 0.0, recall undefined on this
+  set) — and `architecture-review` over-clarifying (3 explicit-null selections,
+  recall 0.5). The other three confusion sets and the holdout remain unrun.
+- Execution validated 4/26; measurement discriminating 3/26 (n=1 pilots);
+  routing (Layer C) still `not_run` everywhere.
+
 ## Case-set audit
 
 All 130 cases were audited against their `SKILL.md`. The main structural change in
