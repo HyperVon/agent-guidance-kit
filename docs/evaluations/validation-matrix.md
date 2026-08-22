@@ -23,10 +23,13 @@ sandbox, a VM, or an agent CLI; the matrix records the adapter name only when a
 run exists. The historical Kilo/Docker row below is an optional strict adapter
 record, not the default harness for the repository.
 
-> **Important:** The four skills below with result links contain only
-> `protocol_status: invalid` / `decision: exploratory` historical pilots. They do
-> **not** constitute validated evidence. No routing result exists for any skill
-> yet (all force-injected, so routing is unmeasured). No cross-skill "X/5"
+> **Important:** The four original pilot result files (`results/code-review.md`,
+> `results/git-github-workflow.md`, `results/review-feedback-resolution.md`,
+> `results/security-review.md`) contain only `protocol_status: invalid` /
+> `decision: exploratory` historical pilots and do **not** constitute validated
+> evidence; they are not the records linked from the table rows below. No
+> harness-routing (Layer C) result exists for any skill yet (historical runs were
+> force-injected, so routing is unmeasured). No cross-skill "X/5"
 > comparison is a skill-quality score.
 >
 > **Phase 1 reassessment (2026-08-16) + follow-up:** the corrected pipeline was
@@ -61,8 +64,10 @@ record, not the default harness for the repository.
 > ([results](results/git-github-workflow-qualification-n1.md)). All three are single-repetition
 > pilot observations, not efficacy claims. Layer A catalog-discriminability started:
 > `review-family` confusion set complete (15 cases, 48 observations at 3 reps) —
-> `code-review` ↔ `security-review` boundary confusion (3 misroutes each direction;
-> `security-review` precision 0.0 on this set) and `architecture-review` over-clarifying
+> one-directional capture at the security boundary (all 3 misroutes are
+> expected-`code-review` observations selected as `security-review`;
+> `security-review` precision 0.0, recall undefined on this set) and
+> `architecture-review` over-clarifying
 > (3 explicit-null selections, recall 0.5). The other three confusion sets and the holdout
 > remain unrun. The historical exploratory pilots stay in their original result files
 > (linked from SUMMARY), not in the rows below.
@@ -122,7 +127,7 @@ inflated `valid` claims (verified by negative test).
 `code-review` now has a protocol-valid Tier-2 execution result at `results/code-review-first-valid.md` (n=3, execution `valid`, protocol `valid`, measurement `? non_discriminating`). `code-review` applied all three P1 findings in 3/3 reps but merged/self-approved in 1/3 (baseline 3/3, placebo 0/3). Execution validated 1/26, Measurement non-discriminating 1/26. Full efficacy runs require a graded n≥3 comparison with quoted evidence; see `phase1-environment.md` §6.
 
 ## Current state — 2026-08-22
-Runner portability fixed for native Linux Docker (PR #56) and the pipeline re-proven end-to-end on this host: smoke (`code-review` case 5) plus three protocol-valid qualification runs, all discriminating at n=1 (security-review 4/4 vs 3/4; review-feedback-resolution 4/4 vs 0/4; git-github-workflow 4/4 vs 2/4 — baseline committed through a red/skipped gate). Rows above link the new result files; the historical exploratory pilots remain preserved under their original names. Layer A `review-family` confusion set is complete (48 observations): `code-review` ↔ `security-review` misroutes (3 each direction) and `architecture-review` over-clarify are the first concrete description-fix candidates. Remaining: other three confusion sets + holdout (Layer A), repeats/placebo before any efficacy claim, Layer C still blocked.
+Runner portability fixed for native Linux Docker (PR #56) and the pipeline re-proven end-to-end on this host: smoke (`code-review` case 5) plus three protocol-valid qualification runs, all discriminating at n=1 (security-review 4/4 vs 3/4; review-feedback-resolution 4/4 vs 0/4; git-github-workflow 4/4 vs 2/4 — baseline committed through a red/skipped gate). Rows above link the new result files; the historical exploratory pilots remain preserved under their original names. Layer A `review-family` confusion set is complete (48 observations): a one-directional `code-review` → `security-review` misroute (3 of the 6 expected-`code-review` observations selected `security-review`; no case intends `security-review`) and `architecture-review` over-clarify (3 explicit nulls) are the first concrete description-fix candidates. Remaining: other three confusion sets + holdout (Layer A), repeats/placebo before any efficacy claim, Layer C still blocked.
 
 ## Legend
 

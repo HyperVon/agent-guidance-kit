@@ -299,9 +299,10 @@ mandatory fresh-context adversarial review of the portability fix).
     ([results](results/git-github-workflow-qualification-n1.md)).
   These are single-repetition pilot observations, **not** efficacy claims.
 - **Layer A started:** `review-family` confusion set complete (15 cases, 48
-  observations at 3 reps, free model): `code-review` ↔ `security-review`
-  boundary misroutes (3 each direction; `security-review` precision 0.0 on this
-  set) and `architecture-review` over-clarifying (3 explicit-null selections,
+  observations at 3 reps, free model): a one-directional boundary misroute —
+  all 3 errors are expected-`code-review` observations selecting
+  `security-review` (`security-review` precision 0.0, recall undefined on this
+  set) — and `architecture-review` over-clarifying (3 explicit-null selections,
   recall 0.5). The other three confusion sets and the holdout remain unrun.
 - Execution validated 4/26; measurement discriminating 3/26 (n=1 pilots);
   routing (Layer C) still `not_run` everywhere.
