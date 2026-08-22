@@ -86,7 +86,7 @@ runs are still instruction-only and must be labeled `limited`.
 | [dependency-upgrade](../../skills/dependency-upgrade/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
 | [documentation-review](../../skills/documentation-review/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
 | [frontend-quality-review](../../skills/frontend-quality-review/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
-| [git-github-workflow](../../skills/git-github-workflow/evals/evals.json) | 5 | ready (5/5) | not_run | valid | ✓ discriminating | valid | 1 | [results](results/git-github-workflow-qualification-n1.md) |
+| [git-github-workflow](../../skills/git-github-workflow/evals/evals.json) | 5 | ready (5/5) | not_run | valid | ✓ discriminating | valid | 1 | [results](results/git-github-workflow-qualification-n1-rerun1.md) |
 | [harness-adaptation](../../skills/harness-adaptation/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
 | [implementation-planning](../../skills/implementation-planning/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
 | [parallel-multi-agent](../../skills/parallel-multi-agent/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
@@ -94,9 +94,9 @@ runs are still instruction-only and must be labeled `limited`.
 | [reduce-code-size](../../skills/reduce-code-size/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
 | [repository-guidance-authoring](../../skills/repository-guidance-authoring/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
 | [requirements-and-design](../../skills/requirements-and-design/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
-| [review-feedback-resolution](../../skills/review-feedback-resolution/evals/evals.json) | 5 | ready (5/5) | not_run | valid | ✓ discriminating | valid | 1 | [results](results/review-feedback-resolution-qualification-n1.md) |
+| [review-feedback-resolution](../../skills/review-feedback-resolution/evals/evals.json) | 5 | ready (5/5) | not_run | valid | ✓ discriminating | valid | 1 | [results](results/review-feedback-resolution-qualification-n1-rerun1.md) |
 | [rules-and-skills-audit](../../skills/rules-and-skills-audit/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
-| [security-review](../../skills/security-review/evals/evals.json) | 5 | ready (5/5) | not_run | valid | ✓ discriminating | valid | 1 | [results](results/security-review-qualification-n1.md) |
+| [security-review](../../skills/security-review/evals/evals.json) | 5 | ready (5/5) | not_run | valid | ? non_discriminating | valid | 1 | [results](results/security-review-qualification-n1-rerun2.md) |
 | [skill-authoring](../../skills/skill-authoring/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
 | [skill-discovery](../../skills/skill-discovery/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
 | [skill-evaluation](../../skills/skill-evaluation/evals/evals.json) | 5 | designed_only | not_run | not_run | not_run | not_run | – | – |
@@ -107,11 +107,12 @@ runs are still instruction-only and must be labeled `limited`.
 
 Total: 26 skills, 130 designed cases. Fixtures frozen for 4/26 (the four pilot
 skills: code-review, git-github-workflow, review-feedback-resolution,
-security-review). Routing measured for 0/26. Execution validated for 4/26
+security-review). Routing (Layer C) measured for 0/26. Execution validated for 4/26
 (code-review confirmation n=3 at `results/code-review-first-valid.md`;
-security-review / review-feedback-resolution / git-github-workflow
-qualification n=1). Measurement discriminating: 3/26 (n=1 pilot observations);
-Measurement non-discriminating: 1/26 (`code-review`).
+review-feedback-resolution / git-github-workflow qualification n=1 reruns;
+security-review qualification n=1 rerun 2). Measurement discriminating: 2/26 (n=1
+pilot observations); Measurement non-discriminating: 2/26 (`code-review` n=3;
+`security-review` current-head rerun 2 — see its three-measurement history).
 
 ### Historical Phase 1 state — 2026-08-16
 Layer A catalog-discriminability and Layer B Docker execution **infrastructure proven** (single-rep smoke on `code-review`;
@@ -125,6 +126,35 @@ inflated `valid` claims (verified by negative test).
 
 ### Current state — 2026-08-20
 `code-review` now has a protocol-valid Tier-2 execution result at `results/code-review-first-valid.md` (n=3, execution `valid`, protocol `valid`, measurement `? non_discriminating`). `code-review` applied all three P1 findings in 3/3 reps but merged/self-approved in 1/3 (baseline 3/3, placebo 0/3). Execution validated 1/26, Measurement non-discriminating 1/26. Full efficacy runs require a graded n≥3 comparison with quoted evidence; see `phase1-environment.md` §6.
+
+## Current state — 2026-08-22 (Layer A complete + routing-description fixes)
+
+All four Layer A confusion sets are complete (3 reps, 194 development observations).
+Development-evidence description fixes to `code-review`, `security-review`, and
+`architecture-review` removed all 6 review-family misroutes (code-review→security-review
+one-directional capture; architecture-review over-clarify) with no new neighbor
+regressions. Holdout: pre-change baseline 21/21 and post-change 21/21 — generalization
+held at ceiling; holdout cases were not folded into development data. Layer C remains
+`not_run` (catalog discriminability is a proxy, not harness routing). Ambiguous-null
+capture behavior in design-change/investigation/skill-maintenance sets is recorded as an
+explicit observation, untuned. Execution rows unchanged: 4/26 validated, 3/26
+discriminating at n=1 (see the rerun section below).
+
+## Current state — 2026-08-22 (post-runner-fix reruns)
+
+Commit `c48961b` fixed the seed-copy workspace-root permission bug (non-owner container uid
+could not enumerate a ~0733 workspace root; X propagation checked only S_IXUSR; chmod
+failures were swallowed) and added a container-side workspace enumeration probe to the
+isolation preflight. All three qualification pilots were re-run under the corrected runner
+(same protocol class: qualification, target/baseline, n=1, fresh workers, blind randomized
+grading): security-review 4/4 vs 3/4, review-feedback-resolution 4/4 vs 2/4,
+git-github-workflow 4/4 vs 3/4 — all three again discriminating at n=1 (rows above link the
+rerun result files; the pre-fix result files remain as historical records). Direction
+unchanged on every skill; margins narrowed on two (baseline variance). Layer A
+`review-family` confusion set is complete (48 observations): a one-directional
+`code-review` → `security-review` misroute and `architecture-review` over-clarify remain the
+concrete description-fix candidates. Remaining: other three confusion sets + holdout
+(Layer A), repeats/placebo before any efficacy claim, Layer C still blocked.
 
 ## Current state — 2026-08-22
 Runner portability fixed for native Linux Docker (PR #56) and the pipeline re-proven end-to-end on this host: smoke (`code-review` case 5) plus three protocol-valid qualification runs, all discriminating at n=1 (security-review 4/4 vs 3/4; review-feedback-resolution 4/4 vs 0/4; git-github-workflow 4/4 vs 2/4 — baseline committed through a red/skipped gate). Rows above link the new result files; the historical exploratory pilots remain preserved under their original names. Layer A `review-family` confusion set is complete (48 observations): a one-directional `code-review` → `security-review` misroute (3 of the 6 expected-`code-review` observations selected `security-review`; no case intends `security-review`) and `architecture-review` over-clarify (3 explicit nulls) are the first concrete description-fix candidates. Remaining: other three confusion sets + holdout (Layer A), repeats/placebo before any efficacy claim, Layer C still blocked.

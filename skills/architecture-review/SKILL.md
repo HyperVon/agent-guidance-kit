@@ -3,9 +3,10 @@ name: architecture-review
 description: >-
   Perform a fresh-eyes, evidence-based architecture review of a repository or
   subsystem and compare meaningful Keep, Evolve, Replace, or Greenfield
-  options. Use for architecture reviews, redesign questions, ADR planning, or
-  refactor-versus-rewrite decisions. Recommend only; do not implement the
-  recommendation in the review.
+  options. Use for architecture reviews, redesign questions, ADR planning,
+  refactor-versus-rewrite decisions, and requests asking what to address first
+  when maintainability, design health, and defects compete. Recommend only; do
+  not implement the recommendation in the review.
 ---
 
 # Architecture Review
