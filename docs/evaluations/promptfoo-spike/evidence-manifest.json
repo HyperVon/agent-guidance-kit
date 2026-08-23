@@ -1,0 +1,112 @@
+{
+  "metadata": {
+    "description": "Inventory of M1 spike raw result artifacts and their sanitized representations",
+    "source_commit": "217d53f5db7ea01d4fd4fadbefdfe987f663cbb6",
+    "frozen_baseline": "91ed0155e83d70d0b80a7912d63a2a1c16660b0f",
+    "promptfoo_version": "0.122.0",
+    "kilo_cli_version": "7.4.23",
+    "tested_model_profile": "kilo/tencent/hy3:free",
+    "generated_date": "2026-08-23",
+    "original_results_location": "experiments/promptfoo/.results/ (git-ignored, local-only)",
+    "retention_policy": "Sanitized copies committed for historical reference; originals remain local-only under experiments/promptfoo/.results/. Sanitized copies are non-authoritative representations."
+  },
+  "artifacts": {
+    "routing-dev.json": {
+      "original_hash": "98c358e15bdcdfae7a28bcd1e33ce742756b998f2cb34cbc44347a7896a615a7",
+      "original_size_bytes": 1257122,
+      "sanitized_name": "sanitized-routing-dev.json",
+      "sanitized_hash": "3566cfa3a578bd113711c4b95cbee0e3de20d67c0ae321b67ea9bd3026f21d74",
+      "sanitized_size_bytes": 1264640,
+      "sanitization": "Removed session_id values and workspace path values; absolute local paths (/tmp/kilo/..., /home/...) replaced with <local-path-stripped> markers",
+      "retention_mode": "sanitized_commit"
+    },
+    "routing-holdout.json": {
+      "original_hash": "d634202f9f739171b369208df57fd861787a4976ef95a3c7f2367ae1f6aa322c",
+      "original_size_bytes": 402134,
+      "sanitized_name": "sanitized-routing-holdout.json",
+      "sanitized_hash": "c159d8a784f27cbe75f1def70436b2b2470342d7d6f2d6a9785eb45674c4dde3",
+      "sanitized_size_bytes": 404210,
+      "sanitization": "Removed session_id values and workspace path values; absolute local paths (/tmp/kilo/..., /home/...) replaced with <local-path-stripped> markers",
+      "retention_mode": "sanitized_commit"
+    },
+    "execution.json": {
+      "original_hash": "bd04e5dd9ff0f333abe928ed040ba1150de949e5f1ed257a6c0d304e736fd79f",
+      "original_size_bytes": 382029,
+      "sanitized_name": "sanitized-execution.json",
+      "sanitized_hash": "e219a018b3447b3dedfe962a09b2af18c5a2ad403ec71a74151a96884acf05df",
+      "sanitized_size_bytes": 381118,
+      "sanitization": "Removed session_id values and workspace path values; absolute local paths (/tmp/kilo/..., /home/...) replaced with <local-path-stripped> markers",
+      "retention_mode": "sanitized_commit"
+    },
+    "regression.json": {
+      "original_hash": "927e38aece73e93f0c2c0c7256f87c3fb6dfc8a2e3884d7189377dae9d37a457",
+      "original_size_bytes": 212436,
+      "sanitized_name": "sanitized-regression.json",
+      "sanitized_hash": "4e05cd92d3ee6082f8c5a0239023728ab730ca93e4e03c6b21835e597985e7e9",
+      "sanitized_size_bytes": 212741,
+      "sanitization": "Removed session_id values and workspace path values; absolute local paths (/tmp/kilo/..., /home/...) replaced with <local-path-stripped> markers",
+      "retention_mode": "sanitized_commit"
+    },
+    "smoke-routing.json": {
+      "original_hash": "6c00f1ad849fac611f4c86fac55eef06f28ef586767da151ba1af7127c237de5",
+      "original_size_bytes": 307212,
+      "sanitized_name": "sanitized-smoke-routing.json",
+      "sanitized_hash": "547be99379603db99b89d6273f0b0e0246d5b67cf479b6e5e3eeb4e67a59bd6d",
+      "sanitized_size_bytes": 309764,
+      "sanitization": "Removed session_id values and workspace path values; absolute local paths (/tmp/kilo/..., /home/...) replaced with <local-path-stripped> markers",
+      "retention_mode": "sanitized_commit"
+    },
+    "compare-routing-dev-metrics.json": {
+      "original_hash": "7cb4aaa43643ae559a2f4f8efff01c9fd16ac6fb9e20b1670562b8248f6496c2",
+      "original_size_bytes": 2901,
+      "sanitized_name": "compare-routing-dev-metrics.json",
+      "sanitized_hash": "7cb4aaa43643ae559a2f4f8efff01c9fd16ac6fb9e20b1670562b8248f6496c2",
+      "sanitized_size_bytes": 2901,
+      "sanitization": "None needed - metrics-only JSON without paths or session IDs",
+      "retention_mode": "committed_direct"
+    },
+    "compare-routing-holdout-metrics.json": {
+      "original_hash": "756a9d2ab30bc08bde5ef136dba0b09f5cbfb11f028afd185fbe1733530285c4",
+      "original_size_bytes": 2243,
+      "sanitized_name": "compare-routing-holdout-metrics.json",
+      "sanitized_hash": "756a9d2ab30bc08bde5ef136dba0b09f5cbfb11f028afd185fbe1733530285c4",
+      "sanitized_size_bytes": 2243,
+      "sanitization": "None needed - metrics-only JSON without paths or session IDs",
+      "retention_mode": "committed_direct"
+    },
+    "routing-dev-metrics.json": {
+      "original_hash": "06e79c90d6f1ba53791ba18eb44bdf0e96b9682f3bdf3e58d567b5b45e510d20",
+      "original_size_bytes": 2901,
+      "sanitized_name": "routing-dev-metrics.json",
+      "sanitized_hash": "06e79c90d6f1ba53791ba18eb44bdf0e96b9682f3bdf3e58d567b5b45e510d20",
+      "sanitized_size_bytes": 2901,
+      "sanitization": "None needed - metrics-only JSON without paths or session IDs",
+      "retention_mode": "committed_direct"
+    },
+    "routing-holdout-metrics.json": {
+      "original_hash": "fc69ec9b5dc7cac32564507a8445b4ee4c3733c07f3d1806f1f16be103774056",
+      "original_size_bytes": 2091,
+      "sanitized_name": "routing-holdout-metrics.json",
+      "sanitized_hash": "fc69ec9b5dc7cac32564507a8445b4ee4c3733c07f3d1806f1f16be103774056",
+      "sanitized_size_bytes": 2091,
+      "sanitization": "None needed - metrics-only JSON without paths or session IDs",
+      "retention_mode": "committed_direct"
+    }
+  },
+  "sanitized_comparison_reports": {
+    "compare-routing-dev.md": {
+      "original_hash": "14f18c74ad1159e5db9b93fa3affe0319596e602226613e4d72f131374f82d87",
+      "sanitized_name": "sanitized-compare-routing-dev.md",
+      "sanitization": "Checked for absolute paths - none found",
+      "retention_mode": "committed_direct",
+      "sanitized_hash": "14f18c74ad1159e5db9b93fa3affe0319596e602226613e4d72f131374f82d87"
+    },
+    "compare-routing-holdout.md": {
+      "original_hash": "79d43b43fe083da0d61c40a9af77ce6d2eb77b0dcb97e6ec2268cd05c489b76b",
+      "sanitized_name": "sanitized-compare-routing-holdout.md",
+      "sanitization": "Checked for absolute paths - none found",
+      "retention_mode": "committed_direct",
+      "sanitized_hash": "79d43b43fe083da0d61c40a9af77ce6d2eb77b0dcb97e6ec2268cd05c489b76b"
+    }
+  }
+}
