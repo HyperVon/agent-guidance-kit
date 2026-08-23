@@ -356,8 +356,9 @@ Reading of the v4 evidence:
   recorded skill-maintenance set run has lost exactly one invocation to a varying cause:
   malformed model output in the two earlier batches (original run case 11; post-fix run
   case 5) and, in the two most recent runs, case 7 exiting 1 after the worker requested a
-  permission in the mandated pure/no-tools mode (CLI auto-rejects). Across the four
-  recorded runs, case 7 specifically failed twice in six invocations. Per protocol the
+  permission in the mandated pure/no-tools mode (CLI auto-rejects). Case 7 specifically
+  failed twice in its six invocations across those two most recent runs — two of twelve
+  across all four recorded runs. Per protocol the
   current-head set is reported as **50 successful + 1 failed invocation, NOT complete**
   rather than re-run until lucky.
 - Unchanged ambiguous-null behavior persists (design-change, investigation, and
