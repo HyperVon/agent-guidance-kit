@@ -332,13 +332,17 @@ All four sets were then re-run at 3 reps with full decision accounting (the aggr
 records `attempted_decisions`, `successful_decisions`, and `failed_decisions` with
 case/rep/turn/error — a failed invocation can no longer silently shrink a headline count):
 
-| Confusion set | Attempted | Successful | Failed | Intended-skill errors | Ambiguous-null captures |
+| Confusion set | Attempted | Successful | Failed | Intended-skill errors | Ambiguous-case captures |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| review-family (17 cases) | 54 | 53 | 1 | 1 (`code-review`→`security-review`, case 1, 2/3) | 0 |
-| design-change-family | 51 | 51 | 0 | 0 | 3/6 → `architecture-review` |
-| investigation-family | 45 | 45 | 0 | 0 | 5/6 scattered |
+| review-family (17 cases) | 54 | 53 | 1 | 1 (`code-review`→`security-review`, case 1, 2/3) | 0/3 |
+| design-change-family | 51 | 51 | 0 | 0 | 3/3 → `architecture-review` |
+| investigation-family | 45 | 45 | 0 | 0 | 5/6 scattered (`security-review`×2, `systematic-debugging`×2, `threat-modeling`×1; 1 clarify) |
 | skill-maintenance-family | 51 | 50 | 1 | 0 | 3/3 → `rules-and-skills-audit` |
 | **Total** | **201** | **199** | **2** | **1** | |
+
+(Ambiguous-case captures count only `ambiguous-natural` cases' selections of a skill
+instead of clarifying; correct nulls from workflow no-skill turns are separate and are
+included in the confusion matrix.)
 
 Reading of the v4 evidence:
 
