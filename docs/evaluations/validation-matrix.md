@@ -161,8 +161,10 @@ scope, and every set now records `attempted_decisions` / `successful_decisions` 
 | skill-maintenance-family | 51 | 50 | 1 | 0 |
 
 skill-maintenance is reported as **50 successful + 1 failed invocation — not complete**:
-its case 7 prompt reliably makes the worker request a permission in the mandated pure/
-no-tools mode (CLI auto-rejects, exit 1; failed in all three recorded set attempts).
+its set has lost one invocation in each recorded run to varying causes — malformed model
+output in the two earlier batches, and in the two most recent runs case 7 exiting 1 after
+the worker requested a permission in the mandated pure/no-tools mode (CLI auto-rejects;
+2 of its 6 recorded invocations).
 Ambiguous-null capture persists untuned. Unchanged holdout run once post-shortening:
 21/21 attempted, 21/21 successful — flat vs baseline. Layer C remains `not_run`.
 

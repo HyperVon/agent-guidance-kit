@@ -352,12 +352,14 @@ Reading of the v4 evidence:
   Recorded honestly; descriptions were deliberately NOT re-lengthened to chase it — that
   would restart the add-prose-every-cycle anti-pattern. The unchanged holdout provides
   the generalization check below.
-- Failed invocations are protocol-boundary events, not routing signals: both v4 failures
-  were case prompts ("validate that it still routes correctly" class) where the worker
-  requested a permission in the mandated pure/no-tools mode and the CLI auto-rejected,
-  exiting 1. skill-maintenance case 7 failed in all three recorded attempts of its set;
-  per protocol the set is reported as **50 successful + 1 failed invocation, NOT
-  complete** rather than re-run until lucky.
+- Failed invocations are protocol-boundary events, not routing signals, and each
+  recorded skill-maintenance set run has lost exactly one invocation to a varying cause:
+  malformed model output in the two earlier batches (original run case 11; post-fix run
+  case 5) and, in the two most recent runs, case 7 exiting 1 after the worker requested a
+  permission in the mandated pure/no-tools mode (CLI auto-rejects). Across the four
+  recorded runs, case 7 specifically failed twice in six invocations. Per protocol the
+  current-head set is reported as **50 successful + 1 failed invocation, NOT complete**
+  rather than re-run until lucky.
 - Unchanged ambiguous-null behavior persists (design-change, investigation, and
   skill-maintenance ambiguous cases still select a plausible owner instead of
   clarifying) — recorded untuned.
