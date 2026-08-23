@@ -1,13 +1,18 @@
 # Promptfoo-backed evaluation architecture for Agent Guidance Kit
 
-**Status:** Design-ready; migration is gated on the Promptfoo compatibility
-spike
+**Status:** Design-ready; M2 decision recorded (`GO WITH MATERIAL GAPS`); M3 authorized and pending implementation authorization
 
 **Date:** 2026-08-23
 
+**M2 decision:** `docs/adr/0001-promptfoo-backed-evaluator.md`
+
 **Design input:** [shared conversation](https://chatgpt.com/share/6a8aafd3-322c-83ea-87c5-c49812cd88f4)
 
-**Repository baseline:** `main` at `91ed0155e83d70d0b80a7912d63a2a1c16660b0f`
+**Repository baseline:** `main` at `bfbd03d3f655c97a063dd945f2ee254f0b57e01d`
+
+**Spike evidence commit:** `217d53f5db7ea01d4fd4fadbefdfe987f663cbb6`
+
+**Validated Promptfoo version:** `0.122.0`
 
 **Supersedes:** The first draft of this document, which captured the later
 evidence-policy discussion but missed the earlier Promptfoo architecture and
@@ -150,6 +155,15 @@ does not treat its in-progress implementation as validated evidence. The spike
 report, actual runs, tests, v1/v2 comparison, and fresh-context review will
 determine the migration decision. Live branch, version, and location details
 belong in the companion milestone tracker and spike report.
+
+**M2 decision outcome:** `GO WITH MATERIAL GAPS`. The spike demonstrated that
+Promptfoo can replace commodity evaluation mechanics while AGK-specific code
+retains corpus projection, experimental semantics, routing metrics, provenance,
+workspace controls, Kilo integration, and strict-confirmation behavior. The
+spike was not merged into `main`; historical evidence is preserved at
+`docs/evaluations/promptfoo-spike/`. See
+[ADR-0001](../adr/0001-promptfoo-backed-evaluator.md) for the full decision
+record and the accepted gap batch. M3 is authorized.
 
 ### 3.3 Go/no-go gate
 
@@ -1060,24 +1074,37 @@ The final architecture is successful only when:
 
 ## 17. Open decisions after the spike
 
+**Resolved by M2 decision:**
+
 - Does the evidence support `GO`, `GO WITH MATERIAL GAPS`, `NO`, or
-  `INCONCLUSIVE`?
-- Is `agent-guidance-kit-evals` the final repository name?
-- Which Promptfoo features are sufficiently stable to depend on directly?
+  `INCONCLUSIVE`? → **`GO WITH MATERIAL GAPS`**. See
+  [ADR-0001](../adr/0001-promptfoo-backed-evaluator.md).
+- Is `agent-guidance-kit-evals` the final repository name? → **Selected as
+  working name** pending M3 implementation. Recorded as the intended final name
+  unless a concrete conflict is discovered.
+- Which Promptfoo features are sufficiently stable to depend on directly? →
+  **Pinned to `0.122.0`** for the initial migration; future upgrades verified by
+  deterministic parity tests.
 - Does Kilo expose native, heuristic, forced, or no usable activation evidence?
-- Should the Kilo provider be owned temporarily or proposed upstream first?
+  → **Forced Layer B demonstrated; native Layer C not demonstrated.** Kilo
+  exposes skill activation only through the CLI command surface, not a first-class
+  native event.
 - Which evaluator-v1 isolation guarantees remain mandatory for qualification,
-  and which are reserved for strict confirmation?
-- What exact default AGK qualification policy defines “evidence suggests
-  benefit”?
-- How are provider-native reasoning effort, reasoning mode, and compound
-  harness presets normalized without losing original values?
+  and which are reserved for strict confirmation? → **Independent disposable host
+  workspaces for qualification; Docker attestation retained as strict
+  confirmation** until M5/M6 determines the smallest necessary replacement.
 - Which sanitized Promptfoo artifacts are committed versus retained as CI/release
-  artifacts?
+  artifacts? → **Sanitized result representations committed** in
+  `docs/evaluations/promptfoo-spike/`; full raw artifacts remain local-only
+  under `experiments/promptfoo/.results/`.
+- What exact default AGK qualification policy defines "evidence suggests
+  benefit"? → Deferred to M3/M6.
+- How are provider-native reasoning effort, reasoning mode, and compound
+  harness presets normalized without losing original values? → Deferred to M3/M6.
 - Is full Git history extraction worthwhile, or is a snapshot plus
-  `MIGRATION.md` safer?
+  `MIGRATION.md` safer? → Deferred to M4.
 - Which parts of the current framework-bound `skill-evaluation` skill should
-  return later as a small portable methodology skill?
+  return later as a small portable methodology skill? → Deferred to M7.
 
 The companion
 [`evidence-evaluator-milestones.md`](evidence-evaluator-milestones.md) tracks

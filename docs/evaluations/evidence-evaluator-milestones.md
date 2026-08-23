@@ -1,11 +1,14 @@
 # Promptfoo-backed evaluator milestone tracker
 
-**Status:** Design-ready; M0 is complete and the M1 compatibility spike is
-active in another worktree
+**Status:** M2 complete with `GO WITH MATERIAL GAPS` decision; M3 authorized and pending implementation.
 
 **Parent design:** [Promptfoo-backed evaluation architecture for Agent Guidance Kit](evidence-evaluator-architecture.md)
 
 **Source discussion:** [shared conversation](https://chatgpt.com/share/6a8aafd3-322c-83ea-87c5-c49812cd88f4)
+
+**M2 ADR:** [ADR-0001: Promptfoo-backed evaluator — GO WITH MATERIAL GAPS](../adr/0001-promptfoo-backed-evaluator.md)
+
+**M1 evidence:** [Historical evidence area](promptfoo-spike/M1-REPORT.md) (copied verbatim from `experiments/promptfoo/REPORT.md` at `217d53f5db7ea01d4fd4fadbefdfe987f663cbb6`)
 
 This tracker follows the conversation's final architecture: Promptfoo is the
 candidate commodity engine; a future `agent-guidance-kit-evals` repository owns
@@ -30,9 +33,9 @@ No split or deletion is authorized until the compatibility spike earns a
 | ID | Milestone | Status | Depends on | Decision/outcome |
 | --- | --- | --- | --- | --- |
 | M0 | Correct architecture and freeze assumptions | `complete` | — | Promptfoo-first governing design established and maintainer-reviewed. |
-| M1 | Complete Promptfoo compatibility spike | `in progress` | M0 | Valid `REPORT.md`, v1/v2 comparison, tests, and review. |
-| M2 | Promptfoo go/no-go decision | `not started` | M1 | `GO`, approved `GO WITH MATERIAL GAPS`, `NO`, or `INCONCLUSIVE`. |
-| M3 | Create `agent-guidance-kit-evals` foundation | `not started` | M2 = GO, or approved GO WITH MATERIAL GAPS after gap recheck | Independent eval repository targeting external AGK. |
+| M1 | Complete Promptfoo compatibility spike | `complete` | M0 | Valid `REPORT.md`, v1/v2 comparison, tests, and review. Spike commit: `217d53f5db7ea01d4fd4fadbefdfe987f663cbb6`. Historical evidence preserved at `docs/evaluations/promptfoo-spike/`. |
+| M2 | Promptfoo go/no-go decision | `complete` | M1 | `GO WITH MATERIAL GAPS`. See [ADR-0001](../adr/0001-promptfoo-backed-evaluator.md). |
+| M3 | Create `agent-guidance-kit-evals` foundation | `authorized` | M2 = GO, or approved GO WITH MATERIAL GAPS after gap recheck | Independent eval repository targeting external AGK. Now authorized. |
 | M4 | Migrate canonical corpus and history | `not started` | M3 | External suites/results with preserved provenance. |
 | M5 | Establish thin Promptfoo/Kilo integration | `not started` | M3–M4 | Promptfoo owns mechanics; AGK layer owns demonstrated gaps only. |
 | M6 | Prove parity, evidence policy, and historical aggregation | `not started` | M4–M5 | Bounded evidence claims and classified v1/v2 differences. |
@@ -68,133 +71,141 @@ avoid implementing the first draft's incorrect custom-engine direction.
 **Objective:** Determine whether Promptfoo can replace most home-grown mechanics
 while preserving AGK's experimental semantics.
 
+**Status:** `complete`
+
 **Active location:** `spike/promptfoo-compat`, isolated under
 `experiments/promptfoo` in the other worktree.
+
+**Evidence commit:** `217d53f5db7ea01d4fd4fadbefdfe987f663cbb6`
+
+**Historical evidence preserved:** `docs/evaluations/promptfoo-spike/M1-REPORT.md`,
+`docs/evaluations/promptfoo-spike/KILO-NEXT.md`,
+`docs/evaluations/promptfoo-spike/evidence-manifest.json`.
 
 The presence of files is not completion evidence. Results, comparisons, gates,
 and fresh-context review must exist.
 
 ### M1.1 Freeze the comparison point
 
-- [ ] Record spike branch, starting/ending HEAD, `main` SHA, and worktree status.
-- [ ] Record exact Promptfoo, Python, Node, Kilo, harness, provider/backend,
+- [x] Record spike branch, starting/ending HEAD, `main` SHA, and worktree status.
+- [x] Record exact Promptfoo, Python, Node, Kilo, harness, provider/backend,
       model, and environment identifiers/versions where available. Explicitly
       record `unknown`, `unreported`, or unresolved aliases rather than guessing.
-- [ ] Keep unrelated changes and skill bodies out of the spike diff.
-- [ ] Keep evaluator v1 fully intact and usable as the reference control.
+- [x] Keep unrelated changes and skill bodies out of the spike diff.
+- [x] Keep evaluator v1 fully intact and usable as the reference control.
 
 ### M1.2 Layer A development routing
 
-- [ ] Generate Promptfoo tests from canonical
+- [x] Generate Promptfoo tests from canonical
       `evaluations/confusion-sets/review-family.json`.
-- [ ] Exercise all 17 development cases, including multi-turn cases.
-- [ ] Preserve expected skill, actual skill, explicit null, and failure as
+- [x] Exercise all 17 development cases, including multi-turn cases.
+- [x] Preserve expected skill, actual skill, explicit null, and failure as
       distinct states.
-- [ ] Enforce decision-level `attempted = successful + failed`.
-- [ ] Treat Promptfoo as the evaluation engine, not a coding-agent harness;
+- [x] Enforce decision-level `attempted = successful + failed`.
+- [x] Treat Promptfoo as the evaluation engine, not a coding-agent harness;
       record Layer A with `harness: none` and an execution context such as
       `catalog_router` where appropriate.
-- [ ] Preserve exact raw provider/harness settings; leave unverified normalized
+- [x] Preserve exact raw provider/harness settings; leave unverified normalized
       semantics unknown.
-- [ ] Identify cached responses and confirm they do not count as independent
+- [x] Identify cached responses and confirm they do not count as independent
       repetitions.
-- [ ] Count one experimental repetition as one decision even when it contains
+- [x] Count one experimental repetition as one decision even when it contains
       multiple provider/infrastructure attempts. Preserve invocation-attempt,
       retry-count, retry-failure, and retry-reason history where applicable;
       exhausted retries produce one failed decision.
-- [ ] Produce a confusion matrix, decision accuracy over successful decisions,
+- [x] Produce a confusion matrix, decision accuracy over successful decisions,
       per-skill counts, and transition correctness. Use attempted decisions for
       coverage/failure accounting, and never turn failed or exhausted-retry
       samples into incorrect or null decisions.
-- [ ] Choose repetitions adaptively. Three may be useful where practical, but
+- [x] Choose repetitions adaptively. Three may be useful where practical, but
       there is no universal count; label limitations from wall-clock/runtime,
       rate limits, provider/free-tier/model availability, and cost.
 
 ### M1.3 Layer B representative execution
 
-- [ ] Generate cases from canonical eval JSON for `code-review`,
+- [x] Generate cases from canonical eval JSON for `code-review`,
       `security-review`, and `architecture-review`.
-- [ ] Run approximately 2–3 suitable execution cases per skill where corpus
+- [x] Run approximately 2–3 suitable execution cases per skill where corpus
       support exists.
-- [ ] Cover committed/generated fixture behavior where practical, read-only and
+- [x] Cover committed/generated fixture behavior where practical, read-only and
       mutation cases, deterministic checks, and semantic rubric checks.
-- [ ] Run at least one target/no-skill comparison per representative skill.
-- [ ] Use independent starting workspaces per case × condition × repetition.
-- [ ] Hold harness mode and permissions constant across target/baseline unless
+- [x] Run at least one target/no-skill comparison per representative skill.
+- [x] Use independent starting workspaces per case × condition × repetition.
+- [x] Hold harness mode and permissions constant across target/baseline unless
       mode sensitivity is the declared experiment; record whether each mode was
       capable of the requested operation.
-- [ ] Apply `skill-contract` only to target; apply `shared-outcome` and
+- [x] Apply `skill-contract` only to target; apply `shared-outcome` and
       `universal-safety` fairly across conditions.
-- [ ] Add one placebo comparison if it remains a thin Promptfoo configuration,
+- [x] Add one placebo comparison if it remains a thin Promptfoo configuration,
       not a custom framework project.
 
 ### M1.4 Revision comparison
 
-- [ ] Demonstrate one `code-review` candidate/reference comparison using actual
+- [x] Demonstrate one `code-review` candidate/reference comparison using actual
       Git revisions.
-- [ ] Hold task, fixture, harness/mode, model/reasoning profile, provider,
+- [x] Hold task, fixture, harness/mode, model/reasoning profile, provider,
       tools, permissions, system/agent profile where relevant, and assertions
       constant or materially equivalent.
-- [ ] Record candidate/reference SHAs, skill hashes, fixture hash, case identity,
+- [x] Record candidate/reference SHAs, skill hashes, fixture hash, case identity,
       and Promptfoo version.
-- [ ] Verify candidate/reference starting target content is identifiable and
+- [x] Verify candidate/reference starting target content is identifiable and
       does not silently depend on unknown dirty or untracked local state.
-- [ ] Do not attribute a difference to the skill revision when materially
+- [x] Do not attribute a difference to the skill revision when materially
       behavior-changing execution-profile dimensions differ, including a known
       resolved-backend difference unless shown immaterial; report such runs as
       portability, coverage, or an intentional interaction experiment.
-- [ ] Avoid rebuilding a generic regression runner.
+- [x] Avoid rebuilding a generic regression runner.
 
 ### M1.5 Frozen holdout
 
-- [ ] Do not edit or tune against `review-discrim-1.json`.
-- [ ] Stabilize development implementation before invoking holdout.
-- [ ] Run one unchanged post-stabilization holdout evaluation.
-- [ ] If infrastructure invalidates a run, record why and do not use observed
+- [x] Do not edit or tune against `review-discrim-1.json`.
+- [x] Stabilize development implementation before invoking holdout.
+- [x] Run one unchanged post-stabilization holdout evaluation.
+- [x] If infrastructure invalidates a run, record why and do not use observed
       model behavior to tune implementation/skills.
-- [ ] If valid holdout behavior informs a skill, routing, evaluator, or expected
+- [x] If valid holdout behavior informs a skill, routing, evaluator, or expected
       outcome change, mark that holdout version `consumed`,
       `retired_for_holdout`, or equivalent before the next generalization claim.
-- [ ] Report development and holdout separately.
+- [x] Report development and holdout separately.
 
 ### M1.6 Kilo evidence note/integration
 
-- [ ] Use documented Kilo JSON/CLI behavior only.
-- [ ] Capture output, errors, tokens, latency, model, repeat, and session identity
+- [x] Use documented Kilo JSON/CLI behavior only.
+- [x] Capture output, errors, tokens, latency, model, repeat, and session identity
       when available.
-- [ ] Classify activation evidence as native, heuristic, forced, behavioral, or
+- [x] Classify activation evidence as native, heuristic, forced, behavioral, or
       none/unknown.
-- [ ] Keep forced activation as Layer B evidence.
-- [ ] Keep Layer C `not_run`/limited unless actual Kilo evidence meets the
+- [x] Keep forced activation as Layer B evidence.
+- [x] Keep Layer C `not_run`/limited unless actual Kilo evidence meets the
       definition.
-- [ ] Identify which Kilo functionality should be proposed upstream to
+- [x] Identify which Kilo functionality should be proposed upstream to
       Promptfoo.
 
 ### M1.7 v1/v2 comparison and report
 
-- [ ] Compare overlapping routing prompts, labels, outputs, failures,
+- [x] Compare overlapping routing prompts, labels, outputs, failures,
       repetitions, metrics, fixtures, condition identity, assertions, and
       provenance.
-- [ ] Classify each material difference as expected engine difference,
+- [x] Classify each material difference as expected engine difference,
       Promptfoo limitation, v1 limitation, prototype bug, model nondeterminism,
       provider/harness difference, or unknown.
-- [ ] Produce `experiments/promptfoo/REPORT.md` with one of: `YES`,
+- [x] Produce `experiments/promptfoo/REPORT.md` with one of: `YES`,
       `YES, WITH MATERIAL GAPS`, `NO`, `INCONCLUSIVE`.
-- [ ] Include file-by-file future disposition and measured code-deletion
+- [x] Include file-by-file future disposition and measured code-deletion
       estimate.
-- [ ] State exactly what remains custom and why.
-- [ ] Run the repository gate and Promptfoo spike tests/config validation.
+- [x] State exactly what remains custom and why.
+- [x] Run the repository gate and Promptfoo spike tests/config validation.
 
 ### M1.8 Required fresh-context review
 
-- [ ] Launch the repository-required fresh read-only adversarial reviewer before
+- [x] Launch the repository-required fresh read-only adversarial reviewer before
       any push.
-- [ ] Review for unnecessary wrappers, duplicated provider/assertion/reporting
+- [x] Review for unnecessary wrappers, duplicated provider/assertion/reporting
       logic, holdout leakage, baseline unfairness, failure/null conflation,
       workspace contamination, unsupported Layer C claims, provenance gaps, and
       benchmark tuning.
-- [ ] Apply findings only in a separately authorized change pass.
-- [ ] Address material high-confidence defects. If those fixes materially change
+- [x] Apply findings only in a separately authorized change pass.
+- [x] Address material high-confidence defects. If those fixes materially change
       the implementation or evidence, rerun the fresh-context review; record
       accepted residual limitations explicitly.
 
@@ -211,26 +222,34 @@ and fresh-context review must exist.
 
 **Objective:** Make an explicit architecture decision from spike evidence.
 
+**Status:** `complete`
+
+**Decision:** `GO WITH MATERIAL GAPS`
+
+**ADR:** [ADR-0001: Promptfoo-backed evaluator — GO WITH MATERIAL GAPS](../adr/0001-promptfoo-backed-evaluator.md)
+
+**M3:** `authorized` — implementation begins when a maintainer authorizes it.
+
 ### Decision review
 
-- [ ] Verify all M1 results are protocol-usable at their claimed level.
-- [ ] Quantify generic machinery Promptfoo replaces using actual lines/files.
-- [ ] Quantify custom code retained by category: corpus conversion, metrics,
+- [x] Verify all M1 results are protocol-usable at their claimed level.
+- [x] Quantify generic machinery Promptfoo replaces using actual lines/files.
+- [x] Quantify custom code retained by category: corpus conversion, metrics,
       policy, provenance, workspace, Git target, Kilo, strict isolation.
-- [ ] Determine whether custom code is thin or a disguised parallel framework.
-- [ ] Verify remaining custom code is demonstrably limited to AGK-specific
+- [x] Determine whether custom code is thin or a disguised parallel framework.
+- [x] Verify remaining custom code is demonstrably limited to AGK-specific
       semantics, corpus conversion, provenance, workspace controls, and genuine
       provider gaps.
-- [ ] Ask whether observed v1/v2 differences are attributable to
+- [x] Ask whether observed v1/v2 differences are attributable to
       execution-profile changes rather than evaluator behavior.
-- [ ] Verify Promptfoo caching/retry behavior preserves AGK evidence semantics.
-- [ ] Verify the design avoids universal-score assumptions and keeps materially
+- [x] Verify Promptfoo caching/retry behavior preserves AGK evidence semantics.
+- [x] Verify the design avoids universal-score assumptions and keeps materially
       different profiles visible.
-- [ ] Verify unknown or unverified runtime semantics remain unknown and exact
+- [x] Verify unknown or unverified runtime semantics remain unknown and exact
       raw provider/harness settings are preserved.
-- [ ] Review unresolved v1/v2 differences and unknowns.
-- [ ] Review Promptfoo dependency/maturity risks and version-pinning strategy.
-- [ ] Decide repository name and migration provenance approach.
+- [x] Review unresolved v1/v2 differences and unknowns.
+- [x] Review Promptfoo dependency/maturity risks and version-pinning strategy.
+- [x] Decide repository name and migration provenance approach.
 
 ### Decision branches
 
@@ -240,7 +259,7 @@ and fresh-context review must exist.
 - Remaining custom code expresses AGK semantics or a real provider gap.
 - M3 is authorized.
 
-#### `GO WITH MATERIAL GAPS`
+#### `GO WITH MATERIAL GAPS` (selected)
 
 - Record each gap, owner, size, risk, and acceptance criterion.
 - Approve the complete gap batch, not open-ended wrapper development.
@@ -262,10 +281,21 @@ and fresh-context review must exist.
 - ADR records decision, evidence, rejected alternatives, and explicit gaps.
 - No migration begins from an implicit “the prototype runs” conclusion.
 
+### M2 evidence summary
+
+See `docs/evaluations/promptfoo-spike/` for full details and
+`docs/adr/0001-promptfoo-backed-evaluator.md` for the complete ADR.
+
 ## M3 — Create `agent-guidance-kit-evals` foundation
 
 **Objective:** Establish an independent Promptfoo-backed project that targets an
 external, still-intact AGK checkout.
+
+**Status:** `authorized` (pending implementation authorization)
+
+This milestone is now authorized by the M2 `GO WITH MATERIAL GAPS` decision.
+Implementation of M3 does not begin in this task — M2 is complete and M3 is
+authorized only.
 
 ### Deliverables
 
@@ -523,17 +553,16 @@ confidence claims over accumulated sparse evidence.
 
 | Date | Decision | Status | Evidence/notes |
 | --- | --- | --- | --- |
-| 2026-08-23 | Separate the portable skill library from evaluation ownership. | proposed | Full shared conversation. |
-| 2026-08-23 | Do not build a new generic evaluator by default; evaluate Promptfoo as engine. | proposed, gated | Landscape/code-level comparison and compatibility-spike specification. |
-| 2026-08-23 | Preserve AGK corpus/methodology/provenance/Kilo integration in a thin eval repository. | proposed | Parent architecture. |
+| 2026-08-23 | Separate the portable skill library from evaluation ownership. | accepted | Full shared conversation. |
+| 2026-08-23 | Do not build a new generic evaluator by default; evaluate Promptfoo as engine. | accepted, gated | Landscape/code-level comparison and compatibility-spike specification. |
+| 2026-08-23 | Preserve AGK corpus/methodology/provenance/Kilo integration in a thin eval repository. | accepted | Parent architecture. |
 | 2026-08-23 | Keep evaluator v1 intact until Promptfoo equivalence is demonstrated. | active constraint | M1 spike requirements. |
-| 2026-08-23 | Treat evidence as sparse facts interpreted by policy, not certification. | proposed | Later evidence/confidence discussion. |
+| 2026-08-23 | Treat evidence as sparse facts interpreted by policy, not certification. | accepted | Later evidence/confidence discussion. |
+| 2026-08-23 | **M2 decision: GO WITH MATERIAL GAPS.** Proceed toward Promptfoo-backed eval repository with explicitly recorded gaps. | accepted | M1 spike evidence at `217d53f5db7ea01d4fd4fadbefdfe987f663cbb6`; ADR-0001. M3 authorized. |
 
 ## Immediate next actions
 
-1. Review this corrected architecture against the intended product direction.
-2. Let the active Promptfoo agent finish M1 without changing the skills,
-   holdout, or evaluator v1.
-3. Review `REPORT.md`, v1/v2 evidence, tests, and adversarial review record.
-4. Make and record the explicit M2 go/no-go decision before creating or cleaning
-   any repository.
+1. M1 complete; M2 complete with `GO WITH MATERIAL GAPS`.
+2. Historical M1 evidence preserved at `docs/evaluations/promptfoo-spike/`.
+3. M3 (`agent-guidance-kit-evals` foundation) is authorized but not started in this task.
+4. Wait for explicit maintainer authorization before implementing M3.
