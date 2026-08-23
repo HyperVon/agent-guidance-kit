@@ -1,6 +1,6 @@
 # Promptfoo-backed evaluator milestone tracker
 
-**Status:** M2 complete with `GO WITH MATERIAL GAPS` decision; M3 authorized and pending implementation.
+**Status:** M0–M4 complete; M5 authorized and not started. Canonical evaluation-corpus ownership now lives in `agent-guidance-kit-evals`; the AGK copies of the corpus are a frozen legacy evaluator-v1 compatibility/reference copy until M7.
 
 **Parent design:** [Promptfoo-backed evaluation architecture for Agent Guidance Kit](evidence-evaluator-architecture.md)
 
@@ -36,8 +36,8 @@ No split or deletion is authorized until the compatibility spike earns a
 | M1 | Complete Promptfoo compatibility spike | `complete` | M0 | Valid `REPORT.md`, v1/v2 comparison, tests, and review. Spike commit: `217d53f5db7ea01d4fd4fadbefdfe987f663cbb6`. Historical evidence preserved at `docs/evaluations/promptfoo-spike/`. |
 | M2 | Promptfoo go/no-go decision | `complete` | M1 | `GO WITH MATERIAL GAPS`. See [ADR-0001](../adr/0001-promptfoo-backed-evaluator.md). |
 | M3 | Create `agent-guidance-kit-evals` foundation | `complete` | M2 = GO, or approved GO WITH MATERIAL GAPS after gap recheck | Foundation commit `56600a8`; hardened and merged at `5fa650b3`; 26 skills discovered; 33 tests; AGK not mutated. |
-| M4 | Migrate canonical corpus and history | `not started` | M3 | External suites/results with preserved provenance. |
-| M5 | Establish thin Promptfoo/Kilo integration | `not started` | M3–M4 | Promptfoo owns mechanics; AGK layer owns demonstrated gaps only. |
+| M4 | Migrate canonical corpus and history | `complete` | M3 | Migrated at eval-repo merge `cb1c1651` from AGK source `8ac3f7b`; 26 packs / 145 canonical files; holdout hash parity verified; 20 historical-v1 artifacts; AGK not mutated. |
+| M5 | Establish thin Promptfoo/Kilo integration | `authorized / not started` | M3–M4 | Promptfoo owns mechanics; AGK layer owns demonstrated gaps only. |
 | M6 | Prove parity, evidence policy, and historical aggregation | `not started` | M4–M5 | Bounded evidence claims and classified v1/v2 differences. |
 | M7 | Clean Agent Guidance Kit | `not started` | M6 | Lean copy/adapt library with lightweight static CI. |
 | M8 | Prove independent operation and harden | `not started` | M7 | Clean AGK externally evaluated; both repos independently healthy. |
@@ -228,7 +228,7 @@ and fresh-context review must exist.
 
 **ADR:** [ADR-0001: Promptfoo-backed evaluator — GO WITH MATERIAL GAPS](../adr/0001-promptfoo-backed-evaluator.md)
 
-**M3:** `authorized` — implementation begins when a maintainer authorizes it.
+**M3:** `authorized` at decision time (historical); M3 has since been implemented and completed. See the M3/M4 sections and the decision log below.
 
 ### Decision review
 
@@ -332,27 +332,59 @@ AGK checkout.
 **Objective:** Move evaluation ownership without rewriting corpus semantics or
 historical truth.
 
+**Status:** `complete`
+
+**Migration record:** `MIGRATION.md` and `migration/m4-source-manifest.json` in
+`agent-guidance-kit-evals`.
+
+**Evidence:**
+
+- Source AGK extraction revision: `8ac3f7bf01fc06ebffc826da3e090c1085c91485`
+  (frozen; all migrated content extracted from this single snapshot).
+- Eval-repo M4 merge SHA: `cb1c1651b36218ba449aa979510b442ecac38cc9`
+  (eval-repo PR #2, hosted CI green).
+- Canonical corpus: 26 per-skill eval packs (140 files) + 4 confusion-set
+  families + 1 protected holdout file = 145 canonical files.
+- Holdout hash parity:
+  `sha256:e2ad6dac06d64f8efad17df96d6c6f3af13c7f3a88aac25b19fe87587936dd35`
+  identical on both sides; holdout not run and not used for tuning.
+- Historical v1 evidence: 20 artifacts under `historical-v1/` (results,
+  summaries/reports, inventory, environment record, methodology reference
+  snapshots); statuses such as `invalid`, `limited`, `not_run` preserved
+  verbatim; no historical truth rewritten.
+- Integrity verification: deterministic manifest + `scripts/verify_migration.py`;
+  full source parity run against a fresh clone of the frozen SHA confirmed
+  165/165 files byte-equal (0 mismatches, 0 missing, 0 unexpected); fresh-context
+  adversarial review returned PASS with no findings.
+- Known provenance gaps recorded in `MIGRATION.md`: raw `.eval-evidence/`
+  artifacts are local-only and were never committed upstream; standalone
+  committed routing reports do not exist for evaluator v1 outside SUMMARY.md;
+  per-artifact historical run revisions remain unreported/unverified where the
+  artifact itself does not record them.
+
 ### Deliverables
 
-- Per-skill eval packs under eval-repo corpus.
-- Development confusion sets and physically separate holdout.
-- Target profile mapping corpus skill identities to external target skills.
+- Per-skill eval packs under eval-repo corpus. — done (`corpus/skills/<skill>/evals/`)
+- Development confusion sets and physically separate holdout. — done (`corpus/confusion-sets/`, `corpus/holdout/`)
+- Target profile mapping corpus skill identities to external target skills. — done (`profiles/agk-target-skills.json`)
 - Historical schema-v3 results, summaries, validation matrix, routing reports,
-  and frontmatter inventory under `historical-v1`.
+  and frontmatter inventory under `historical-v1`. — done (standalone routing-report files do not exist in v1; recorded as a provenance gap)
 - `MIGRATION.md` with source repository, commit, extraction date, path mapping,
-  and known provenance gaps.
-- Hash comparison showing fixtures/suites remained stable where intended.
+  and known provenance gaps. — done
+- Hash comparison showing fixtures/suites remained stable where intended. — done (manifest + verifier)
 
 ### Exit criteria
 
-- Canonical corpus has one owner.
-- Generated Promptfoo projections are reproducible and not hand-maintained.
-- Historical invalid/limited/not-run labels remain unchanged.
-- Holdout content and identity match the frozen source.
+- Canonical corpus has one owner. — met: `agent-guidance-kit-evals` is canonical; the AGK copies are a frozen legacy evaluator-v1 compatibility/reference copy until M7 and are not independently editable canonical sources.
+- Generated Promptfoo projections are reproducible and not hand-maintained. — met for M4 scope: no hand-maintained projections exist; production projection generators are M5 deliverables (milestone boundary clarified in `MIGRATION.md`).
+- Historical invalid/limited/not-run labels remain unchanged. — verified byte-for-byte.
+- Holdout content and identity match the frozen source. — verified by hash parity.
 
 ## M5 — Establish thin Promptfoo/Kilo integration
 
 **Objective:** Productize only the custom surface demonstrated necessary by M1/M2.
+
+**Status:** `authorized / not started`
 
 ### Deliverables
 
@@ -573,10 +605,11 @@ confidence claims over accumulated sparse evidence.
 | 2026-08-23 | Treat evidence as sparse facts interpreted by policy, not certification. | accepted | Later evidence/confidence discussion. |
 | 2026-08-23 | **M2 decision: GO WITH MATERIAL GAPS.** Proceed toward Promptfoo-backed eval repository with explicitly recorded gaps. | accepted | M1 spike evidence at `217d53f5db7ea01d4fd4fadbefdfe987f663cbb6`; ADR-0001. M3 authorized. |
 | 2026-08-23 | **M3 complete.** `agent-guidance-kit-evals` repository founded at `56600a8`; hardened and merged at `5fa650b3`. | accepted | 26 AGK skills discovered in external checkout; 33 unit tests pass; committed npm lockfile; reproducible `npm ci`; Promptfoo 0.122.0 asserted; config validation; deterministic echo-provider smoke; corrected Git revision resolution; durable/local-only evidence distinction; AGK not mutated. |
+| 2026-08-23 | **M4 complete — canonical corpus ownership migrated.** `agent-guidance-kit-evals` is now canonical for evaluation corpus changes; the remaining AGK corpus is a frozen legacy evaluator-v1 compatibility/reference copy until M7. | accepted | Eval-repo merge `cb1c1651` from AGK source `8ac3f7b`; 26 packs / 145 canonical files migrated as exact copies; holdout hash parity `sha256:e2ad6dac…dd35`; 20 historical-v1 artifacts with labels preserved verbatim; 165/165 source-parity verified; fresh-context review PASS. |
 
 ## Immediate next actions
 
-1. M1 complete; M2 complete with `GO WITH MATERIAL GAPS`.
+1. M0–M4 complete.
 2. Historical M1 evidence preserved at `docs/evaluations/promptfoo-spike/`.
-3. M3 (`agent-guidance-kit-evals` foundation) complete and hardened at `5fa650b3`.
-4. Wait for explicit maintainer authorization before implementing M3.
+3. Future corpus edits originate in `agent-guidance-kit-evals` (`corpus/`); do not edit the AGK corpus copies in parallel.
+4. M5 (thin Promptfoo/Kilo integration) is authorized and not started; wait for explicit maintainer go-ahead before implementing it.
