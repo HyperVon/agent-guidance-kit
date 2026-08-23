@@ -1,12 +1,11 @@
 ---
 name: security-review
 description: >-
-  Review a change, repository, service boundary, or agent workflow for
-  evidence-backed security risks involving secrets, identity, authorization,
-  input handling, data exposure, dependencies, paths, commands, network access,
-  or destructive authority. Use for an explicit security review or a scoped
-  security concern; do not apply it to an ordinary bug or failing test without a
-  security-relevant boundary. Report by default; do not probe external systems.
+  Perform a dedicated security vulnerability review of code, configuration,
+  trust boundaries, or agent workflows, tracing untrusted input and privilege
+  paths to exploitable sinks. Use when security risk is the requested
+  deliverable — not merely because code under ordinary review touches auth,
+  tokens, or secrets.
 ---
 
 # Security Review

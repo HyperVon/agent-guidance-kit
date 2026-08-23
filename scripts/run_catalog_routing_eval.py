@@ -270,7 +270,12 @@ def build_aggregate(cases, skills):
     Counting rule (recorded in the evidence as ``aggregate.rule``):
     every SUCCESSFUL model decision is one observation ``(intended, selected)``;
     failed model invocations are NOT observations (they are recorded separately
-    per case/rep and never inflate or deflate the matrix).
+    per case/rep and never inflate or deflate the matrix). The aggregate also
+    carries the full accounting — ``attempted_decisions`` (every captured
+    decision slot), ``successful_decisions`` (== ``observations``), and
+    ``failed_decisions`` (case/rep/turn + error for each failed invocation) —
+    so a failed invocation can never silently disappear behind a headline
+    observation count.
 
       * plain case (non-turn): intended = ``expected_skill``, selected =
         ``decision.selected_skill`` (a null selection is recorded as the
@@ -288,6 +293,8 @@ def build_aggregate(cases, skills):
     (undefined), never fabricated as 0.
     """
     obs = []
+    attempted = 0
+    failures = []
     for case in cases:
         turns = case.get("turns")
         is_workflow = case.get("case_type") in (
@@ -295,7 +302,12 @@ def build_aggregate(cases, skills):
         if turns and is_workflow:
             for rep in case.get("repetitions", []):
                 for t in rep.get("turns", []):
+                    attempted += 1
                     if t.get("status") != "success":
+                        failures.append({"case_id": case.get("id"),
+                                         "rep": rep.get("rep"),
+                                         "turn": t.get("turn"),
+                                         "error": t.get("error")})
                         continue
                     intended = t.get("expected_route")
                     if intended is None:
@@ -306,7 +318,12 @@ def build_aggregate(cases, skills):
                     obs.append((intended, selected))
         else:
             for rep in case.get("repetitions", []):
+                attempted += 1
                 if rep.get("status") != "success":
+                    failures.append({"case_id": case.get("id"),
+                                     "rep": rep.get("rep"),
+                                     "turn": None,
+                                     "error": rep.get("error")})
                     continue
                 intended = case.get("expected_skill")
                 if intended is None:
@@ -338,8 +355,13 @@ def build_aggregate(cases, skills):
                  "workflow-transition/harness-native turns each contribute one "
                  "observation; explicit null selections are the literal "
                  "'null' class; precision/recall are null (not 0) when the "
-                 "denominator is zero"),
+                 "denominator is zero; attempted_decisions counts every "
+                 "captured decision slot and failed_decisions names every "
+                 "failed invocation so failures stay visible"),
         "observations": len(obs),
+        "attempted_decisions": attempted,
+        "successful_decisions": len(obs),
+        "failed_decisions": failures,
         "confusion_matrix": matrix,
         "per_skill": per_skill,
     }

@@ -1,11 +1,11 @@
 ---
 name: code-review
 description: >-
-  Perform an evidence-based review of a diff, branch, subsystem, or repository
-  for concrete correctness, contract, security, runtime, boundary, test, and
-  documentation defects. Use for code reviews and change-set readiness
-  feedback. Report findings first; edit only when the user separately and
-  explicitly asks to apply selected findings.
+  Review a diff, pull request, branch, subsystem, or bounded repository
+  surface for concrete correctness and regression defects, reporting any
+  defect found — security ones included. Use when the deliverable is the code
+  review itself; use security-review when a dedicated vulnerability assessment
+  is the primary task.
 ---
 
 # Code Review

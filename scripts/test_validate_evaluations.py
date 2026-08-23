@@ -3615,6 +3615,205 @@ class ExecutionRunnerBoundaryTests(unittest.TestCase):
             shutil.rmtree(ree.SHARED_TMP, ignore_errors=True)
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_workspace_root_is_listable_by_non_owner(self):
+        # Linux/Docker uid-mapping regression: tempfile.mkdtemp creates the
+        # workspace root 0700; the previous normalization added only
+        # write+execute bits to the ROOT (leaving ~0733), so a non-owner
+        # container uid could traverse but never LIST the workspace. The root
+        # must receive the same coherent a+rwX policy as every descendant.
+        tmp = tempfile.mkdtemp()
+        try:
+            source = os.path.join(tmp, "source")
+            nested = os.path.join(source, "sub")
+            os.makedirs(nested)
+            open(os.path.join(nested, "f.txt"), "w").write("task\n")
+            # Mirror the real runner: materialized seeds are created by
+            # tempfile.mkdtemp, so the SOURCE root is 0700. (copytree's final
+            # copystat copies this mode onto the workspace root before
+            # normalization — with the old w+x-only root handling this yields
+            # exactly the 0733 non-enumerable root this test pins.)
+            os.chmod(source, 0o700)
+            worker = ree._copy_seed(source)
+            root_mode = os.stat(worker).st_mode & 0o777
+            self.assertEqual(root_mode, 0o777,
+                             f"workspace root mode is {oct(root_mode)}, "
+                             f"expected a+rwX (0777); a 0733-style root "
+                             f"cannot be enumerated by a non-owner uid")
+            self.assertEqual(os.stat(os.path.join(worker, "sub")).st_mode
+                             & 0o777, 0o777)
+        finally:
+            shutil.rmtree(ree.SHARED_TMP, ignore_errors=True)
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_restrictive_source_file_becomes_rw_and_stays_non_exec(self):
+        # A 0600 source file must become readable/writable by the
+        # container-equivalent non-owner and must NOT gain execute bits.
+        tmp = tempfile.mkdtemp()
+        try:
+            source = os.path.join(tmp, "source")
+            os.makedirs(source)
+            f = os.path.join(source, "secret.txt")
+            open(f, "w").write("data\n")
+            os.chmod(f, 0o600)
+            worker = ree._copy_seed(source)
+            wf = os.path.join(worker, "secret.txt")
+            mode = os.stat(wf).st_mode
+            self.assertEqual(mode & 0o777, 0o666,
+                             f"restrictive file mode is {oct(mode & 0o777)}, "
+                             f"expected rw for user/group/other (0666)")
+            self.assertFalse(mode & (stat.S_IXUSR | stat.S_IXGRP
+                                     | stat.S_IXOTH),
+                             "non-executable file must not gain execute bits")
+        finally:
+            shutil.rmtree(ree.SHARED_TMP, ignore_errors=True)
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_group_only_exec_bit_propagates_to_all_exec_bits(self):
+        # True X semantics: a file whose ONLY execute bit is S_IXGRP proves
+        # that checking S_IXUSR alone is insufficient. After normalization the
+        # file must be executable by user/group/other.
+        tmp = tempfile.mkdtemp()
+        try:
+            source = os.path.join(tmp, "source")
+            os.makedirs(source)
+            f = os.path.join(source, "tool.sh")
+            open(f, "w").write("#!/bin/sh\nexit 0\n")
+            # r for owner (so the seed stays copyable), w+x ONLY for group:
+            # S_IXGRP set while S_IXUSR is clear.
+            os.chmod(f, 0o0430)
+            self.assertFalse(os.stat(f).st_mode & stat.S_IXUSR)
+            worker = ree._copy_seed(source)
+            wf = os.path.join(worker, "tool.sh")
+            mode = os.stat(wf).st_mode
+            self.assertEqual(mode & 0o777, 0o777,
+                             f"file with group-only exec must normalize to "
+                             f"a+rwX (rwx for user/group/other), got "
+                             f"{oct(mode & 0o777)}")
+        finally:
+            shutil.rmtree(ree.SHARED_TMP, ignore_errors=True)
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_ordinary_file_does_not_become_executable(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            source = os.path.join(tmp, "source")
+            os.makedirs(source)
+            f = os.path.join(source, "notes.md")
+            open(f, "w").write("plain text\n")
+            os.chmod(f, 0o644)
+            worker = ree._copy_seed(source)
+            wf = os.path.join(worker, "notes.md")
+            mode = os.stat(wf).st_mode
+            self.assertEqual(mode & 0o777, 0o666,
+                             f"ordinary file mode is {oct(mode & 0o777)}, "
+                             f"expected 0666")
+            self.assertFalse(mode & (stat.S_IXUSR | stat.S_IXGRP
+                                     | stat.S_IXOTH))
+        finally:
+            shutil.rmtree(ree.SHARED_TMP, ignore_errors=True)
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_permission_normalization_failure_fails_the_seed_copy(self):
+        # Swallowed chmod failures leave an invalid condition workspace; the
+        # runner must refuse to continue into model execution.
+        tmp = tempfile.mkdtemp()
+        real_chmod = os.chmod
+
+        def failing_chmod(path, mode, *args, **kwargs):
+            # Fail only OUR a+rwX normalization call for this workspace path
+            # (other-write requested), not copytree's copystat call, which
+            # re-applies the source mode (no other-write) during the copy.
+            if (os.path.basename(path) == "locked.txt"
+                    and mode & stat.S_IWOTH):
+                raise PermissionError(
+                    f"[Errno 1] Operation not permitted: {path!r}")
+            return real_chmod(path, mode, *args, **kwargs)
+
+        try:
+            source = os.path.join(tmp, "source")
+            os.makedirs(source)
+            locked = os.path.join(source, "locked.txt")
+            with open(locked, "w") as fh:
+                fh.write("x\n")
+            os.chmod(locked, 0o600)
+            before = (set(os.listdir(ree.SHARED_TMP))
+                      if os.path.isdir(ree.SHARED_TMP) else set())
+            with unittest.mock.patch.object(ree.os, "chmod",
+                                            side_effect=failing_chmod):
+                with self.assertRaisesRegex(PermissionError,
+                                            "a\\+rwX.*locked.txt"):
+                    ree._copy_seed(source)
+            # The unusable workspace copy must be cleaned up, not left behind.
+            new_leftovers = set(os.listdir(ree.SHARED_TMP)) - before
+            self.assertEqual(new_leftovers, set(), new_leftovers)
+        finally:
+            shutil.rmtree(ree.SHARED_TMP, ignore_errors=True)
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_partial_copytree_failure_leaves_no_workspace(self):
+        # If shutil.copytree raises after partially populating dst, the
+        # disposable destination must be cleaned before the error propagates:
+        # no stale workspace may leak into the staging tree.
+        tmp = tempfile.mkdtemp()
+        real_copytree = shutil.copytree
+
+        def failing_copytree(src, dst, *args, **kwargs):
+            # Simulate a mid-copy crash: dst already has content.
+            os.makedirs(os.path.join(dst, "partial-dir"), exist_ok=True)
+            with open(os.path.join(dst, "partial-file.txt"), "w") as fh:
+                fh.write("half-copied\n")
+            raise OSError("[Errno 5] simulated mid-copy I/O error")
+
+        try:
+            source = os.path.join(tmp, "source")
+            os.makedirs(source)
+            with open(os.path.join(source, "README.md"), "w") as fh:
+                fh.write("# task\n")
+            before = (set(os.listdir(ree.SHARED_TMP))
+                      if os.path.isdir(ree.SHARED_TMP) else set())
+            with unittest.mock.patch.object(ree.shutil, "copytree",
+                                            side_effect=failing_copytree):
+                with self.assertRaisesRegex(OSError, "simulated mid-copy"):
+                    ree._copy_seed(source)
+            self.assertEqual(real_copytree, shutil.copytree)
+            new_leftovers = set(os.listdir(ree.SHARED_TMP)) - before
+            self.assertEqual(new_leftovers, set(), new_leftovers)
+        finally:
+            shutil.rmtree(ree.SHARED_TMP, ignore_errors=True)
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_probe_uid_selection_is_deterministically_non_owner(self):
+        # The Docker regression probe only proves non-owner access if the
+        # container uid differs from the workspace owner's uid; the selector
+        # must guarantee that for any owner uid.
+        self.assertNotEqual(dip.select_non_owner_uid(1001), 1001)
+        self.assertNotEqual(dip.select_non_owner_uid(1000), 1000)
+        self.assertNotEqual(dip.select_non_owner_uid(0), 0)
+        for owner in range(0, 2001):
+            self.assertNotEqual(dip.select_non_owner_uid(owner), owner,
+                                f"uid collision for owner {owner}")
+        self.assertEqual(dip.select_non_owner_uid(1000), 1001)
+        self.assertEqual(dip.select_non_owner_uid(1001), 1000)
+
+    def test_host_staging_parent_stays_restrictive(self):
+        # The shared .docker-tmp staging parent keeps unrelated local users
+        # out even though each disposable workspace leaf is a+rwX.
+        tmp = tempfile.mkdtemp()
+        try:
+            source = os.path.join(tmp, "source")
+            os.makedirs(source)
+            open(os.path.join(source, "README.md"), "w").write("# task\n")
+            worker = ree._copy_seed(source)
+            parent_mode = os.stat(ree.SHARED_TMP).st_mode & 0o777
+            self.assertEqual(parent_mode, 0o700,
+                             f"staging parent mode is {oct(parent_mode)}, "
+                             f"must stay private to the evaluator (0700)")
+            leaf_mode = os.stat(worker).st_mode & 0o777
+            self.assertEqual(leaf_mode, 0o777)
+        finally:
+            shutil.rmtree(ree.SHARED_TMP, ignore_errors=True)
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_runner_refuses_command_placeholders_before_worker(self):
         tmp = tempfile.mkdtemp()
         try:
@@ -4464,6 +4663,11 @@ class LayerAAggregateTests(unittest.TestCase):
         agg = rc.build_aggregate(self._case_results(),
                                  ["code-review", "security-review"])
         self.assertEqual(agg["observations"], 4)  # failed rep not an observation
+        self.assertEqual(agg["attempted_decisions"], 5)
+        self.assertEqual(agg["successful_decisions"], 4)
+        self.assertEqual(agg["failed_decisions"],
+                         [{"case_id": 2, "rep": 2, "turn": None,
+                           "error": "kilo exited 1"}])
         self.assertEqual(agg["confusion_matrix"]["code-review"],
                          {"code-review": 1, "security-review": 1})
         self.assertEqual(agg["confusion_matrix"]["security-review"],

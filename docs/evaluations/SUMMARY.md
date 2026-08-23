@@ -275,6 +275,138 @@ execution result.
   Therefore this follow-up contains no new target, baseline, placebo, or
   efficacy result claim.
 
+## Layer A completed + routing-description fixes (2026-08-22)
+
+> **Superseded snapshot:** this section records the first post-fix Layer A batch (longer
+> descriptions). Current state is the section below ("Layer A v4 — short router-facing
+> descriptions").
+
+All four confusion sets are now complete at 3 reps each (development evidence only;
+Layer A is a catalog-discriminability proxy, not harness-routing evidence):
+
+| Confusion set | Observations | Misroutes (pre-fix) | Misroutes (post-fix) |
+| --- | ---: | ---: | ---: |
+| review-family | 48 | 6 | 0 |
+| design-change-family | 51 | 3 | 3 |
+| investigation-family | 45 | 6 | 6 |
+| skill-maintenance-family | 50 | 3 | 3 |
+
+- **`code-review` → `security-review` (one-directional) fixed.** Pre-fix, all
+  3 errors were expected-`code-review` observations selecting `security-review`
+  on change-set reviews that touched auth/token code; no case ever intended
+  `security-review`. Post-fix: `code-review` 6/6, `security-review` over-selection gone.
+- **`architecture-review` over-clarify fixed.** Pre-fix it returned explicit null on
+  3 of its own hard-negative observations; post-fix 6/6.
+- Description edits were made to exactly three frontmatter descriptions
+  (`code-review`, `security-review`, `architecture-review`) based only on these
+  development results, then revalidated against all four sets.
+- **No new neighbor regressions:** every intended-skill observation outside the two
+  targeted errors was already perfect and stayed perfect. Two unchanged ambiguous-null
+  behaviors remain recorded as explicit observations (design-change and
+  skill-maintenance ambiguous cases still select a plausible owner instead of
+  clarifying; investigation-family's ambiguous case swapped confusion partner from
+  `security-review` to `threat-modeling` — still never clarifies). These are
+  preserved as-is; they were not tuned against.
+- **Holdout generalization:** pre-change holdout baseline (run before any description
+  edit): 21/21 observations correct, including all three changed skills. Post-change
+  holdout: 21/21 — flat at ceiling, no regression. Holdout cases were not folded into
+  development data.
+- Raw evidence: `.eval-evidence/layerA-{review,design-change,investigation,
+  skill-maintenance}-family{,-postfix}.json`, `.eval-evidence/holdout-review-discrim-1-{prechange,postchange}.json`
+  (gitignored). Undefined precision/recall values are recorded as null wherever a
+  denominator is zero (e.g., `security-review` in review-family has no
+  intended-`security-review` observations).
+- Layer C harness-routing remains `not_run`: none of this is evidence about real
+  harness selection.
+
+## Layer A v4 — short router-facing descriptions (2026-08-22)
+
+Frontmatter descriptions are routing metadata for an LLM, not human-facing
+mini-documentation. The three previously edited descriptions were rewritten to compact
+router-facing discriminators derived from each skill's body contract
+(`code-review` 105→45 words / 721→314 chars; `security-review` 112→44 / 807→311;
+`architecture-review` 54→34 / 420→271). Two development cases were added to
+review-family (#16 subsystem correctness review, #17 bounded-repository review) to
+protect the non-diff scope the longer `code-review` description had drifted away from.
+All four sets were then re-run at 3 reps with full decision accounting (the aggregate now
+records `attempted_decisions`, `successful_decisions`, and `failed_decisions` with
+case/rep/turn/error — a failed invocation can no longer silently shrink a headline count):
+
+| Confusion set | Attempted | Successful | Failed | Intended-skill errors | Ambiguous-case captures |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| review-family (17 cases) | 54 | 53 | 1 | 1 (`code-review`→`security-review`, case 1, 2/3) | 0/3 |
+| design-change-family | 51 | 51 | 0 | 0 | 3/3 → `architecture-review` |
+| investigation-family | 45 | 45 | 0 | 0 | 5/6 scattered (`security-review`×2, `systematic-debugging`×2, `threat-modeling`×1; 1 clarify) |
+| skill-maintenance-family | 51 | 50 | 1 | 0 | 3/3 → `rules-and-skills-audit` |
+| **Total** | **201** | **199** | **2** | **1** | |
+
+(Ambiguous-case captures count only `ambiguous-natural` cases' selections of a skill
+instead of clarifying; correct nulls from workflow no-skill turns are separate and are
+included in the confusion matrix.)
+
+Reading of the v4 evidence:
+
+- Both new non-diff cases pass 3/3; `code-review` keeps subsystem/bounded-repo scope.
+- One intended-skill wobble remains on review-family case 1 (the hardest auth-token
+  hard-negative): one of three reps selected `security-review` under the shortened text.
+  Recorded honestly; descriptions were deliberately NOT re-lengthened to chase it — that
+  would restart the add-prose-every-cycle anti-pattern. The unchanged holdout provides
+  the generalization check below.
+- Failed invocations are protocol-boundary events, not routing signals, and each
+  recorded skill-maintenance set run has lost exactly one invocation to a varying cause:
+  malformed model output in the two earlier batches (original run case 11; post-fix run
+  case 5) and, in the two most recent runs, case 7 exiting 1 after the worker requested a
+  permission in the mandated pure/no-tools mode (CLI auto-rejects). Case 7 specifically
+  failed twice in its six invocations across those two most recent runs — two of twelve
+  across all four recorded runs. Per protocol the
+  current-head set is reported as **50 successful + 1 failed invocation, NOT complete**
+  rather than re-run until lucky.
+- Unchanged ambiguous-null behavior persists (design-change, investigation, and
+  skill-maintenance ambiguous cases still select a plausible owner instead of
+  clarifying) — recorded untuned.
+- Raw evidence: `.eval-evidence/layerA-*-v4.json`; superseded batches archived under
+  `.eval-evidence/archive/layerA-pre-v4/`.
+- **Holdout (unchanged cases, run once post-shortening): 21/21 attempted, 21/21
+  successful** — identical to the pre-edit baseline; generalization held at ceiling.
+
+## Qualification rerun batch (2026-08-22, post-runner-fix)
+
+The three qualification pilots were re-run after commit `c48961b` fixed the seed-copy
+workspace-root permission bug (a non-owner container uid could not enumerate a ~0733
+workspace root) and made permission-normalization failures fail closed. Each rerun used the
+same protocol class (`qualification`, target/baseline, n=1, fresh independent workers,
+Docker strict isolation, fresh-context blind grading over randomized A/B labels); the
+original result files are preserved unchanged as pre-fix historical records.
+
+- `security-review` case 1 — the current-head measurement is
+  **non-discriminating (`both_fail`)**: target 3/4, baseline 2/4
+  ([rerun 2](results/security-review-qualification-n1-rerun2.md)). The target sample
+  failed the frozen read-and-redact assertion by quoting the fixture's literal bearer
+  tokens verbatim; the baseline kept credentials location-only. Two earlier n=1
+  comparisons of the same case (pre-fix runner, and post-fix pre-description-edit, raw
+  evidence archived) were both `skill_only_pass` (4/4 vs 3/4). The three n=1 samples
+  disagree on direction; none is an efficacy claim, and the disagreement is exactly what
+  placebo + n≥3 confirmation must resolve before any claim.
+- `review-feedback-resolution` case 1 — target 4/4, baseline 2/4
+  ([rerun](results/review-feedback-resolution-qualification-n1-rerun1.md)); direction
+  unchanged, margin narrowed (this baseline sample recorded context and grounded its
+  declines but still failed the disposition taxonomy).
+- `git-github-workflow` case 1 — target 4/4, baseline 3/4
+  ([rerun](results/git-github-workflow-qualification-n1-rerun1.md)); direction unchanged,
+  margin narrowed (baseline again committed through the unrunnable verification gate).
+
+All three remain single-repetition pilot observations, **not** efficacy claims. The two
+discriminating skills agree in direction across their original and rerun comparisons;
+`security-review`'s three samples disagree (see above), and every run is still
+qualification n=1.
+
+**Evidence retention status:** every committed result binds its case to a SHA-256
+`raw_evidence_hash` over the canonical file in the ignored `.eval-evidence/` directory, but
+those raw files still live only on the evaluation host's disk. Durable independent
+verification (sanitized content-addressed evidence bundles, CI artifacts, or release assets)
+remains a **follow-up**: it needs a sanitization pass that strips personal paths and
+environment metadata before anything is published, which is larger than this change set.
+
 ## Qualification batch (2026-08-22)
 
 First evaluation batch on a native Linux Docker host, after fixing the runner's
@@ -304,8 +436,9 @@ mandatory fresh-context adversarial review of the portability fix).
   `security-review` (`security-review` precision 0.0, recall undefined on this
   set) — and `architecture-review` over-clarifying (3 explicit-null selections,
   recall 0.5). The other three confusion sets and the holdout remain unrun.
-- Execution validated 4/26; measurement discriminating 3/26 (n=1 pilots);
-  routing (Layer C) still `not_run` everywhere.
+- Execution validated 4/26; measurement at the current measurement points:
+  discriminating 2/26, non-discriminating 2/26 (all n=1 pilots except
+  code-review n=3); routing (Layer C) still `not_run` everywhere.
 
 ## Case-set audit
 
