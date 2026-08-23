@@ -1,0 +1,16 @@
+{
+  "name": "agk-promptfoo-spike",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Promptfoo compatibility spike for agent-guidance-kit (not a runtime dependency of AGK skills)",
+  "scripts": {
+    "test:spike": "python3 -m unittest tests.test_spike",
+    "routing:dev": "promptfoo eval -c configs/routing-development.yaml --no-cache -o .results/routing-dev.json --no-progress-bar",
+    "routing:holdout": "promptfoo eval -c configs/routing-holdout.yaml --no-cache -o .results/routing-holdout.json --no-progress-bar",
+    "execution": "promptfoo eval -c configs/execution.yaml --no-cache -o .results/execution.json --no-progress-bar",
+    "regression": "promptfoo eval -c configs/regression.yaml --no-cache -o .results/regression.json --no-progress-bar"
+  },
+  "dependencies": {
+    "promptfoo": "0.122.0"
+  }
+}

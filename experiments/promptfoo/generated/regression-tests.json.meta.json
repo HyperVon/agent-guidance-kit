@@ -1,0 +1,11 @@
+{
+  "generated_by": "experiments/promptfoo/generators/skill_cases.py (--regression)",
+  "model": "kilo/tencent/hy3:free",
+  "skill": "code-review",
+  "case": 1,
+  "candidate_git_sha": "deeebfe1678e015b7f32de93833f01f544a21fcf",
+  "reference_git_sha": "8adc094f203f8c09f44e7953b093912a31f36bd2",
+  "reps": 2,
+  "test_count": 4,
+  "note": "Candidate/reference differ ONLY in the installed SKILL.md revision; task, fixture, model, activation mechanism and shared/universal assertions are held constant."
+}

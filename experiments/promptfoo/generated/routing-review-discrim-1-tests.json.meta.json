@@ -1,0 +1,9 @@
+{
+  "generated_by": "experiments/promptfoo/generators/routing_cases.py",
+  "source": "../../evaluations/holdout/review-discrim-1.json",
+  "source_hash": "sha256:8be9419fd3ef6ca9317423e618dcca00064b7c224806f1e9e92870e71fef8748",
+  "evidence_kind": "holdout",
+  "catalog_hash": "sha256:9cade01d5bcb86c4151b33d05bf87076c53c8cbb931ecf6f6944012a1984b95a",
+  "reps": 3,
+  "test_count": 21
+}

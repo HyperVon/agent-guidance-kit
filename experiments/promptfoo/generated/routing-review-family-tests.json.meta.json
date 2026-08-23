@@ -1,0 +1,9 @@
+{
+  "generated_by": "experiments/promptfoo/generators/routing_cases.py",
+  "source": "../../evaluations/confusion-sets/review-family.json",
+  "source_hash": "sha256:5e4dfe7821265e8e3db80ab9aab1c6973d852522da91f73d5d8590dd57445f2f",
+  "evidence_kind": "confusion-set",
+  "catalog_hash": "sha256:0391cfd3350eeb393e5f10da518172015226b4d39eda0ab35fd830dda0795e64",
+  "reps": 3,
+  "test_count": 51
+}

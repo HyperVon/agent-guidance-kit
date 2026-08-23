@@ -1,0 +1,15 @@
+# Layer A - catalog-routing discriminability over the review-family
+# development confusion set (Promptfoo-backed spike).
+description: AGK Layer A catalog-routing - review-family (development)
+providers:
+  - id: file://../providers/catalog_router.py
+    label: kilo-hy3-free
+    config:
+      model: kilo/tencent/hy3:free
+      timeout_s: 600
+prompts:
+  - "{{prompt}}"
+tests: file://../generated/routing-review-family-tests.json
+defaultTest:
+  options:
+    cache: false

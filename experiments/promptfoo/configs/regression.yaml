@@ -1,0 +1,17 @@
+# Skill revision comparison: code-review candidate (deeebfe) vs reference
+# (8adc094) on one execution case, 2 reps per revision. Only the installed
+# SKILL.md revision differs between rows (per-row skill_revision_sha var).
+description: AGK regression - code-review SKILL.md revision comparison
+providers:
+  - id: file://../providers/kilo_worker.py
+    label: kilo-hy3-free
+    config:
+      model: kilo/tencent/hy3:free
+      timeout_s: 900
+      timeout: 900000
+prompts:
+  - "{{prompt}}"
+tests: file://../generated/regression-tests.json
+defaultTest:
+  options:
+    cache: false

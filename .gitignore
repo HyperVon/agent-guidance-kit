@@ -30,3 +30,7 @@ dist/
 
 # Harness-neutral adapter workspaces (disposable, never committed).
 .evaluation-tmp/
+
+# Promptfoo spike local artifacts
+experiments/promptfoo/.results/
+experiments/promptfoo/node_modules/

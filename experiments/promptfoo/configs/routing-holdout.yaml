@@ -1,0 +1,15 @@
+# Layer A - FROZEN HOLDOUT (review-discrim-1). Run once after stabilization.
+# Never tune against these results.
+description: AGK Layer A catalog-routing - review-discrim-1 (FROZEN HOLDOUT)
+providers:
+  - id: file://../providers/catalog_router.py
+    label: kilo-hy3-free
+    config:
+      model: kilo/tencent/hy3:free
+      timeout_s: 600
+prompts:
+  - "{{prompt}}"
+tests: file://../generated/routing-review-discrim-1-tests.json
+defaultTest:
+  options:
+    cache: false

@@ -1,0 +1,17 @@
+# Layer B - post-activation execution efficacy (target vs baseline vs one
+# placebo). Each row gets an independent fresh workspace; guidance is
+# activated through Kilo's skill-command surface (forced, NOT native).
+description: AGK Layer B execution - representative cases, target/baseline(+placebo)
+providers:
+  - id: file://../providers/kilo_worker.py
+    label: kilo-hy3-free
+    config:
+      model: kilo/tencent/hy3:free
+      timeout_s: 900
+      timeout: 900000
+prompts:
+  - "{{prompt}}"
+tests: file://../generated/execution-tests.json
+defaultTest:
+  options:
+    cache: false
