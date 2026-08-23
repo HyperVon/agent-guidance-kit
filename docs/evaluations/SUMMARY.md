@@ -277,6 +277,10 @@ execution result.
 
 ## Layer A completed + routing-description fixes (2026-08-22)
 
+> **Superseded snapshot:** this section records the first post-fix Layer A batch (longer
+> descriptions). Current state is the section below ("Layer A v4 — short router-facing
+> descriptions").
+
 All four confusion sets are now complete at 3 reps each (development evidence only;
 Layer A is a catalog-discriminability proxy, not harness-routing evidence):
 
@@ -314,6 +318,49 @@ Layer A is a catalog-discriminability proxy, not harness-routing evidence):
   intended-`security-review` observations).
 - Layer C harness-routing remains `not_run`: none of this is evidence about real
   harness selection.
+
+## Layer A v4 — short router-facing descriptions (2026-08-22)
+
+Frontmatter descriptions are routing metadata for an LLM, not human-facing
+mini-documentation. The three previously edited descriptions were rewritten to compact
+router-facing discriminators derived from each skill's body contract
+(`code-review` 105→45 words / 721→314 chars; `security-review` 112→44 / 807→311;
+`architecture-review` 54→34 / 420→271). Two development cases were added to
+review-family (#16 subsystem correctness review, #17 bounded-repository review) to
+protect the non-diff scope the longer `code-review` description had drifted away from.
+All four sets were then re-run at 3 reps with full decision accounting (the aggregate now
+records `attempted_decisions`, `successful_decisions`, and `failed_decisions` with
+case/rep/turn/error — a failed invocation can no longer silently shrink a headline count):
+
+| Confusion set | Attempted | Successful | Failed | Intended-skill errors | Ambiguous-null captures |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| review-family (17 cases) | 54 | 53 | 1 | 1 (`code-review`→`security-review`, case 1, 2/3) | 0 |
+| design-change-family | 51 | 51 | 0 | 0 | 3/6 → `architecture-review` |
+| investigation-family | 45 | 45 | 0 | 0 | 5/6 scattered |
+| skill-maintenance-family | 51 | 50 | 1 | 0 | 3/3 → `rules-and-skills-audit` |
+| **Total** | **201** | **199** | **2** | **1** | |
+
+Reading of the v4 evidence:
+
+- Both new non-diff cases pass 3/3; `code-review` keeps subsystem/bounded-repo scope.
+- One intended-skill wobble remains on review-family case 1 (the hardest auth-token
+  hard-negative): one of three reps selected `security-review` under the shortened text.
+  Recorded honestly; descriptions were deliberately NOT re-lengthened to chase it — that
+  would restart the add-prose-every-cycle anti-pattern. The unchanged holdout provides
+  the generalization check below.
+- Failed invocations are protocol-boundary events, not routing signals: both v4 failures
+  were case prompts ("validate that it still routes correctly" class) where the worker
+  requested a permission in the mandated pure/no-tools mode and the CLI auto-rejected,
+  exiting 1. skill-maintenance case 7 failed in all three recorded attempts of its set;
+  per protocol the set is reported as **50 successful + 1 failed invocation, NOT
+  complete** rather than re-run until lucky.
+- Unchanged ambiguous-null behavior persists (design-change, investigation, and
+  skill-maintenance ambiguous cases still select a plausible owner instead of
+  clarifying) — recorded untuned.
+- Raw evidence: `.eval-evidence/layerA-*-v4.json`; superseded batches archived under
+  `.eval-evidence/archive/layerA-pre-v4/`.
+- **Holdout (unchanged cases, run once post-shortening): 21/21 attempted, 21/21
+  successful** — identical to the pre-edit baseline; generalization held at ceiling.
 
 ## Qualification rerun batch (2026-08-22, post-runner-fix)
 

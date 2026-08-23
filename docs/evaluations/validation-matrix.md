@@ -129,6 +129,10 @@ inflated `valid` claims (verified by negative test).
 
 ## Current state — 2026-08-22 (Layer A complete + routing-description fixes)
 
+> **Superseded snapshot:** superseded by the v4 section below (descriptions were
+> subsequently shortened to router-facing metadata and all sets re-run with full
+> attempted/successful/failed accounting).
+
 All four Layer A confusion sets are complete (3 reps, 194 development observations).
 Development-evidence description fixes to `code-review`, `security-review`, and
 `architecture-review` removed all 6 review-family misroutes (code-review→security-review
@@ -139,6 +143,28 @@ held at ceiling; holdout cases were not folded into development data. Layer C re
 capture behavior in design-change/investigation/skill-maintenance sets is recorded as an
 explicit observation, untuned. Execution rows: 4/26 validated; at the current measurement
 points 2/26 discriminating and 2/26 non-discriminating (see below).
+
+## Current state — 2026-08-22 (Layer A v4: short router-facing descriptions)
+
+Frontmatter descriptions are routing metadata for the LLM router, not documentation. The
+three touched descriptions were rewritten as compact discriminators (`code-review`
+105→45 words, `security-review` 112→44, `architecture-review` 54→34), two development
+cases (#16 subsystem review, #17 bounded-repo review) protect `code-review`'s non-diff
+scope, and every set now records `attempted_decisions` / `successful_decisions` /
+`failed_decisions` so failed invocations stay visible:
+
+| Set | Attempted | Successful | Failed | Intended-skill errors |
+| --- | ---: | ---: | ---: | ---: |
+| review-family | 54 | 53 | 1 | 1 (case 1 → `security-review`, 2/3) |
+| design-change-family | 51 | 51 | 0 | 0 |
+| investigation-family | 45 | 45 | 0 | 0 |
+| skill-maintenance-family | 51 | 50 | 1 | 0 |
+
+skill-maintenance is reported as **50 successful + 1 failed invocation — not complete**:
+its case 7 prompt reliably makes the worker request a permission in the mandated pure/
+no-tools mode (CLI auto-rejects, exit 1; failed in all three recorded set attempts).
+Ambiguous-null capture persists untuned. Unchanged holdout run once post-shortening:
+21/21 attempted, 21/21 successful — flat vs baseline. Layer C remains `not_run`.
 
 ## Current state — 2026-08-22 (post-runner-fix reruns)
 

@@ -32,7 +32,10 @@ hash-verified pristine seed; target tree probed present and hash-matched; baseli
 **Grading:** fresh-context blind subagent grader over sanitized outputs (labels randomized
 to A/B, unmapped after grading); graded against the frozen assertions verbatim from
 `skills/security-review/evals/evals.json`. Raw evidence (gitignored):
-`.eval-evidence/qual-security-review-case1-rerun1.json`.
+`.eval-evidence/qual-security-review-case1-rerun1.json` — later moved under
+`.eval-evidence/archive/pre-description-edit-2026-08-22/` after the routing-description
+shortening changed the skill discovery tree; the file and its SHA-256 are preserved
+unchanged in the archive.
 
 ```result-json
 {
