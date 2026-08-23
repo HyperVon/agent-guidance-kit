@@ -8,7 +8,9 @@
     "tested_model_profile": "kilo/tencent/hy3:free",
     "generated_date": "2026-08-23",
     "original_results_location": "experiments/promptfoo/.results/ (git-ignored, local-only)",
-    "retention_policy": "Sanitized copies committed for historical reference; originals remain local-only under experiments/promptfoo/.results/. Sanitized copies are non-authoritative representations."
+    "retention_policy": "Sanitized copies committed for historical reference; originals remain local-only under experiments/promptfoo/.results/. Sanitized copies are non-authoritative representations.",
+    "m3_followup_repository": "agent-guidance-kit-evals (foundation commit 56600a8)",
+    "m3_followup_note": "M3 establishes the eval repository foundation with its own raw-evidence retention policy in docs/evidence-retention.md of the new repo."
   },
   "artifacts": {
     "routing-dev.json": {
