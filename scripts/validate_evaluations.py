@@ -2728,8 +2728,15 @@ def validate_catalog_routing_evidence(evidence):
 
 
 def _recompute_case_set_aggregate(cases, skills):
-    """Recompute case-set metrics from captured successful decisions."""
+    """Recompute case-set metrics from captured successful decisions.
+
+    Mirrors ``run_catalog_routing_eval.build_aggregate`` exactly, including
+    the attempted/successful/failed decision accounting so a failed model
+    invocation stays visible in the aggregate instead of silently vanishing.
+    """
     observations = []
+    attempted = 0
+    failures = []
     workflow_types = ("workflow-transition", "harness-native")
     for case in cases:
         if not isinstance(case, dict):
@@ -2743,7 +2750,12 @@ def _recompute_case_set_aggregate(cases, skills):
                 for turn in rep.get("turns", []):
                     if not isinstance(turn, dict):
                         continue
+                    attempted += 1
                     if turn.get("status") != "success":
+                        failures.append({"case_id": case.get("id"),
+                                         "rep": rep.get("rep"),
+                                         "turn": turn.get("turn"),
+                                         "error": turn.get("error")})
                         continue
                     intended = turn.get("expected_route")
                     selected = turn.get("selected_skill")
@@ -2755,7 +2767,12 @@ def _recompute_case_set_aggregate(cases, skills):
             for rep in case.get("repetitions", []):
                 if not isinstance(rep, dict):
                     continue
+                attempted += 1
                 if rep.get("status") != "success":
+                    failures.append({"case_id": case.get("id"),
+                                     "rep": rep.get("rep"),
+                                     "turn": None,
+                                     "error": rep.get("error")})
                     continue
                 decision = rep.get("decision") or {}
                 intended = case.get("expected_skill")
@@ -2787,8 +2804,13 @@ def _recompute_case_set_aggregate(cases, skills):
                  "workflow-transition/harness-native turns each contribute one "
                  "observation; explicit null selections are the literal "
                  "'null' class; precision/recall are null (not 0) when the "
-                 "denominator is zero"),
+                 "denominator is zero; attempted_decisions counts every "
+                 "captured decision slot and failed_decisions names every "
+                 "failed invocation so failures stay visible"),
         "observations": len(observations),
+        "attempted_decisions": attempted,
+        "successful_decisions": len(observations),
+        "failed_decisions": failures,
         "confusion_matrix": matrix,
         "per_skill": per_skill,
     }

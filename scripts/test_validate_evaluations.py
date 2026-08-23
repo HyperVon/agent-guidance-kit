@@ -3750,6 +3750,51 @@ class ExecutionRunnerBoundaryTests(unittest.TestCase):
             shutil.rmtree(ree.SHARED_TMP, ignore_errors=True)
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_partial_copytree_failure_leaves_no_workspace(self):
+        # If shutil.copytree raises after partially populating dst, the
+        # disposable destination must be cleaned before the error propagates:
+        # no stale workspace may leak into the staging tree.
+        tmp = tempfile.mkdtemp()
+        real_copytree = shutil.copytree
+
+        def failing_copytree(src, dst, *args, **kwargs):
+            # Simulate a mid-copy crash: dst already has content.
+            os.makedirs(os.path.join(dst, "partial-dir"), exist_ok=True)
+            with open(os.path.join(dst, "partial-file.txt"), "w") as fh:
+                fh.write("half-copied\n")
+            raise OSError("[Errno 5] simulated mid-copy I/O error")
+
+        try:
+            source = os.path.join(tmp, "source")
+            os.makedirs(source)
+            with open(os.path.join(source, "README.md"), "w") as fh:
+                fh.write("# task\n")
+            before = (set(os.listdir(ree.SHARED_TMP))
+                      if os.path.isdir(ree.SHARED_TMP) else set())
+            with unittest.mock.patch.object(ree.shutil, "copytree",
+                                            side_effect=failing_copytree):
+                with self.assertRaisesRegex(OSError, "simulated mid-copy"):
+                    ree._copy_seed(source)
+            self.assertEqual(real_copytree, shutil.copytree)
+            new_leftovers = set(os.listdir(ree.SHARED_TMP)) - before
+            self.assertEqual(new_leftovers, set(), new_leftovers)
+        finally:
+            shutil.rmtree(ree.SHARED_TMP, ignore_errors=True)
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_probe_uid_selection_is_deterministically_non_owner(self):
+        # The Docker regression probe only proves non-owner access if the
+        # container uid differs from the workspace owner's uid; the selector
+        # must guarantee that for any owner uid.
+        self.assertNotEqual(dip.select_non_owner_uid(1001), 1001)
+        self.assertNotEqual(dip.select_non_owner_uid(1000), 1000)
+        self.assertNotEqual(dip.select_non_owner_uid(0), 0)
+        for owner in range(0, 2001):
+            self.assertNotEqual(dip.select_non_owner_uid(owner), owner,
+                                f"uid collision for owner {owner}")
+        self.assertEqual(dip.select_non_owner_uid(1000), 1001)
+        self.assertEqual(dip.select_non_owner_uid(1001), 1000)
+
     def test_host_staging_parent_stays_restrictive(self):
         # The shared .docker-tmp staging parent keeps unrelated local users
         # out even though each disposable workspace leaf is a+rwX.
@@ -4618,6 +4663,11 @@ class LayerAAggregateTests(unittest.TestCase):
         agg = rc.build_aggregate(self._case_results(),
                                  ["code-review", "security-review"])
         self.assertEqual(agg["observations"], 4)  # failed rep not an observation
+        self.assertEqual(agg["attempted_decisions"], 5)
+        self.assertEqual(agg["successful_decisions"], 4)
+        self.assertEqual(agg["failed_decisions"],
+                         [{"case_id": 2, "rep": 2, "turn": None,
+                           "error": "kilo exited 1"}])
         self.assertEqual(agg["confusion_matrix"]["code-review"],
                          {"code-review": 1, "security-review": 1})
         self.assertEqual(agg["confusion_matrix"]["security-review"],

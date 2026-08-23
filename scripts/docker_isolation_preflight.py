@@ -216,6 +216,15 @@ check() { # name ok detail
 }
 WORKER_UID=$(id -u)
 
+# 0. Deterministic non-owner proof: this probe is only meaningful when the
+# container process uid DIFFERS from the host workspace owner's uid. If they
+# match, FAIL rather than silently counting as coverage.
+if [ "$WORKER_UID" != "__OWNER_UID__" ]; then
+  check "non_owner_worker" true "container uid $WORKER_UID != workspace owner __OWNER_UID__"
+else
+  check "non_owner_worker" false "container uid $WORKER_UID equals workspace owner __OWNER_UID__; probe cannot prove non-owner access"
+fi
+
 # 1. The workspace ROOT must be listable (ls -la /work/task equivalence).
 if LISTING=$(ls -A __FIXTURE_MOUNT__ 2>&1); then
   COUNT=$(printf '%s\n' "$LISTING" | grep -c . || true)
@@ -263,11 +272,32 @@ echo "]"
     .replace("__PROBE_NEW__", PROBE_NEW_FILE)
 
 
+def select_non_owner_uid(owner_uid):
+    """Pick a numeric container uid GUARANTEED to differ from ``owner_uid``.
+
+    The image's default worker account is uid 1001, but on many Linux hosts
+    the workspace owner is ALSO 1000/1001, so trusting the image default does
+    not prove a non-owner probe. Deterministically pick 1001 unless that is
+    the owner, in which case fall back to 1000.
+    """
+    return 1001 if owner_uid != 1001 else 1000
+
+
 def run_workspace_probe(image, workspace_dir):
-    """Mount a disposable _copy_seed workspace READ-WRITE and probe it."""
+    """Mount a disposable _copy_seed workspace READ-WRITE and probe it.
+
+    Runs as a container uid deterministically chosen to differ from the
+    host-side workspace owner (see :func:`select_non_owner_uid`) so the
+    probe genuinely exercises non-owner access; if the uids ever match the
+    probe FAILS rather than silently counting as coverage.
+    """
+    owner_uid = os.stat(workspace_dir).st_uid
+    worker_uid = select_non_owner_uid(owner_uid)
+    script = workspace_probe_script().replace("__OWNER_UID__", str(owner_uid))
     cmd = ["docker", "run", "--rm", "--entrypoint", "bash",
+           "--user", f"{worker_uid}:{worker_uid}",
            "-v", f"{workspace_dir}:{FIXTURE_MOUNT}"]
-    cmd += [image, "-c", workspace_probe_script()]
+    cmd += [image, "-c", script]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
     out = proc.stdout
     start = out.find("[")
@@ -277,7 +307,12 @@ def run_workspace_probe(image, workspace_dir):
         print(out)
         print(proc.stderr)
         return None
-    return json.loads(out[start:end + 1])
+    report = json.loads(out[start:end + 1])
+    # Bind the uid proof into every returned record for evidence purposes.
+    for item in report:
+        item["workspace_owner_uid"] = owner_uid
+        item["container_worker_uid"] = worker_uid
+    return report
 
 
 def main():

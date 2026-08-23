@@ -497,38 +497,41 @@ def _copy_seed(src):
     non-owner uid gets a write/traverse-only directory it cannot list).
     Symlinks are skipped. Failures are raised, never swallowed: an
     inaccessible workspace would silently invalidate the experimental
-    condition, so the runner must fail before any worker is launched.
+    condition, so the runner must fail before any worker is launched. Any
+    failure after ``dst`` is created cleans that disposable destination
+    before re-raising, so a partially populated workspace never leaks into
+    the staging tree.
     """
     dst = _mkdtemp(prefix="kilo-workspace-")
-    shutil.copytree(src, dst, symlinks=True, dirs_exist_ok=True)
-    # The bind mount hides the image's /work/task ownership. Make only this
-    # disposable worker copy accessible to the non-root container user; the
-    # canonical fixture and source skill remain untouched.
-    failures = []
-    for root, dirs, files in os.walk(dst, followlinks=False):
-        for name in [*dirs, *files]:
-            path = os.path.join(root, name)
-            if os.path.islink(path):
-                continue
-            try:
-                mode = os.stat(path, follow_symlinks=False).st_mode
-                os.chmod(path, _apply_a_rw_x(mode))
-            except OSError as exc:
-                failures.append(f"{path}: chmod a+rwX failed: {exc}")
     try:
+        shutil.copytree(src, dst, symlinks=True, dirs_exist_ok=True)
+        # The bind mount hides the image's /work/task ownership. Make only this
+        # disposable worker copy accessible to the non-root container user; the
+        # canonical fixture and source skill remain untouched.
+        failures = []
+        for root, dirs, files in os.walk(dst, followlinks=False):
+            for name in [*dirs, *files]:
+                path = os.path.join(root, name)
+                if os.path.islink(path):
+                    continue
+                try:
+                    mode = os.stat(path, follow_symlinks=False).st_mode
+                    os.chmod(path, _apply_a_rw_x(mode))
+                except OSError as exc:
+                    failures.append(f"{path}: chmod a+rwX failed: {exc}")
         # The root gets the SAME a+rwX policy as every descendant (the old
         # implementation added only write+execute here, leaving a 0733 root
         # that a non-owner container uid could traverse but never list).
         mode = os.stat(dst).st_mode
         os.chmod(dst, _apply_a_rw_x(mode))
-    except OSError as exc:
-        failures.append(f"{dst}: chmod a+rwX failed: {exc}")
-    if failures:
+        if failures:
+            raise PermissionError(
+                "cannot prepare worker workspace with required a+rwX "
+                "accessibility; refusing to launch workers on an invalid "
+                "condition: " + "; ".join(failures))
+    except BaseException:
         shutil.rmtree(dst, ignore_errors=True)
-        raise PermissionError(
-            "cannot prepare worker workspace with required a+rwX "
-            "accessibility; refusing to launch workers on an invalid "
-            "condition: " + "; ".join(failures))
+        raise
     return dst
 
 

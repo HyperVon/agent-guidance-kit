@@ -1,16 +1,11 @@
 ---
 name: code-review
 description: >-
-  Perform an evidence-based review of a concrete change set — a diff, pull
-  request, branch, or commit series — for correctness, regressions, contract,
-  runtime, boundary, test, documentation, and scoped security defects. Use it
-  whenever the request is to review whether a change is correct, safe, or
-  ready to merge, even when the change touches authentication, authorization,
-  tokens, or other security-sensitive code: security defects found in the
-  reviewed change are part of this review's report. For a dedicated security
-  analysis whose deliverable is the vulnerability assessment itself, use
-  security-review instead. Report findings first; edit only when the user
-  separately and explicitly asks to apply selected findings.
+  Review a diff, pull request, branch, subsystem, or bounded repository
+  surface for concrete correctness and regression defects, reporting any
+  defect found — security ones included. Use when the deliverable is the code
+  review itself; use security-review when a dedicated vulnerability assessment
+  is the primary task.
 ---
 
 # Code Review
