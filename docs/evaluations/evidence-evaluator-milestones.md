@@ -35,7 +35,7 @@ No split or deletion is authorized until the compatibility spike earns a
 | M0 | Correct architecture and freeze assumptions | `complete` | — | Promptfoo-first governing design established and maintainer-reviewed. |
 | M1 | Complete Promptfoo compatibility spike | `complete` | M0 | Valid `REPORT.md`, v1/v2 comparison, tests, and review. Spike commit: `217d53f5db7ea01d4fd4fadbefdfe987f663cbb6`. Historical evidence preserved at `docs/evaluations/promptfoo-spike/`. |
 | M2 | Promptfoo go/no-go decision | `complete` | M1 | `GO WITH MATERIAL GAPS`. See [ADR-0001](../adr/0001-promptfoo-backed-evaluator.md). |
-| M3 | Create `agent-guidance-kit-evals` foundation | `authorized` | M2 = GO, or approved GO WITH MATERIAL GAPS after gap recheck | Independent eval repository targeting external AGK. Now authorized. |
+| M3 | Create `agent-guidance-kit-evals` foundation | `complete` | M2 = GO, or approved GO WITH MATERIAL GAPS after gap recheck | Foundation commit `56600a8`; 26 skills discovered; AGK not mutated. |
 | M4 | Migrate canonical corpus and history | `not started` | M3 | External suites/results with preserved provenance. |
 | M5 | Establish thin Promptfoo/Kilo integration | `not started` | M3–M4 | Promptfoo owns mechanics; AGK layer owns demonstrated gaps only. |
 | M6 | Prove parity, evidence policy, and historical aggregation | `not started` | M4–M5 | Bounded evidence claims and classified v1/v2 differences. |
@@ -291,11 +291,22 @@ See `docs/evaluations/promptfoo-spike/` for full details and
 **Objective:** Establish an independent Promptfoo-backed project that targets an
 external, still-intact AGK checkout.
 
-**Status:** `authorized` (pending implementation authorization)
+**Status:** `complete`
 
-This milestone is now authorized by the M2 `GO WITH MATERIAL GAPS` decision.
-Implementation of M3 does not begin in this task — M2 is complete and M3 is
-authorized only.
+**New repository:** `agent-guidance-kit-evals` (under the same GitHub organization as AGK)
+
+**Foundation commit:** `56600a8` (initial `main` commit)
+
+**External-target smoke evidence:**
+
+- Local-path mode: 26 AGK skills discovered in external checkout at
+  `f26bde74f8e4186ade94c6438bf56d03f2541c07`; AGK not mutated.
+- Revision-addressable mode: 26 skills discovered from clean Git clone at
+  `f26bde74f8e4186ade94c6438bf56d03f2541c07`; resolved revision verified;
+  target cleaned up after test.
+
+**Deterministic tests:** 26 unit tests pass without network, model access, or
+AGK checkout.
 
 ### Deliverables
 
@@ -559,6 +570,7 @@ confidence claims over accumulated sparse evidence.
 | 2026-08-23 | Keep evaluator v1 intact until Promptfoo equivalence is demonstrated. | active constraint | M1 spike requirements. |
 | 2026-08-23 | Treat evidence as sparse facts interpreted by policy, not certification. | accepted | Later evidence/confidence discussion. |
 | 2026-08-23 | **M2 decision: GO WITH MATERIAL GAPS.** Proceed toward Promptfoo-backed eval repository with explicitly recorded gaps. | accepted | M1 spike evidence at `217d53f5db7ea01d4fd4fadbefdfe987f663cbb6`; ADR-0001. M3 authorized. |
+| 2026-08-23 | **M3 complete.** `agent-guidance-kit-evals` repository founded at `56600a8`. | accepted | 26 AGK skills discovered in external checkout; 26 unit tests pass; AGK not mutated. |
 
 ## Immediate next actions
 
