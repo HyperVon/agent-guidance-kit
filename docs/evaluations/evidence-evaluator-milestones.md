@@ -1,6 +1,6 @@
 # Promptfoo-backed evaluator milestone tracker
 
-**Status:** M0–M4 complete; M5 authorized and not started. Canonical evaluation-corpus ownership now lives in `agent-guidance-kit-evals`; the AGK copies of the corpus are a frozen legacy evaluator-v1 compatibility/reference copy until M7.
+**Status:** M0–M5 complete; M6 authorized and not started. Canonical evaluation-corpus ownership now lives in `agent-guidance-kit-evals`; the AGK copies of the corpus are a frozen legacy evaluator-v1 compatibility/reference copy until M7.
 
 **Parent design:** [Promptfoo-backed evaluation architecture for Agent Guidance Kit](evidence-evaluator-architecture.md)
 
@@ -37,8 +37,8 @@ No split or deletion is authorized until the compatibility spike earns a
 | M2 | Promptfoo go/no-go decision | `complete` | M1 | `GO WITH MATERIAL GAPS`. See [ADR-0001](../adr/0001-promptfoo-backed-evaluator.md). |
 | M3 | Create `agent-guidance-kit-evals` foundation | `complete` | M2 = GO, or approved GO WITH MATERIAL GAPS after gap recheck | Foundation commit `56600a8`; hardened and merged at `5fa650b3`; 26 skills discovered; 33 tests; AGK not mutated. |
 | M4 | Migrate canonical corpus and history | `complete` | M3 | Migrated at eval-repo merge `cb1c1651` from AGK source `8ac3f7b`; 26 packs / 145 canonical files; holdout hash parity verified; 20 historical-v1 artifacts; AGK not mutated. |
-| M5 | Establish thin Promptfoo/Kilo integration | `authorized / not started` | M3–M4 | Promptfoo owns mechanics; AGK layer owns demonstrated gaps only. |
-| M6 | Prove parity, evidence policy, and historical aggregation | `not started` | M4–M5 | Bounded evidence claims and classified v1/v2 differences. |
+| M5 | Establish thin Promptfoo/Kilo integration | `complete` | M3–M4 | Eval-repo merge `025779c` (PR #3) from branch head `7c4845d`; hosted CI run 32703699945 success (194 tests); Promptfoo 0.122.0; corrected live Kilo smoke target+baseline; ownership split: canonical fixtures eval-repo owned, skills from external AGK target. |
+| M6 | Prove parity, evidence policy, and historical aggregation | `authorized / not started` | M4–M5 | Bounded evidence claims and classified v1/v2 differences. |
 | M7 | Clean Agent Guidance Kit | `not started` | M6 | Lean copy/adapt library with lightweight static CI. |
 | M8 | Prove independent operation and harden | `not started` | M7 | Clean AGK externally evaluated; both repos independently healthy. |
 
@@ -384,7 +384,45 @@ historical truth.
 
 **Objective:** Productize only the custom surface demonstrated necessary by M1/M2.
 
-**Status:** `authorized / not started`
+**Status:** `complete`
+
+### Completion evidence (2026-08-24)
+
+- **Merge:** eval-repo `main` at `025779c1ad9438ce39ba59389397b1908a1e5c9f`
+  (PR #3 squash, merged 2026-08-24T07:57:37Z) from final branch head
+  `7c4845d3c3a4087bd1fb7a05a46c8f815bddf99d`.
+- **Hosted CI:** run `32703699945` — success; 194 deterministic tests
+  (`pytest`, ruff, compileall, M4 migration verify, projection determinism,
+  Promptfoo 0.122.0 assertion, config validation, echo smoke, flow probe).
+- **Engine pin:** Promptfoo 0.122.0.
+- **Ownership split (correction pass):** canonical fixtures are eval-repo
+  owned (`corpus/`); the skills being evaluated are owned by the external
+  AGK target checkout — the AGK target no longer needs `skills/*/evals/`,
+  so M7 removal of legacy eval copies cannot break evaluation.
+- **Layer A catalog:** real SKILL.md frontmatter descriptions from the
+  target checkout, fail-closed on missing/orphan descriptions;
+  names-only mode exists as an explicitly labeled debug opt-in.
+- **Live Kilo smoke (sanitized record in eval repo
+  `docs/evidence-m5-live-smoke.md`):** target + baseline conditions both
+  rc=0 from identical starting task-state hashes (treatment isolation
+  held); target activation = `forced` (Layer B = allowed), baseline
+  activation = `none`; Layer C remains **not established** — no native
+  harness-native skill-activation evidence was claimed.
+- **Semantic grading boundary:** protocol substrate implemented and gated;
+  outcome rubric qualification deliberately deferred to M6. Rows record
+  `protocol_valid = true` / `outcome_graded = false` where semantic
+  grading has not occurred; row PASS never means rubric satisfaction.
+- **Provenance envelope:** machine-readable corpus/target/skill/
+  execution-profile/run/workspace facts wired into both providers;
+  evaluator/Promptfoo/harness versions recorded as facts (`unreported`
+  when absent), never fabricated.
+- **Integrity:** staged/index-aware and symlink-aware target identity,
+  `git archive` revision materialization, stream-validity fail-closed
+  gate, honest retry accounting, complete reviewed assertion-scope map
+  (v2) with coverage guard.
+- **Scope boundaries:** no holdout was consumed (hash unchanged:
+  `sha256:e2ad6dac06d64f8efad17df96d6c6f3af13c7f3a88aac25b19fe87587936dd35`);
+  no M6 aggregation/policy work was part of M5; no M7 cleanup occurred.
 
 ### Deliverables
 
@@ -400,16 +438,19 @@ historical truth.
 
 ### Guardrails
 
-- [ ] No GenericProvider abstraction around Promptfoo providers.
-- [ ] No generic runner/concurrency/retry engine.
-- [ ] No generic assertion engine or report renderer.
-- [ ] No duplicate Codex/Claude/OpenCode providers.
-- [ ] No unsupported promotion of skill reads to native activation.
-- [ ] No global ordered reasoning-effort assumption.
-- [ ] No execution-profile normalization that destroys exact raw
+All verified at merge `025779c` by the M5 thinning audit
+(`docs/m5-integration-boundary.md`) and the pre-push grep gate:
+
+- [x] No GenericProvider abstraction around Promptfoo providers.
+- [x] No generic runner/concurrency/retry engine.
+- [x] No generic assertion engine or report renderer.
+- [x] No duplicate Codex/Claude/OpenCode providers.
+- [x] No unsupported promotion of skill reads to native activation.
+- [x] No global ordered reasoning-effort assumption.
+- [x] No execution-profile normalization that destroys exact raw
       provider/harness values or invents semantics for unknown settings.
-- [ ] No custom cache/retry engine around Promptfoo.
-- [ ] No causal revision comparison across unmatched execution profiles.
+- [x] No custom cache/retry engine around Promptfoo.
+- [x] No causal revision comparison across unmatched execution profiles.
 
 ### Exit criteria
 
@@ -606,10 +647,11 @@ confidence claims over accumulated sparse evidence.
 | 2026-08-23 | **M2 decision: GO WITH MATERIAL GAPS.** Proceed toward Promptfoo-backed eval repository with explicitly recorded gaps. | accepted | M1 spike evidence at `217d53f5db7ea01d4fd4fadbefdfe987f663cbb6`; ADR-0001. M3 authorized. |
 | 2026-08-23 | **M3 complete.** `agent-guidance-kit-evals` repository founded at `56600a8`; hardened and merged at `5fa650b3`. | accepted | 26 AGK skills discovered in external checkout; 33 unit tests pass; committed npm lockfile; reproducible `npm ci`; Promptfoo 0.122.0 asserted; config validation; deterministic echo-provider smoke; corrected Git revision resolution; durable/local-only evidence distinction; AGK not mutated. |
 | 2026-08-23 | **M4 complete — canonical corpus ownership migrated.** `agent-guidance-kit-evals` is now canonical for evaluation corpus changes; the remaining AGK corpus is a frozen legacy evaluator-v1 compatibility/reference copy until M7. | accepted | Eval-repo merge `cb1c1651` from AGK source `8ac3f7b`; 26 packs / 145 canonical files migrated as exact copies; holdout hash parity `sha256:e2ad6dac…dd35`; 20 historical-v1 artifacts with labels preserved verbatim; 165/165 source-parity verified; fresh-context review PASS. |
+| 2026-08-24 | **M5 complete — thin Promptfoo/Kilo integration merged.** Eval-repo `main` at `025779c` (PR #3). | accepted | Hosted CI run 32703699945 success (194 tests); Promptfoo 0.122.0; corrected live Kilo smoke (target forced / Layer B allowed / Layer C not established; baseline none; identical starting task-state hashes); fixtures eval-repo owned, skills target-owned; protocol-valid vs outcome-graded boundary recorded; no holdout consumed; no M6/M7 work performed. M6 authorized. |
 
 ## Immediate next actions
 
-1. M0–M4 complete.
+1. M0–M5 complete.
 2. Historical M1 evidence preserved at `docs/evaluations/promptfoo-spike/`.
 3. Future corpus edits originate in `agent-guidance-kit-evals` (`corpus/`); do not edit the AGK corpus copies in parallel.
-4. M5 (thin Promptfoo/Kilo integration) is authorized and not started; wait for explicit maintainer go-ahead before implementing it.
+4. M6 (parity, evidence policy, and historical aggregation) is authorized and not started; wait for explicit maintainer go-ahead before implementing it.
