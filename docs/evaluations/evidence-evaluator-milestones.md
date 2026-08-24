@@ -468,10 +468,11 @@ confidence claims over accumulated sparse evidence.
 ### Completion evidence (2026-08-24)
 
 - **Eval-repo merge:** final `main` at
-  `33daebb89eb24d4b8ff4d11bc241654afacb3a77` after M6 PR #4 squash merge
-  `624e032e44da10ebbf0e7fda52a52c11cd94a933` and metadata follow-up PR #5
-  (final branch commit `428ba1d`); hosted CI runs `32739433920` and
-  `32741183992` — both success.
+  `5d0296f0c62b2c86507bd1117527cabad19600c5` after M6 PR #4 squash merge
+  `624e032e44da10ebbf0e7fda52a52c11cd94a933`, metadata follow-up PR #5
+  (`33daebb89eb24d4b8ff4d11bc241654afacb3a77`), and report refresh PR #6
+  (final branch commit `fd2784f`); hosted CI runs `32739433920`,
+  `32741183992`, and `32742192548` — all success.
 - **Versioned analysis:** analyzer `analyzer-v1`; policy
   `default-qualification` `policy-v1`; validator contract
   `agk-evidence-validator-v1`; durable derived index
@@ -693,7 +694,7 @@ confidence claims over accumulated sparse evidence.
 | 2026-08-23 | **M3 complete.** `agent-guidance-kit-evals` repository founded at `56600a8`; hardened and merged at `5fa650b3`. | accepted | 26 AGK skills discovered in external checkout; 33 unit tests pass; committed npm lockfile; reproducible `npm ci`; Promptfoo 0.122.0 asserted; config validation; deterministic echo-provider smoke; corrected Git revision resolution; durable/local-only evidence distinction; AGK not mutated. |
 | 2026-08-23 | **M4 complete — canonical corpus ownership migrated.** `agent-guidance-kit-evals` is now canonical for evaluation corpus changes; the remaining AGK corpus is a frozen legacy evaluator-v1 compatibility/reference copy until M7. | accepted | Eval-repo merge `cb1c1651` from AGK source `8ac3f7b`; 26 packs / 145 canonical files migrated as exact copies; holdout hash parity `sha256:e2ad6dac…dd35`; 20 historical-v1 artifacts with labels preserved verbatim; 165/165 source-parity verified; fresh-context review PASS. |
 | 2026-08-24 | **M5 complete — thin Promptfoo/Kilo integration merged.** Eval-repo `main` at `025779c` (PR #3). | accepted | Hosted CI run 32703699945 success (194 tests); Promptfoo 0.122.0; corrected live Kilo smoke (target forced / Layer B allowed / Layer C not established; baseline none; identical starting task-state hashes); fixtures eval-repo owned, skills target-owned; protocol-valid vs outcome-graded boundary recorded; no holdout consumed; no M6/M7 work performed. M6 authorized. |
-| 2026-08-24 | **M6 complete — evidence policy, parity, and historical aggregation merged.** Eval-repo final `main` at `33daebba` (PR #4 plus metadata follow-up PR #5). | accepted | Hosted CI runs 32739433920 and 32741183992 success; analyzer `analyzer-v1`; policy `policy-v1`; 26-skill sparse coverage; 17 routing rows / 18 decisions / 14 correct / 0 provider failures; 2 protocol-valid but ungraded execution rows; judge not run; 0 supported/qualified skills; holdout unchanged and unused; strict Docker deferred; M7 authorized. |
+| 2026-08-24 | **M6 complete — evidence policy, parity, and historical aggregation merged.** Eval-repo final `main` at `5d0296f0` (PR #4 plus metadata follow-up PR #5 and report refresh PR #6). | accepted | Hosted CI runs 32739433920, 32741183992, and 32742192548 success; analyzer `analyzer-v1`; policy `policy-v1`; 26-skill sparse coverage; 17 routing rows / 18 decisions / 14 correct / 0 provider failures; 2 protocol-valid but ungraded execution rows; judge not run; 0 supported/qualified skills; holdout unchanged and unused; strict Docker deferred; M7 authorized. |
 
 ## Immediate next actions
 
