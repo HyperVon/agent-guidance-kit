@@ -1,6 +1,6 @@
 # Promptfoo-backed evaluator milestone tracker
 
-**Status:** M0–M5 complete; M6 authorized and not started. Canonical evaluation-corpus ownership now lives in `agent-guidance-kit-evals`; the AGK copies of the corpus are a frozen legacy evaluator-v1 compatibility/reference copy until M7.
+**Status:** M0–M6 complete; M7 authorized and not started. Canonical evaluation-corpus ownership now lives in `agent-guidance-kit-evals`; the AGK copies of the corpus are a frozen legacy evaluator-v1 compatibility/reference copy until M7.
 
 **Parent design:** [Promptfoo-backed evaluation architecture for Agent Guidance Kit](evidence-evaluator-architecture.md)
 
@@ -38,8 +38,8 @@ No split or deletion is authorized until the compatibility spike earns a
 | M3 | Create `agent-guidance-kit-evals` foundation | `complete` | M2 = GO, or approved GO WITH MATERIAL GAPS after gap recheck | Foundation commit `56600a8`; hardened and merged at `5fa650b3`; 26 skills discovered; 33 tests; AGK not mutated. |
 | M4 | Migrate canonical corpus and history | `complete` | M3 | Migrated at eval-repo merge `cb1c1651` from AGK source `8ac3f7b`; 26 packs / 145 canonical files; holdout hash parity verified; 20 historical-v1 artifacts; AGK not mutated. |
 | M5 | Establish thin Promptfoo/Kilo integration | `complete` | M3–M4 | Eval-repo merge `025779c` (PR #3) from branch head `7c4845d`; hosted CI run 32703699945 success (194 tests); Promptfoo 0.122.0; corrected live Kilo smoke target+baseline; ownership split: canonical fixtures eval-repo owned, skills from external AGK target. |
-| M6 | Prove parity, evidence policy, and historical aggregation | `authorized / not started` | M4–M5 | Bounded evidence claims and classified v1/v2 differences. |
-| M7 | Clean Agent Guidance Kit | `not started` | M6 | Lean copy/adapt library with lightweight static CI. |
+| M6 | Prove parity, evidence policy, and historical aggregation | `complete` | M4–M5 | Eval-repo merge `624e032e` (PR #4); analyzer `analyzer-v1`, policy `policy-v1`, validator `agk-evidence-validator-v1`; 26-skill sparse coverage index; representative routing/execution parity and explicit evidence gaps. |
+| M7 | Clean Agent Guidance Kit | `authorized / not started` | M6 | Lean copy/adapt library with lightweight static CI. |
 | M8 | Prove independent operation and harden | `not started` | M7 | Clean AGK externally evaluated; both repos independently healthy. |
 
 ## M0 — Correct architecture and freeze assumptions
@@ -463,6 +463,49 @@ All verified at merge `025779c` by the M5 thinning audit
 **Objective:** Show that the new system preserves meaning and supports bounded
 confidence claims over accumulated sparse evidence.
 
+**Status:** `complete`
+
+### Completion evidence (2026-08-24)
+
+- **Eval-repo merge:** PR #4, squash merge
+  `624e032e44da10ebbf0e7fda52a52c11cd94a933`, from final branch commit
+  `a70fa192`; hosted CI run `32739433920` — success.
+- **Versioned analysis:** analyzer `analyzer-v1`; policy
+  `default-qualification` `policy-v1`; validator contract
+  `agk-evidence-validator-v1`; durable derived index
+  `evidence/indexes/analyzer-v1.json` rebuilds deterministically.
+- **Evidence sources:** evaluator-v1 schema-v3 and legacy records remain
+  source-labelled historical evidence; the committed M1 report is explicitly
+  report-only with raw unavailable; M5 smoke remains integration evidence;
+  M6 Promptfoo runs are committed sanitized artifacts with source hashes.
+- **Parity:** representative Layer A review-family run produced 17 rows / 18
+  decisions: 14 correct, 18 successful, 0 provider failures, one explicit
+  null. Representative Layer B security-review case 5 target/baseline rows
+  were both protocol-valid from identical starting task-state hashes, but
+  semantic outcomes remain ungraded (`outcome_graded = false`). Historical
+  v1 Docker/Kilo 7.4.22 versus M6 host/Kilo 7.4.23 differences are reported
+  as profile/infrastructure coverage differences, not causal regressions.
+- **Historical coverage:** all 26 skills appear in the sparse index. Current
+  policy result is 26 `observed`, 0 `supported`, 0 `qualified`, and 0
+  `strongly supported`; no positive qualification was manufactured.
+- **Policy semantics:** missing evidence is an explicit gap; no universal
+  score or policy DSL exists. Profiles preserve requested/resolved identity,
+  raw reasoning, tools/permissions, orchestration, environment, and run
+  metadata separately. Causal revision comparisons refuse profile mismatch.
+- **Judge:** no independently configured semantic judge was available for a
+  new control run. M1's known free-model judge inversions remain recorded;
+  M6 did not promote unvalidated semantic results. Judge status is
+  `not_run`, and no skill qualification depends on it.
+- **Isolation:** independent host workspaces reproduced identical starting
+  state for the representative pair; strict Docker confirmation remains
+  optional/deferred rather than silently claimed equivalent to v1.
+- **Holdout/scope:** protected holdout hash remains
+  `sha256:e2ad6dac06d64f8efad17df96d6c6f3af13c7f3a88aac25b19fe87587936dd35`;
+  it was not run or used for tuning. No AGK cleanup, evaluator-v1 rewrite, or
+  M7 work occurred.
+- **Review:** final fresh-context adversarial review returned `PASS` with no
+  findings; local deterministic gates were green before push.
+
 ### Deliverables
 
 - Representative deterministic and model-backed parity matrix against v1.
@@ -648,10 +691,11 @@ confidence claims over accumulated sparse evidence.
 | 2026-08-23 | **M3 complete.** `agent-guidance-kit-evals` repository founded at `56600a8`; hardened and merged at `5fa650b3`. | accepted | 26 AGK skills discovered in external checkout; 33 unit tests pass; committed npm lockfile; reproducible `npm ci`; Promptfoo 0.122.0 asserted; config validation; deterministic echo-provider smoke; corrected Git revision resolution; durable/local-only evidence distinction; AGK not mutated. |
 | 2026-08-23 | **M4 complete — canonical corpus ownership migrated.** `agent-guidance-kit-evals` is now canonical for evaluation corpus changes; the remaining AGK corpus is a frozen legacy evaluator-v1 compatibility/reference copy until M7. | accepted | Eval-repo merge `cb1c1651` from AGK source `8ac3f7b`; 26 packs / 145 canonical files migrated as exact copies; holdout hash parity `sha256:e2ad6dac…dd35`; 20 historical-v1 artifacts with labels preserved verbatim; 165/165 source-parity verified; fresh-context review PASS. |
 | 2026-08-24 | **M5 complete — thin Promptfoo/Kilo integration merged.** Eval-repo `main` at `025779c` (PR #3). | accepted | Hosted CI run 32703699945 success (194 tests); Promptfoo 0.122.0; corrected live Kilo smoke (target forced / Layer B allowed / Layer C not established; baseline none; identical starting task-state hashes); fixtures eval-repo owned, skills target-owned; protocol-valid vs outcome-graded boundary recorded; no holdout consumed; no M6/M7 work performed. M6 authorized. |
+| 2026-08-24 | **M6 complete — evidence policy, parity, and historical aggregation merged.** Eval-repo `main` at `624e032e` (PR #4). | accepted | Hosted CI run 32739433920 success; analyzer `analyzer-v1`; policy `policy-v1`; 26-skill sparse coverage; 17 routing rows / 18 decisions / 14 correct / 0 provider failures; 2 protocol-valid but ungraded execution rows; judge not run; 0 supported/qualified skills; holdout unchanged and unused; strict Docker deferred; M7 authorized. |
 
 ## Immediate next actions
 
-1. M0–M5 complete.
+1. M0–M6 complete.
 2. Historical M1 evidence preserved at `docs/evaluations/promptfoo-spike/`.
 3. Future corpus edits originate in `agent-guidance-kit-evals` (`corpus/`); do not edit the AGK corpus copies in parallel.
-4. M6 (parity, evidence policy, and historical aggregation) is authorized and not started; wait for explicit maintainer go-ahead before implementing it.
+4. M7 (clean AGK copy/adapt library and lightweight static CI) is authorized and not started; do not begin it in this task.
