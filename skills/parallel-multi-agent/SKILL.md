@@ -116,11 +116,9 @@ Risks/Blockers: <any residual risk or deferred work, or "none">
 ```
 
 For delegated evaluation workers, the deep isolation, blindness, baseline
-isolation, contamination, and grading rules are owned by
-[skill-evaluation](../skill-evaluation/SKILL.md). Follow those constraints
-and do not reimplement or weaken them here; load its
-[isolation protocol](../skill-evaluation/references/isolation-protocol.md)
-when setting up evaluation workers.
+isolation, contamination, and grading rules are owned by the
+[separate evaluation repository](https://github.com/HyperVon/agent-guidance-kit-evals).
+Follow those constraints and do not reimplement or weaken them here.
 
 Default sensitive-path denylist:
 

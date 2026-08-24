@@ -1,17 +1,37 @@
 # Agent Guidance Kit
 
-A portable library of **software-engineering and development** agent skills you
-**copy or adapt** into your own project. Most skills here are built for
-engineering workflows — code review, testing, debugging, security, releases —
-though a few generalize to broader documentation and process work. There is no
-installer and no adoption lifecycle — you read the skills here and adopt the
-ones that fit. Check out the repo, then ask your coding agent to review it and
-recommend what to adopt.
+Agent Guidance Kit is a portable collection of software-engineering agent
+skills that you can review, copy, and adapt into a compatible coding-agent
+environment. It is a library, not an installer, runtime, package manager, or
+certification system.
 
-See [`docs/using-the-library.md`](docs/using-the-library.md) for the exact
-review-and-adopt workflow your agent should follow.
+## Browse
 
-## Included skills
+Start with the catalog below. Each skill is a self-contained `SKILL.md` with
+optional reference material loaded when needed.
+
+## Review
+
+Read the `SKILL.md` and any relevant references for the skills that match your
+workflow. Check their trigger, boundaries, assumptions, and portability before
+adopting them.
+
+## Select
+
+Choose only the skills that fit your project. A useful adoption decision is
+`ADD`, `ADAPT`, `KEEP_LOCAL`, `DEFER`, or `SKIP`.
+
+## Copy and Adapt
+
+1. Copy the selected skill folder into your agent's supported skill location.
+2. Adapt project-specific names, commands, and boundaries.
+3. Keep local guidance that is stronger or more specific than the copied skill.
+4. Review the result in the context of your project before using it.
+
+The detailed adoption workflow is in
+[`docs/using-the-library.md`](docs/using-the-library.md).
+
+## Included Skills
 
 | Skill | What it does |
 | :--- | :--- |
@@ -36,21 +56,17 @@ review-and-adopt workflow your agent should follow.
 | [security-review](skills/security-review/SKILL.md) | Evidence-based review of changes, boundaries, and workflows for secrets, auth, input, data exposure, and dependency risks. |
 | [skill-authoring](skills/skill-authoring/SKILL.md) | Author or revise a repository-local agent skill after approval, preserving trigger, boundaries, and portability. |
 | [skill-discovery](skills/skill-discovery/SKILL.md) | Proactively search GitHub, harness docs, and public guidance for candidate agent workflows and map them to a project's existing skill catalog (evidence table for skill-reviewer intake). |
-| [skill-evaluation](skills/skill-evaluation/SKILL.md) | Design or run clean-context evaluations to decide whether a skill improves outcomes. |
 | [skill-optimizer](skills/skill-optimizer/SKILL.md) | Lower guidance context cost without weakening routing, safety, correctness, or verification. |
 | [skill-reviewer](skills/skill-reviewer/SKILL.md) | Review skills and guidance for missing, weak, or misleading content and recommend improvements. |
 | [systematic-debugging](skills/systematic-debugging/SKILL.md) | Diagnose a reproducible failure by finding its root cause before fixing. |
 | [threat-modeling](skills/threat-modeling/SKILL.md) | Repository-grounded threat model: assets, actors, boundaries, entrypoints, abuse paths, mitigations. |
 
-## Adopting guidance
+## Evaluation Ownership
 
-1. Check out this repo.
-2. In your project, ask your agent to read this `README.md` and the catalog, then
-   decide for each skill whether to `ADD`, `ADAPT`, `KEEP_LOCAL`, `DEFER`, or
-   `SKIP` it.
-3. Approve the plan, then let the agent copy or adapt the chosen skills.
-
-Full workflow: [`docs/using-the-library.md`](docs/using-the-library.md).
+Evaluation corpus, evidence, and methodology are maintained separately in
+[`agent-guidance-kit-evals`](https://github.com/HyperVon/agent-guidance-kit-evals).
+You do not need that repository to browse, select, copy, or use a skill from
+this library.
 
 ## License
 

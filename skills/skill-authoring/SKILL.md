@@ -135,11 +135,11 @@ Two failure modes to avoid:
   tree. Remove unverifiable claims and unfinished placeholders.
 - Check the entrypoint's context cost and move low-frequency detail behind a
   clear reference link when that preserves discoverability and verification.
-- For a new or materially changed skill, treat clean-context evaluation
-  ([skill-evaluation](../skill-evaluation/SKILL.md)) as an *optional validation
-  gate you run yourself* when the change claims an outcome improvement. Do not
-  hand the authoring task to evaluation, and do not impose a full evaluation
-  project unless the user requested measurement.
+- For a new or materially changed skill, treat clean-context evaluation in the
+  [separate evaluation repository](https://github.com/HyperVon/agent-guidance-kit-evals)
+  as an *optional validation gate you run yourself* when the change claims an
+  outcome improvement. Do not hand the authoring task to evaluation, and do not
+  impose a full evaluation project unless the user requested measurement.
 - Check the diff for whitespace errors, secrets, personal paths, provider
   assumptions, unintended files, and changes outside the approved scope.
 - Re-read the complete changed skill and report exactly what was validated,

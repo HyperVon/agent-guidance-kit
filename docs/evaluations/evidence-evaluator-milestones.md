@@ -1,6 +1,6 @@
 # Promptfoo-backed evaluator milestone tracker
 
-**Status:** M0–M6 complete; M7 authorized and not started. Canonical evaluation-corpus ownership now lives in `agent-guidance-kit-evals`; the AGK copies of the corpus are a frozen legacy evaluator-v1 compatibility/reference copy until M7.
+**Status:** M0–M7 complete; M8 authorized and not started. Canonical evaluation-corpus ownership and active evaluation operation live in `agent-guidance-kit-evals`; AGK is now the portable skill library and target repository.
 
 **Parent design:** [Promptfoo-backed evaluation architecture for Agent Guidance Kit](evidence-evaluator-architecture.md)
 
@@ -8,13 +8,12 @@
 
 **M2 ADR:** [ADR-0001: Promptfoo-backed evaluator — GO WITH MATERIAL GAPS](../adr/0001-promptfoo-backed-evaluator.md)
 
-**M1 evidence:** [Historical evidence area](promptfoo-spike/M1-REPORT.md) (copied verbatim from `experiments/promptfoo/REPORT.md` at `217d53f5db7ea01d4fd4fadbefdfe987f663cbb6`)
+**M1 evidence:** [Historical evidence in the eval repository](https://github.com/HyperVon/agent-guidance-kit-evals/tree/main/historical-m1-promptfoo) (report-only record copied from `experiments/promptfoo/REPORT.md` at `217d53f5db7ea01d4fd4fadbefdfe987f663cbb6`)
 
-This tracker follows the conversation's final architecture: Promptfoo is the
-candidate commodity engine; a future `agent-guidance-kit-evals` repository owns
-AGK corpus, methodology, thin integrations, Kilo support, provenance, and
-historical evidence; Agent Guidance Kit returns to being a lightweight portable
-skill library.
+This tracker records the final architecture: Promptfoo is the commodity engine;
+`agent-guidance-kit-evals` owns the AGK corpus, methodology, thin integrations,
+Kilo support, provenance, and historical evidence; Agent Guidance Kit is the
+lightweight portable skill library and external evaluation target.
 
 No split or deletion is authorized until the compatibility spike earns a
 `GO`/approved `GO WITH MATERIAL GAPS` decision.
@@ -33,13 +32,13 @@ No split or deletion is authorized until the compatibility spike earns a
 | ID | Milestone | Status | Depends on | Decision/outcome |
 | --- | --- | --- | --- | --- |
 | M0 | Correct architecture and freeze assumptions | `complete` | — | Promptfoo-first governing design established and maintainer-reviewed. |
-| M1 | Complete Promptfoo compatibility spike | `complete` | M0 | Valid `REPORT.md`, v1/v2 comparison, tests, and review. Spike commit: `217d53f5db7ea01d4fd4fadbefdfe987f663cbb6`. Historical evidence preserved at `docs/evaluations/promptfoo-spike/`. |
+| M1 | Complete Promptfoo compatibility spike | `complete` | M0 | Valid `REPORT.md`, v1/v2 comparison, tests, and review. Spike commit: `217d53f5db7ea01d4fd4fadbefdfe987f663cbb6`. Historical evidence preserved in eval-repo `historical-m1-promptfoo/`. |
 | M2 | Promptfoo go/no-go decision | `complete` | M1 | `GO WITH MATERIAL GAPS`. See [ADR-0001](../adr/0001-promptfoo-backed-evaluator.md). |
 | M3 | Create `agent-guidance-kit-evals` foundation | `complete` | M2 = GO, or approved GO WITH MATERIAL GAPS after gap recheck | Foundation commit `56600a8`; hardened and merged at `5fa650b3`; 26 skills discovered; 33 tests; AGK not mutated. |
 | M4 | Migrate canonical corpus and history | `complete` | M3 | Migrated at eval-repo merge `cb1c1651` from AGK source `8ac3f7b`; 26 packs / 145 canonical files; holdout hash parity verified; 20 historical-v1 artifacts; AGK not mutated. |
 | M5 | Establish thin Promptfoo/Kilo integration | `complete` | M3–M4 | Eval-repo merge `025779c` (PR #3) from branch head `7c4845d`; hosted CI run 32703699945 success (194 tests); Promptfoo 0.122.0; corrected live Kilo smoke target+baseline; ownership split: canonical fixtures eval-repo owned, skills from external AGK target. |
 | M6 | Prove parity, evidence policy, and historical aggregation | `complete` | M4–M5 | Eval-repo merge `624e032e` (PR #4); analyzer `analyzer-v1`, policy `policy-v1`, validator `agk-evidence-validator-v1`; 26-skill sparse coverage index; representative routing/execution parity and explicit evidence gaps. |
-| M7 | Clean Agent Guidance Kit | `authorized / not started` | M6 | Lean copy/adapt library with lightweight static CI. |
+| M7 | Clean Agent Guidance Kit | `complete` | M6 | AGK restored as a portable copy/adapt library; evaluator-owned content removed; lightweight static CI retained. |
 | M8 | Prove independent operation and harden | `not started` | M7 | Clean AGK externally evaluated; both repos independently healthy. |
 
 ## M0 — Correct architecture and freeze assumptions
@@ -78,9 +77,9 @@ while preserving AGK's experimental semantics.
 
 **Evidence commit:** `217d53f5db7ea01d4fd4fadbefdfe987f663cbb6`
 
-**Historical evidence preserved:** `docs/evaluations/promptfoo-spike/M1-REPORT.md`,
-`docs/evaluations/promptfoo-spike/KILO-NEXT.md`,
-`docs/evaluations/promptfoo-spike/evidence-manifest.json`.
+**Historical evidence preserved:** report-only M1 evidence and provenance in
+eval-repo `historical-m1-promptfoo/`. AGK retains only a historical pointer at
+`docs/evaluations/promptfoo-spike/README.md`.
 
 The presence of files is not completion evidence. Results, comparisons, gates,
 and fresh-context review must exist.
@@ -283,7 +282,9 @@ and fresh-context review must exist.
 
 ### M2 evidence summary
 
-See `docs/evaluations/promptfoo-spike/` for full details and
+See the eval-repo
+[`historical-m1-promptfoo/`](https://github.com/HyperVon/agent-guidance-kit-evals/tree/main/historical-m1-promptfoo)
+for the durable report and
 `docs/adr/0001-promptfoo-backed-evaluator.md` for the complete ADR.
 
 ## M3 — Create `agent-guidance-kit-evals` foundation
@@ -554,6 +555,37 @@ confidence claims over accumulated sparse evidence.
 
 **Objective:** Restore AGK's original portable copy/adapt product identity.
 
+**Status:** `complete`
+
+### Completion evidence (2026-08-24)
+
+- **Starting point:** AGK `origin/main` at
+  `2542ed76b58ed254ecbe986a259cc28c5344a50c`; branch
+  `m7/clean-agent-guidance-kit`.
+- **Inventory:** complete pre-deletion disposition is recorded in
+  `docs/m7-cleanup-inventory.md`.
+- **Removal:** 213 tracked evaluator-owned files deleted, including the
+  top-level corpus, 140 per-skill eval files across 26 packs, evaluator-v1
+  runners/validators, Docker infrastructure, historical result copies, and
+  framework-bound `skill-evaluation`.
+- **Skill library:** 26 skills before, 25 after; no ordinary skill was deleted.
+  Retained ordinary skill content is unchanged except three minimal links
+  repaired after `skill-evaluation` removal.
+- **Product docs:** README now follows browse → review → select → copy/adapt;
+  AGENTS contains portable skill/contribution guidance and a compact eval-repo
+  ownership boundary rather than active evaluation policy.
+- **Static CI:** `scripts/validate_catalog.py` and its two standard-library
+  tests replace evaluator CI. Python/Ruff remain only for this static tooling;
+  PyYAML and pytest are removed, and CodeQL is removed because the remaining
+  executable surface is a small deterministic catalog checker.
+- **Ownership:** eval-repo `scripts/verify_migration.py` passed for 145 files
+  with zero mismatches; AGK cleanup did not modify the eval repository.
+- **Holdout:** eval-repo protected holdout remains unchanged at
+  `sha256:e2ad6dac06d64f8efad17df96d6c6f3af13c7f3a88aac25b19fe87587936dd35`;
+  M7 did not run it.
+- **Scope:** M8 independent-operation proof, hardening, upstreaming, and new
+  model-backed runs were not performed.
+
 ### Preconditions
 
 - M3–M6 complete.
@@ -576,9 +608,9 @@ confidence claims over accumulated sparse evidence.
 
 ### Exit criteria
 
-- AGK contains no hidden evaluator implementation or dangling paths.
-- A user can adopt a skill without knowing the eval repository exists.
-- AGK deterministic gate passes independently.
+- [x] AGK contains no hidden evaluator implementation or dangling paths.
+- [x] A user can adopt a skill without knowing the eval repository exists.
+- [x] AGK deterministic gate passes independently.
 
 ## M8 — Prove independent operation and harden
 
@@ -698,7 +730,8 @@ confidence claims over accumulated sparse evidence.
 
 ## Immediate next actions
 
-1. M0–M6 complete.
-2. Historical M1 evidence preserved at `docs/evaluations/promptfoo-spike/`.
+1. M0–M7 complete.
+2. Historical M1 report-only evidence is preserved in eval-repo
+   `historical-m1-promptfoo/`; AGK retains only a pointer.
 3. Future corpus edits originate in `agent-guidance-kit-evals` (`corpus/`); do not edit the AGK corpus copies in parallel.
-4. M7 (clean AGK copy/adapt library and lightweight static CI) is authorized and not started; do not begin it in this task.
+4. M8 is authorized and not started; do not begin it in the M7 cleanup.

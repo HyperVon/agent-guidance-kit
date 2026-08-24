@@ -3,64 +3,47 @@
 This repository is a portable library of agent skills. When working here:
 
 - The canonical catalog lives in `skills/`; each skill is a self-contained
-  `SKILL.md` following the Agent Skills format. The README's "Included skills"
+  `SKILL.md` following the Agent Skills format. The README's "Included Skills"
   table is the index; the full adoption workflow is in
   [`docs/using-the-library.md`](docs/using-the-library.md).
-- Run the full project gate before committing and again before pushing:
-  `python3 scripts/validate_evaluations.py`,
-  `python3 -m pytest scripts/test_validate_evaluations.py -q`,
-  the README index check, and `ruff check scripts/`. See
-  [`.github/workflows/check.yml`](.github/workflows/check.yml).
-- Do not modify skill bodies, references, or evals without an explicit
-  approved change pass. Reviews are read-only unless application is
-  separately authorized.
+- Keep skills portable: use project-neutral names, state triggers and
+  boundaries, and put deeper material in skill-local `references/` files.
+- Do not modify ordinary skill bodies or references for cleanup, style, or
+  benchmark results. Skill changes require an explicitly approved change pass.
+- Evaluation corpus, methodology, evidence, and execution belong to
+  `HyperVon/agent-guidance-kit-evals`; do not add evaluator code or canonical
+  evaluation data back to AGK.
 
-## Mandatory adversarial review for PRs
+## Deterministic Gate
 
-Per adopting repository policy (see
-[`skills/adversarial-pr-review/SKILL.md`](skills/adversarial-pr-review/SKILL.md)):
+Run the product-only gate before committing and again before pushing:
+
+```text
+python3 scripts/validate_catalog.py
+python3 -m unittest discover -s scripts -p 'test_*.py' -q
+ruff check scripts/
+git diff --check
+```
+
+The gate checks skill structure and frontmatter, README catalog integrity,
+repository-relative Markdown links, and the absence of canonical evaluator
+roots. It does not require the eval repository, a model, Kilo, Promptfoo,
+Docker, or network access to an evaluator.
+
+## Mandatory Adversarial Review for PRs
+
+Per repository policy and
+[`skills/adversarial-pr-review/SKILL.md`](skills/adversarial-pr-review/SKILL.md):
 
 - Every branch that opens or updates a pull request MUST receive a completed
-  fresh-context adversarial review **before any push** of that branch.
-- After a PR is created, the gate is mandatory on **every later update push**
-  until the review converges — the final pass reports no additional findings.
-  A prior review does not cover later changes.
+  fresh-context adversarial review before any push.
+- After a PR is created, review the complete update delta before every later
+  push until the review converges with no additional findings.
 - The parent may not substitute its own self-review; at least one fresh,
   independent, read-only subagent reviewer is required.
-- The mechanics and track matrix are owned by `adversarial-pr-review`; the
-  branch/commit/PR hygiene steps are in
-  [`skills/git-github-workflow/SKILL.md`](skills/git-github-workflow/SKILL.md).
+- Review findings are applied only in a separately authorized change pass.
+- Record a compact `PASS` or up to three anchored findings with the reviewed
+  commit range.
 
-### Blocked-review exception
-
-If a fresh read-only subagent reviewer cannot be launched (harness limitation,
-missing capability, or sandbox restriction), the review is **blocked**: do not
-push the branch. Report the blocked review and the exact capability gap to the
-user instead, and wait for explicit direction.
-
-### Convergence evidence
-
-A completed review is recorded as a compact verdict — `PASS` or up to three
-anchored `path:line` findings — plus the review's commit range. Keep the
-verdict available (session report, PR description, or tracked artifact) so a
-later update push can confirm the final pass covered the current diff and
-reported no additional findings.
-
-## Review preferences (all harnesses)
-
-This repository also carries the maintainer's review preferences in a Command
-Code taste profile at [`.commandcode/taste/`](.commandcode/taste/). The taste
-storage format is Command Code-specific, but the preferences are meant to be
-considered by any harness:
-
-- adversarial/diff reviews are performed by a **single fresh-context subagent**
-  rather than the context that made the changes;
-- the review must **converge** — no additional validated findings — before a
-  push or PR proceeds;
-- verdicts are compact and bounded: `PASS` or at most three anchored
-  repo-relative `path:line` findings with severity and impact;
-- review findings are applied as a separate, explicitly authorized pass, and
-  the full batch is approved at once rather than item by item.
-
-Non-Command Code harnesses should treat these as the maintainer's stated
-preferences even though the taste file format is not natively read by them.
+If a fresh read-only reviewer cannot be launched, the review is blocked: do not
+push and report the exact capability gap.
