@@ -1,6 +1,6 @@
 # Promptfoo-backed evaluation architecture for Agent Guidance Kit
 
-**Status:** Design-ready; M2 decision recorded (`GO WITH MATERIAL GAPS`); M3 authorized and pending implementation authorization
+**Status:** Historical migration architecture record; M0–M7 complete; M8 authorized/not started. Active evaluation ownership and operation live in `agent-guidance-kit-evals`.
 
 **Date:** 2026-08-23
 

@@ -13,32 +13,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
-      - name: Install dependencies
+      - name: Install lint dependency
         run: |
           python -m pip install --upgrade pip
-          pip install pyyaml pytest ruff
-      - name: Validate evaluation artifacts
-        run: python scripts/validate_evaluations.py
-      - name: Run evaluation validator tests
-        run: python -m pytest scripts/test_validate_evaluations.py -q
-      - name: Check fixture hashes are up to date
-        run: |
-          rm -rf /tmp/skills-before
-          cp -r skills /tmp/skills-before
-          python scripts/hash_fixtures.py
-          diff -r /tmp/skills-before skills --exclude="*.pyc" || (echo "Fixture hashes are out of date. Run python scripts/hash_fixtures.py and commit." && exit 1)
-      - name: Check README skill index matches catalog
-        run: |
-          for dir in skills/*/; do
-            name="$(basename "$dir")"
-            grep -q "skills/${name}/SKILL.md" README.md || { echo "Skill '${name}' is missing from the README catalog. Add a row to the 'Included skills' table."; exit 1; }
-          done
-          grep -o 'skills/[a-z0-9-]*/SKILL\.md' README.md | sort -u | while read -r link; do
-            [ -f "${link}" ] || { echo "README links to missing file: ${link}"; exit 1; }
-          done
-      - name: Lint scripts
+          pip install ruff
+      - name: Validate skill catalog
+        run: python scripts/validate_catalog.py
+      - name: Run static validator tests
+        run: python -m unittest discover -s scripts -p 'test_*.py' -q
+      - name: Lint static tooling
         run: ruff check scripts/
+      - name: Check pull request patch whitespace
+        if: github.event_name == 'pull_request'
+        run: git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.sha }}"
+      - name: Check push patch whitespace
+        if: github.event_name == 'push'
+        run: git diff --check "${{ github.event.before }}...${{ github.sha }}"

@@ -5,7 +5,11 @@
 - **Deciders:** AGK maintainer
 - **Primary document:** [evidence-evaluator-architecture.md](../evaluations/evidence-evaluator-architecture.md)
 - **Milestone tracker:** [evidence-evaluator-milestones.md](../evaluations/evidence-evaluator-milestones.md)
-- **Historical M1 evidence:** [`../evaluations/promptfoo-spike/M1-REPORT.md`](../evaluations/promptfoo-spike/M1-REPORT.md)
+- **Historical M1 evidence:** [`historical-m1-promptfoo/M1-REPORT.md`](https://github.com/HyperVon/agent-guidance-kit-evals/blob/main/historical-m1-promptfoo/M1-REPORT.md)
+
+This is a historical migration decision. AGK is now the portable skill target;
+the active evaluator, corpus, evidence, and methodology live in
+[`agent-guidance-kit-evals`](https://github.com/HyperVon/agent-guidance-kit-evals).
 
 ## Context
 
@@ -180,9 +184,9 @@ as separate concerns:
 
 The M1 report did not emphasize strongly enough that the spike's `.results/`
 directory was git-ignored. Raw artifacts may not survive branch deletion. The
-historical status and a future retention policy are recorded in
-[`promptfoo-spike/README.md`](../evaluations/promptfoo-spike/README.md) and
-[`promptfoo-spike/evidence-manifest.json`](../evaluations/promptfoo-spike/evidence-manifest.json).
+historical status and retention provenance are recorded in the
+[historical M1 pointer](../evaluations/promptfoo-spike/README.md) and the
+[eval-repository provenance record](https://github.com/HyperVon/agent-guidance-kit-evals/blob/main/historical-m1-promptfoo/PROVENANCE.md).
 
 ## Rejected alternatives
 
@@ -227,6 +231,5 @@ Promptfoo.
 - Frozen baseline: `91ed0155e83d70d0b80a7912d63a2a1c16660b0f`
 - Architecture: `docs/evaluations/evidence-evaluator-architecture.md`
 - Milestone tracker: `docs/evaluations/evidence-evaluator-milestones.md`
-- Historical M1 report: `docs/evaluations/promptfoo-spike/M1-REPORT.md`
-- Kilo next steps (design note): `docs/evaluations/promptfoo-spike/KILO-NEXT.md`
-- Evidence manifest: `docs/evaluations/promptfoo-spike/evidence-manifest.json`
+- Historical M1 report: `https://github.com/HyperVon/agent-guidance-kit-evals/blob/main/historical-m1-promptfoo/M1-REPORT.md`
+- Historical M1 provenance: `https://github.com/HyperVon/agent-guidance-kit-evals/blob/main/historical-m1-promptfoo/PROVENANCE.md`
