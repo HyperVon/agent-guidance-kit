@@ -1,6 +1,6 @@
 # Promptfoo-backed evaluator milestone tracker
 
-**Status:** M0–M8 implementation complete on the independent-operation branches; canonical evaluation-corpus ownership and active evaluation operation live in `agent-guidance-kit-evals`; AGK is now the portable skill library and target repository. M8 changes are staged locally and not yet merged or pushed.
+**Status:** M0–M7 complete; M8 simplified cross-platform architecture is implemented on the correction branches, while deterministic CI, live proof, fresh review, and merge evidence remain pending.
 
 **Parent design:** [Promptfoo-backed evaluation architecture for Agent Guidance Kit](evidence-evaluator-architecture.md)
 
@@ -39,7 +39,7 @@ No split or deletion is authorized until the compatibility spike earns a
 | M5 | Establish thin Promptfoo/Kilo integration | `complete` | M3–M4 | Eval-repo merge `025779c` (PR #3) from branch head `7c4845d`; hosted CI run 32703699945 success (194 tests); Promptfoo 0.122.0; corrected live Kilo smoke target+baseline; ownership split: canonical fixtures eval-repo owned, skills from external AGK target. |
 | M6 | Prove parity, evidence policy, and historical aggregation | `complete` | M4–M5 | Eval-repo merge `624e032e` (PR #4); analyzer `analyzer-v1`, policy `policy-v1`, validator `agk-evidence-validator-v1`; 26-skill sparse coverage index; representative routing/execution parity and explicit evidence gaps. |
 | M7 | Clean Agent Guidance Kit | `complete` | M6 | AGK restored as a portable copy/adapt library; evaluator-owned content removed; lightweight static CI retained. |
-| M8 | Prove independent operation and harden | `complete` | M7 | Frozen AGK target externally evaluated; both repos independently healthy; security/architecture review converged with `PASS`; staged implementation awaits merge/push authorization. |
+| M8 | Prove independent operation and harden | `in progress` | M7 | Simplified workspace-isolation architecture implemented; remote deterministic CI, bounded real target/baseline proof, fresh review, and merge evidence remain. |
 
 ## M0 — Correct architecture and freeze assumptions
 
@@ -616,56 +616,51 @@ confidence claims over accumulated sparse evidence.
 
 **Objective:** Demonstrate the split is architectural, not cosmetic.
 
-**Status:** `complete` (implementation staged locally; no merge, push, or live
-model-backed M8 run performed).
+**Status:** `in progress` — simplified cross-platform architecture implemented;
+deterministic validation, live proof, fresh review, and merge evidence remain.
 
-### Completion evidence (2026-08-25)
+### Implementation evidence (2026-08-25)
 
-- **Frozen revisions:** AGK target `da5d947082c2faaf72cd2b9328b3bd7ebd634ba4`;
-  eval-repo baseline `5d0296f0c62b2c86507bd1117527cabad19600c5`; protected
-  holdout remains byte-identical at
-  `sha256:e2ad6dac06d64f8efad17df96d6c6f3af13c7f3a88aac25b19fe87587936dd35`.
-- **Independent health:** AGK passes catalog validation, its two static tests,
-  pinned Ruff, and diff checks without the eval repository. The eval repository
-  passes 251 tests, Ruff, migration verification, evidence-index checks,
-  compileall, Promptfoo 0.122.0 configuration validation, and deterministic
-  routing/execution projections without an AGK checkout.
-- **External target proof:** the cleaned AGK checkout exposes exactly 25 current
-  skills, excludes historical-only `skill-evaluation`, matches the frozen
-  revision, and remains clean before/after target-profile validation. Layer A
-  and bounded Layer B probes use external skills and eval-repo-owned fixtures;
-  target mutation checks remain disposable.
-- **Hardening:** workspace and target containment, symlinks/hardlinks, Git
-  metadata/config redirects, archive extraction, private permissions, marker
-  handling, environment allowlists, no-follow evidence writes, sanitizer
-  residual checks, multi-turn failure accounting, target-profile enforcement,
-  pinned CI actions, and exact Python dependencies are covered by tests and
-  review documentation in the eval repository.
-- **Review and scope:** the final fresh-context security/architecture review
-  returned `PASS`. No live model-backed M8 run was required; the protected
-  holdout was not run or used for tuning. Promptfoo transitive audit findings
-  remain documented as a separate compatibility decision, not silently fixed.
+- The eval correction removes mandatory Bubblewrap execution and Linux-specific
+  filesystem construction from the ordinary Kilo and fixture paths.
+- Normal evaluation uses the operator-supplied external target, dynamic
+  `skills/*/SKILL.md` discovery, disposable host workspaces, filtered
+  cross-platform runtime variables, and supported provider credentials.
+- `profiles/agk-m8-proof.json` and the M8 proof configs are frozen proof-only
+  artifacts. M6 configs retain their historical semantics; ordinary configs do
+  not require a synchronized current-skill catalog.
+- The eval repository adds a source-ownership regression test and reports
+  missing current eval coverage as `no coverage`; historical-only packs remain
+  historical evidence.
+- A fresh-context implementation review returned `PASS` with the documented
+  generator-fixture shell dependency as a residual limitation.
+- The holdout remains untouched. No live model-backed proof, hosted CI result,
+  PR merge, or final remote SHA is claimed here.
 
 ### Cross-project proofs
 
-- [x] Eval repository evaluates cleaned AGK externally.
+- [ ] Eval repository evaluates the selected AGK target externally after the
+      simplified runtime correction.
 - [x] Eval repository does not modify the canonical target; mutations occur only
-      in disposable workspaces.
+      in disposable workspaces by design.
 - [x] Removing eval checkout does not break AGK.
-- [x] Removing AGK checkout still leaves eval-repo unit tests usable with local
-      fixtures/example target.
-- [x] Both repositories pass independent native gates.
+- [x] Removing AGK checkout still leaves eval-repo unit tests usable after the
+      correction; the full eval test suite passes without an AGK checkout.
+- [x] Both repositories pass their final independent native gates after this
+      correction.
 - [x] Model-backed runs are manual/scheduled, not required for ordinary AGK PRs.
 
 ### Hardening and upstreaming
 
-- [x] Security review raw evidence retention, subprocess/provider inputs,
-      workspaces, credentials, and report sanitization.
-- [x] Architecture review generic-versus-target-specific boundaries.
+- [x] Fresh-context security review of the complete correction delta returned
+      `PASS` for implementation; live proof and hosted CI remain separate.
+- [x] Architecture boundary remains Promptfoo-owned commodity mechanics versus
+      AGK-specific target/corpus/provenance behavior.
 - [x] Propose Kilo provider and broadly useful skill-call/confusion/provenance
       improvements upstream to Promptfoo where appropriate.
-- [x] Final fresh-context adversarial review leaves no unresolved material
-      findings; accepted residual limitations are recorded.
+- [x] Final fresh-context implementation review leaves no unresolved material
+      findings; the generator-fixture shell dependency is recorded as a
+      residual limitation.
 
 ### Exit criteria
 
@@ -757,7 +752,7 @@ model-backed M8 run performed).
 | 2026-08-23 | **M4 complete — canonical corpus ownership migrated.** `agent-guidance-kit-evals` is now canonical for evaluation corpus changes; the remaining AGK corpus is a frozen legacy evaluator-v1 compatibility/reference copy until M7. | accepted | Eval-repo merge `cb1c1651` from AGK source `8ac3f7b`; 26 packs / 145 canonical files migrated as exact copies; holdout hash parity `sha256:e2ad6dac…dd35`; 20 historical-v1 artifacts with labels preserved verbatim; 165/165 source-parity verified; fresh-context review PASS. |
 | 2026-08-24 | **M5 complete — thin Promptfoo/Kilo integration merged.** Eval-repo `main` at `025779c` (PR #3). | accepted | Hosted CI run 32703699945 success (194 tests); Promptfoo 0.122.0; corrected live Kilo smoke (target forced / Layer B allowed / Layer C not established; baseline none; identical starting task-state hashes); fixtures eval-repo owned, skills target-owned; protocol-valid vs outcome-graded boundary recorded; no holdout consumed; no M6/M7 work performed. M6 authorized. |
 | 2026-08-24 | **M6 complete — evidence policy, parity, and historical aggregation merged.** Eval-repo final `main` at `5d0296f0` (PR #4 plus metadata follow-up PR #5 and report refresh PR #6). | accepted | Hosted CI runs 32739433920, 32741183992, and 32742192548 success; analyzer `analyzer-v1`; policy `policy-v1`; 26-skill sparse coverage; 17 routing rows / 18 decisions / 14 correct / 0 provider failures; 2 protocol-valid but ungraded execution rows; judge not run; 0 supported/qualified skills; holdout unchanged and unused; strict Docker deferred; M7 authorized. |
-| 2026-08-25 | **M8 implementation complete — independent operation and hardening.** | accepted, staged locally | Frozen AGK/eval revisions independently validated; 251 eval tests and both native product gates pass; current 25-skill external target profile enforced; final fresh-context review `PASS`; no holdout or live M8 model run; merge/push remains separately authorized. |
+| 2026-08-25 | **M8 correction in progress — simplified cross-platform architecture implemented.** | active | Mandatory Bubblewrap path removed from ordinary execution; dynamic external target discovery, proof-only frozen profile, restored M6 configs, workspace cleanup, and source-ownership tests added. Deterministic gates, live proof, fresh review, and merge evidence remain. |
 
 ## Immediate next actions
 
@@ -765,5 +760,6 @@ model-backed M8 run performed).
 2. Historical M1 report-only evidence is preserved in eval-repo
    `historical-m1-promptfoo/`; AGK retains only a pointer.
 3. Future corpus edits originate in `agent-guidance-kit-evals` (`corpus/`); do not edit the AGK corpus copies in parallel.
-4. M8 implementation is complete on the staged branches; merge/push and any
-   optional live model-backed run remain separately authorized actions.
+4. Complete the eval correction gate, run one bounded real target/baseline proof,
+   obtain the required fresh-context review, then follow the documented merge
+   order before declaring M8 complete.

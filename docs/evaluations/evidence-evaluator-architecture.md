@@ -1,6 +1,6 @@
 # Promptfoo-backed evaluation architecture for Agent Guidance Kit
 
-**Status:** Historical migration architecture record; M0–M7 complete; M8 authorized/not started. Active evaluation ownership and operation live in `agent-guidance-kit-evals`.
+**Status:** Historical migration architecture record; M0–M7 complete; M8 simplified cross-platform correction in progress. Active evaluation ownership and operation live in `agent-guidance-kit-evals`.
 
 **Date:** 2026-08-23
 
