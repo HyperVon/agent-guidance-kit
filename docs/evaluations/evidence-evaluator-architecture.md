@@ -1,6 +1,8 @@
 # Promptfoo-backed evaluation architecture for Agent Guidance Kit
 
-**Status:** Historical migration architecture record; M0–M7 complete; M8 simplified cross-platform correction in progress. Active evaluation ownership and operation live in `agent-guidance-kit-evals`.
+**Status:** Historical migration architecture record; M0–M7 complete; M8
+simplified cross-platform correction in progress. Active evaluation ownership
+and operation live in `agent-guidance-kit-evals`.
 
 **Date:** 2026-08-23
 
@@ -17,6 +19,24 @@
 **Supersedes:** The first draft of this document, which captured the later
 evidence-policy discussion but missed the earlier Promptfoo architecture and
 repository-boundary decisions.
+
+## Final governing principle
+
+Evaluation infrastructure is subordinate to evaluation utility. The product
+question is whether skills improve outcomes, whether revisions improve or
+regress behavior, whether routing selects skills appropriately, and how well
+those observations generalize. Infrastructure, security, provenance,
+isolation, and reporting exist to support those experiments.
+
+Under the current maintainer-controlled input model, the evaluator should use
+simple cross-platform disposable workspaces and real provider access rather
+than become a hostile-code sandbox. Before adding infrastructure, identify the
+concrete experiment or correctness risk it enables or protects. If it does not
+enable a required experiment, prevent a realistic material failure, or reduce
+ongoing maintenance substantially, defer it. Once skill-vs-no-skill and
+revision-A-vs-revision-B are practical, real skill evaluations take priority;
+future evaluator changes should be driven by limitations observed in those
+runs.
 
 ## 1. Executive decision
 
