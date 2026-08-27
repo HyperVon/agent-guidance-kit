@@ -61,12 +61,17 @@ The detailed adoption workflow is in
 | [systematic-debugging](skills/systematic-debugging/SKILL.md) | Diagnose a reproducible failure by finding its root cause before fixing. |
 | [threat-modeling](skills/threat-modeling/SKILL.md) | Repository-grounded threat model: assets, actors, boundaries, entrypoints, abuse paths, mitigations. |
 
-## Evaluation Ownership
+## Evaluation and Results
 
-Evaluation corpus, evidence, and methodology are maintained separately in
+AGK skill evaluations, methodology, test cases, and evidence are maintained in
 [`agent-guidance-kit-evals`](https://github.com/HyperVon/agent-guidance-kit-evals).
-You do not need that repository to browse, select, copy, or use a skill from
-this library.
+
+See the
+[latest AGK skill evaluation report](https://github.com/HyperVon/agent-guidance-kit-evals/blob/main/reports/latest.md)
+for current results and maintenance recommendations.
+
+The evaluation repository is not required to browse, copy, adapt, or use the
+skills in this library.
 
 ## License
 
