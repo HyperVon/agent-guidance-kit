@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the portable skill catalog without evaluator dependencies."""
+"""Validate the portable skill catalog with local tooling."""
 
 from __future__ import annotations
 
@@ -14,6 +14,13 @@ ROOT = Path(__file__).resolve().parents[1]
 SKILLS_ROOT = ROOT / "skills"
 CATALOG_LINK = re.compile(r"\]\(skills/([a-z0-9-]+)/SKILL\.md\)")
 MARKDOWN_LINK = re.compile(r"\]\((?:<([^>]+)>|([^\s)]+))\)")
+FORBIDDEN_ROOTS = (
+    "evaluations",
+    "evidence",
+    "campaigns",
+    "reports",
+    "corpus",
+)
 
 
 def tracked_markdown_files() -> list[Path]:
@@ -118,10 +125,11 @@ def validate() -> list[str]:
     for name in sorted(set(catalog_names) - set(names)):
         errors.append(f"README.md: catalog lists removed or unknown skill {name!r}")
 
-    forbidden = [ROOT / "evaluations", ROOT / "Dockerfile.eval", ROOT / "skills" / "skill-evaluation"]
+    forbidden = [ROOT / name for name in FORBIDDEN_ROOTS]
+    forbidden.extend([ROOT / "Dockerfile.eval", ROOT / "skills" / "skill-evaluation"])
     for path in forbidden:
         if path.exists():
-            errors.append(f"forbidden evaluator path remains: {path.relative_to(ROOT)}")
+            errors.append(f"forbidden non-library path remains: {path.relative_to(ROOT)}")
     for skill_dir in skills:
         if (skill_dir / "evals").exists():
             errors.append(f"forbidden per-skill eval path remains: {skill_dir.relative_to(ROOT)}/evals")
