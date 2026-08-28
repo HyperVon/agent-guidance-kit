@@ -5,6 +5,9 @@ description: >-
   plausible but add correctness, maintenance, safety, or review cost. Use for
   AI-slop, de-slopping, invented API or configuration claims, misleading tests
   or documentation, needless complexity, or a broad artifact-quality audit.
+  Includes auditing guides, READMEs, and tests for claims that contradict the
+  code or configuration that implements them; a verification-only audit of a
+  guide's claims is this audit, not a documentation maintenance request.
   Modify artifacts only when the user explicitly requests cleanup.
 ---
 
