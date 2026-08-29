@@ -251,6 +251,20 @@ class CatalogValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "frontmatter must start"):
                 parse_frontmatter(path)
 
+    def test_rejects_literal_frontmatter_control_characters(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "SKILL.md"
+            path.write_text(
+                "---\n"
+                "name: example\n"
+                "description: This description is comfortably longer than forty characters.\x1b\n"
+                "---\n"
+                "# Example\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "control character"):
+                parse_frontmatter(path)
+
     def test_rejects_unsupported_optional_frontmatter_values(self) -> None:
         cases = (
             "compatibility: [python, node]",

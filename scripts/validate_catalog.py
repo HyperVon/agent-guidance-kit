@@ -416,7 +416,8 @@ def parse_frontmatter(path: Path) -> tuple[str, str]:
     Unsupported or malformed YAML is rejected rather than silently ignored so
     the catalog gate cannot accept a file that the reference validator rejects.
     """
-    lines = path.read_text(encoding="utf-8").splitlines()
+    content = path.read_text(encoding="utf-8")
+    lines = content.splitlines()
     if not lines or not lines[0].startswith("---"):
         raise ValueError("frontmatter must start with ---")
     opening_suffix = lines[0][3:]
@@ -427,6 +428,13 @@ def parse_frontmatter(path: Path) -> tuple[str, str]:
         end = lines.index("---", 1)
     except ValueError as exc:
         raise ValueError("frontmatter closing --- is missing") from exc
+
+    raw_lines = content.splitlines(keepends=True)
+    for line in raw_lines[1:end]:
+        if any(ord(character) < 0x20 and character not in "\t\r\n" for character in line):
+            raise ValueError("frontmatter control character is invalid")
+        if any(ord(character) == 0x7F for character in line):
+            raise ValueError("frontmatter control character is invalid")
 
     fields: dict[str, object] = {}
     index = 1
