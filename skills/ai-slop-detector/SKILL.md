@@ -1,13 +1,12 @@
 ---
 name: ai-slop-detector
 description: >-
-  Audit repository artifacts for evidence-backed quality defects that appear
-  plausible but add correctness, maintenance, safety, or review cost. Use for
-  AI-slop, de-slopping, invented API or configuration claims, misleading tests
-  or documentation, needless complexity, or a broad artifact-quality audit.
-  Includes auditing guides, READMEs, and tests for claims that contradict the
-  code or configuration that implements them; a verification-only audit of a
-  guide's claims is this audit, not a documentation maintenance request.
+  Audit repository artifacts for evidence-backed quality problems that may look
+  reasonable at first glance but are incorrect, misleading, brittle, needlessly
+  complex, unsafe, or costly to maintain or review. Use for AI slop, invented
+  API or configuration claims, misleading tests or documentation, unnecessary
+  complexity, or broad artifact-quality audits. This includes checking claims
+  in guides, READMEs, and tests against the code or configuration they describe.
   Modify artifacts only when the user explicitly requests cleanup.
 ---
 
