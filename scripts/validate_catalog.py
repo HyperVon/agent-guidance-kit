@@ -7,6 +7,7 @@ import json
 import re
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -16,8 +17,18 @@ SKILLS_ROOT = ROOT / "skills"
 CATALOG_LINK = re.compile(r"\]\(skills/([a-z0-9-]+)/SKILL\.md\)")
 MARKDOWN_LINK = re.compile(r"\]\((?:<([^>]+)>|([^\s)]+))\)")
 FRONTMATTER_FIELD = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(.*)$")
+ALLOWED_FRONTMATTER_FIELDS = {
+    "name",
+    "description",
+    "license",
+    "allowed-tools",
+    "metadata",
+    "compatibility",
+}
+MAX_NAME_CHARS = 64
 MIN_DESCRIPTION_CHARS = 40
 MAX_DESCRIPTION_CHARS = 1024
+MAX_COMPATIBILITY_CHARS = 500
 
 
 def tracked_markdown_files() -> list[Path]:
@@ -80,7 +91,18 @@ def _parse_inline_scalar(value: str) -> str:
     if value.startswith("'"):
         if len(value) < 2 or not value.endswith("'"):
             raise ValueError("frontmatter quoted scalar is invalid")
-        return value[1:-1].replace("''", "'")
+        inner = value[1:-1]
+        index = 0
+        while index < len(inner):
+            if inner[index] != "'":
+                index += 1
+                continue
+            if index + 1 >= len(inner) or inner[index + 1] != "'":
+                raise ValueError("frontmatter quoted scalar is invalid")
+            index += 2
+        return inner.replace("''", "'")
+    if value[0] in "[{&*!" or re.search(r":\s", value):
+        raise ValueError("frontmatter scalar must be a string")
     return value
 
 
@@ -89,11 +111,14 @@ def _parse_block_header(value: str) -> tuple[str, int | None, str]:
     if not header or header[0] not in {">", "|"}:
         raise ValueError("frontmatter block scalar header is invalid")
     style = header[0]
+    indicators = header[1:]
+    if any(character.isspace() for character in indicators) or not re.fullmatch(
+        r"(?:[1-9]?[+-]?|[+-]?[1-9]?)", indicators
+    ):
+        raise ValueError("frontmatter block scalar header is invalid")
     indentation: int | None = None
     chomping = ""
-    for character in header[1:]:
-        if character.isspace():
-            continue
+    for character in indicators:
         if character in {"+", "-"}:
             if chomping:
                 raise ValueError("frontmatter block scalar header is invalid")
@@ -107,24 +132,26 @@ def _parse_block_header(value: str) -> tuple[str, int | None, str]:
     return style, indentation, chomping
 
 
-def _fold_block_lines(lines: list[str]) -> str:
+def _fold_block_lines(lines: list[tuple[str, bool]]) -> str:
     """Apply the relevant folded-scalar line-break semantics."""
     result: list[str] = []
     index = 0
     last_was_content = False
+    last_was_more_indented = False
     while index < len(lines):
-        if lines[index] == "":
+        if lines[index][0] == "":
             end = index
-            while end < len(lines) and lines[end] == "":
+            while end < len(lines) and lines[end][0] == "":
                 end += 1
             result.append("\n" * (end - index))
             last_was_content = False
             index = end
             continue
         if last_was_content:
-            result.append(" ")
-        result.append(lines[index])
+            result.append("\n" if last_was_more_indented or lines[index][1] else " ")
+        result.append(lines[index][0])
         last_was_content = True
+        last_was_more_indented = lines[index][1]
         index += 1
     return "".join(result)
 
@@ -150,9 +177,6 @@ def _parse_block_scalar(lines: list[str], start: int, end: int, header: str) -> 
             index += 1
             continue
         if not line[:1].isspace():
-            if line.startswith("#"):
-                index += 1
-                continue
             break
         if explicit_indent is not None:
             leading_spaces = len(line) - len(line.lstrip(" "))
@@ -165,21 +189,75 @@ def _parse_block_scalar(lines: list[str], start: int, end: int, header: str) -> 
         return "", index
     nonblank_indents = [len(line) - len(line.lstrip(" ")) for line in raw_lines if line.strip()]
     indentation = explicit_indent or min(nonblank_indents, default=0)
-    values: list[str] = []
+    values: list[tuple[str, bool]] = []
     for line in raw_lines:
         if not line.strip():
-            values.append("")
+            values.append(("", False))
             continue
         leading_spaces = len(line) - len(line.lstrip(" "))
         if leading_spaces < indentation:
             raise ValueError("frontmatter block scalar indentation is invalid")
-        values.append(line[indentation:])
+        values.append((line[indentation:], leading_spaces > indentation))
 
-    value = "\n".join(values) if style == "|" else _fold_block_lines(values)
+    value = "\n".join(line for line, _more_indented in values) if style == "|" else _fold_block_lines(values)
     return _apply_chomping(value, chomping), index
 
 
+def _parse_metadata_map(lines: list[str], start: int, end: int) -> tuple[dict[str, str], int]:
+    """Parse the supported string-to-string form of the optional metadata map."""
+    metadata: dict[str, str] = {}
+    index = start
+    expected_indent: int | None = None
+    while index < end:
+        line = lines[index]
+        if not line.strip():
+            index += 1
+            continue
+        if not line[:1].isspace():
+            break
+        indent = len(line) - len(line.lstrip(" "))
+        if indent == 0:
+            break
+        if expected_indent is None:
+            expected_indent = indent
+        if indent != expected_indent:
+            raise ValueError("frontmatter metadata indentation is invalid")
+        match = FRONTMATTER_FIELD.match(line[indent:])
+        if not match:
+            raise ValueError("frontmatter metadata must be a mapping of scalar values")
+        key, value = match.groups()
+        if not value.strip():
+            raise ValueError("frontmatter metadata values must be scalar strings")
+        if key in metadata:
+            raise ValueError(f"frontmatter metadata key {key!r} is duplicated")
+        metadata[key] = _parse_inline_scalar(value)
+        index += 1
+    return metadata, index
+
+
+def _validate_skill_name(name: str) -> str:
+    normalized = unicodedata.normalize("NFKC", name.strip())
+    if not normalized:
+        raise ValueError("frontmatter name is missing")
+    if len(normalized) > MAX_NAME_CHARS:
+        raise ValueError(f"frontmatter name exceeds {MAX_NAME_CHARS} characters")
+    if normalized != normalized.lower():
+        raise ValueError("frontmatter name must be lowercase")
+    if normalized.startswith("-") or normalized.endswith("-"):
+        raise ValueError("frontmatter name cannot start or end with a hyphen")
+    if "--" in normalized:
+        raise ValueError("frontmatter name cannot contain consecutive hyphens")
+    if not all(character.isalnum() or character == "-" for character in normalized):
+        raise ValueError("frontmatter name may contain only letters, digits, and hyphens")
+    return normalized
+
+
 def parse_frontmatter(path: Path) -> tuple[str, str]:
+    """Parse and validate the supported Agent Skills YAML frontmatter subset.
+
+    Unsupported or malformed YAML is rejected rather than silently ignored so
+    the catalog gate cannot accept a file that the reference validator rejects.
+    """
     lines = path.read_text(encoding="utf-8").splitlines()
     if not lines or lines[0].strip() != "---":
         raise ValueError("frontmatter must start with ---")
@@ -189,31 +267,60 @@ def parse_frontmatter(path: Path) -> tuple[str, str]:
     except ValueError as exc:
         raise ValueError("frontmatter closing --- is missing") from exc
 
-    name = ""
-    description = ""
+    fields: dict[str, object] = {}
     index = 1
     while index < end:
-        match = FRONTMATTER_FIELD.match(lines[index])
-        if not match or lines[index][:1].isspace():
+        line = lines[index]
+        if not line.strip() or line.startswith("#"):
             index += 1
             continue
+        if line[:1].isspace():
+            raise ValueError("frontmatter indentation is invalid")
+        match = FRONTMATTER_FIELD.match(line)
+        if not match:
+            raise ValueError("frontmatter line is not a valid YAML field")
         field, value = match.groups()
-        if field == "name":
-            name = _parse_inline_scalar(value)
-            index += 1
-        elif field == "description":
-            if value.lstrip().startswith((">", "|")):
-                description, index = _parse_block_scalar(lines, index + 1, end, value)
+        if field not in ALLOWED_FRONTMATTER_FIELDS:
+            raise ValueError(f"frontmatter field {field!r} is not supported")
+        if field in fields:
+            raise ValueError(f"frontmatter field {field!r} is duplicated")
+        if field == "metadata":
+            if value.strip() not in {"{}", "{ }"}:
+                if value.strip():
+                    raise ValueError("frontmatter metadata must be an indented mapping")
+                fields[field], index = _parse_metadata_map(lines, index + 1, end)
             else:
-                description = _parse_inline_scalar(value)
+                fields[field] = {}
                 index += 1
+        elif value.lstrip().startswith((">", "|")):
+            if field == "name":
+                raise ValueError("frontmatter name must be an inline scalar")
+            fields[field], index = _parse_block_scalar(lines, index + 1, end, value)
         else:
+            fields[field] = _parse_inline_scalar(value)
             index += 1
 
-    if not name:
+    if "name" not in fields:
         raise ValueError("frontmatter name is missing")
-    if not description:
+    if not isinstance(fields["name"], str):
+        raise ValueError("frontmatter name must be a string")
+    name = _validate_skill_name(fields["name"])
+    if "description" not in fields:
         raise ValueError("frontmatter description is empty")
+    description = fields["description"]
+    if not isinstance(description, str) or not description:
+        raise ValueError("frontmatter description is empty")
+    if "compatibility" in fields:
+        compatibility = fields["compatibility"]
+        if not isinstance(compatibility, str):
+            raise ValueError("frontmatter compatibility must be a string")
+        if len(compatibility) > MAX_COMPATIBILITY_CHARS:
+            raise ValueError(f"frontmatter compatibility exceeds {MAX_COMPATIBILITY_CHARS} characters")
+    for field in ("license", "allowed-tools"):
+        if field in fields and not isinstance(fields[field], str):
+            raise ValueError(f"frontmatter {field} must be a string")
+    if "metadata" in fields and not isinstance(fields["metadata"], dict):
+        raise ValueError("frontmatter metadata must be a mapping")
 
     if not MIN_DESCRIPTION_CHARS <= len(description) <= MAX_DESCRIPTION_CHARS:
         raise ValueError(

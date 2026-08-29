@@ -102,6 +102,104 @@ class CatalogValidatorTests(unittest.TestCase):
                 )
                 self.assertEqual(parse_frontmatter(path), ("example", expected))
 
+    def test_preserves_block_scalar_boundaries(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "SKILL.md"
+            path.write_text(
+                "---\n"
+                "name: example\n"
+                "description: >-\n"
+                "  first line with enough words to pass the minimum.\n"
+                "    more indented line\n"
+                "  final line.\n"
+                "---\n"
+                "# Example\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                parse_frontmatter(path)[1],
+                "first line with enough words to pass the minimum.\n  more indented line\nfinal line.",
+            )
+
+    def test_rejects_malformed_frontmatter_and_invalid_names(self) -> None:
+        cases = (
+            (
+                "name: example\ndescription: This description is comfortably longer than forty characters.\nnot yaml at all\n",
+                "frontmatter line",
+            ),
+            (
+                "name: example\ndescription: 'This description is comfortably longer than forty characters.'oops\n",
+                "quoted scalar",
+            ),
+            (
+                "name: example\ndescription: > -\n  This description is comfortably longer than forty characters.\n",
+                "block scalar header",
+            ),
+            (
+                "name: foo--bar\ndescription: This description is comfortably longer than forty characters.\n",
+                "consecutive hyphens",
+            ),
+            (
+                "name: -foo\ndescription: This description is comfortably longer than forty characters.\n",
+                "start or end",
+            ),
+            (
+                "name: Foo\ndescription: This description is comfortably longer than forty characters.\n",
+                "lowercase",
+            ),
+            (
+                "name: foo_bar\ndescription: This description is comfortably longer than forty characters.\n",
+                "only letters",
+            ),
+            (
+                f"name: {'x' * 65}\ndescription: This description is comfortably longer than forty characters.\n",
+                "exceeds 64",
+            ),
+        )
+        for frontmatter, message in cases:
+            with self.subTest(message=message), TemporaryDirectory() as directory:
+                path = Path(directory) / "SKILL.md"
+                path.write_text(f"---\n{frontmatter}---\n# Example\n", encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, message):
+                    parse_frontmatter(path)
+
+    def test_rejects_unsupported_optional_frontmatter_values(self) -> None:
+        cases = (
+            "compatibility: [python, node]",
+            "license: {name: MIT}",
+            "allowed-tools: *alias",
+            "metadata: [owner]",
+        )
+        for field in cases:
+            with self.subTest(field=field), TemporaryDirectory() as directory:
+                path = Path(directory) / "SKILL.md"
+                path.write_text(
+                    "---\n"
+                    "name: example\n"
+                    "description: This description is comfortably longer than forty characters.\n"
+                    f"{field}\n"
+                    "---\n"
+                    "# Example\n",
+                    encoding="utf-8",
+                )
+                with self.assertRaisesRegex(ValueError, "(string|mapping)"):
+                    parse_frontmatter(path)
+
+    def test_rejects_overlong_compatibility(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "SKILL.md"
+            path.write_text(
+                "---\n"
+                "name: example\n"
+                "description: This description is comfortably longer than forty characters.\n"
+                f"compatibility: {'x' * 501}\n"
+                "---\n"
+                "# Example\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "compatibility"):
+                parse_frontmatter(path)
+
     def test_rejects_description_outside_length_boundaries(self) -> None:
         for length in (39, 1025):
             with self.subTest(length=length), TemporaryDirectory() as directory:
