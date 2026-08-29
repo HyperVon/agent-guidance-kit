@@ -15,8 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SKILLS_ROOT = ROOT / "skills"
 CATALOG_LINK = re.compile(r"\]\(skills/([a-z0-9-]+)/SKILL\.md\)")
 MARKDOWN_LINK = re.compile(r"\]\((?:<([^>]+)>|([^\s)]+))\)")
-FRONTMATTER_FIELD = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(.*)$")
-METADATA_FIELD = re.compile(r"^(.+?)\s*:\s*(.*)$")
+FRONTMATTER_FIELD = re.compile(r"^(.+?)\s*:\s*(.*)$")
 ALLOWED_FRONTMATTER_FIELDS = {
     "name",
     "description",
@@ -143,7 +142,9 @@ def _parse_inline_scalar(value: str) -> str:
                 raise ValueError("frontmatter quoted scalar is invalid")
             index += 2
         return inner.replace("''", "'")
-    if value.startswith(("- ", "? ", ": ", ",", "[", "]", "{", "}", "&", "*", "!", "%", "@", "`")):
+    if value in {"-", "?", ":"} or value.startswith(
+        ("- ", "? ", ": ", ",", "[", "]", "{", "}", "&", "*", "!", "%", "@", "`")
+    ):
         raise ValueError("frontmatter scalar must be a string")
     if re.search(r":\s", value):
         raise ValueError("frontmatter scalar must be a string")
@@ -189,7 +190,7 @@ def _fold_block_lines(lines: list[tuple[str, bool]]) -> str:
                 end += 1
             next_is_more_indented = end < len(lines) and lines[end][1]
             newline_count = end - index
-            if last_was_more_indented or next_is_more_indented:
+            if end < len(lines) and (last_was_more_indented or next_is_more_indented):
                 newline_count += 1
             result.append("\n" * newline_count)
             last_was_content = False
@@ -221,6 +222,7 @@ def _parse_block_scalar(
     required_indent = parent_indent + explicit_indent if explicit_indent is not None else None
     raw_lines: list[str] = []
     index = start
+    inferred_indent: int | None = None
     while index < end:
         line = lines[index]
         if not line.strip():
@@ -237,13 +239,17 @@ def _parse_block_scalar(
         if required_indent is not None:
             if leading_spaces < required_indent:
                 break
+        elif inferred_indent is not None and leading_spaces < inferred_indent:
+            break
+        elif inferred_indent is None:
+            inferred_indent = leading_spaces
         raw_lines.append(line)
         index += 1
 
     if not raw_lines:
         return "", index
     nonblank_indents = [len(line) - len(line.lstrip(" ")) for line in raw_lines if line.strip()]
-    indentation = required_indent or min(nonblank_indents, default=0)
+    indentation = required_indent or inferred_indent or min(nonblank_indents, default=0)
     values: list[tuple[str, bool]] = []
     for line in raw_lines:
         if not line.strip():
@@ -258,6 +264,104 @@ def _parse_block_scalar(
     return _apply_chomping(value, chomping), index
 
 
+def _quoted_scalar_complete(value: str) -> bool:
+    if not value or value[0] not in {'"', "'"}:
+        return False
+    quote = value[0]
+    index = 1
+    while index < len(value):
+        if value[index] != quote:
+            if value[index] == "\\" and quote == '"':
+                index += 2
+            else:
+                index += 1
+            continue
+        if quote == "'" and index + 1 < len(value) and value[index + 1] == quote:
+            index += 2
+            continue
+        return index == len(value) - 1
+    return False
+
+
+def _parse_multiline_quoted_scalar(
+    lines: list[str], start: int, end: int, value: str, parent_indent: int = 0
+) -> tuple[str, int]:
+    parts = [value]
+    index = start
+    while not _quoted_scalar_complete(_strip_yaml_comment("".join(parts))):
+        if index >= end:
+            raise ValueError("frontmatter quoted scalar is invalid")
+        line = lines[index]
+        if not line.strip():
+            parts.append("\n")
+            index += 1
+            continue
+        if line.startswith("\t"):
+            raise ValueError("frontmatter quoted scalar indentation is invalid")
+        indentation = len(line) - len(line.lstrip(" "))
+        if indentation <= parent_indent:
+            raise ValueError("frontmatter quoted scalar indentation is invalid")
+        parts.append(" " + line.strip())
+        index += 1
+    return _parse_inline_scalar(_strip_yaml_comment("".join(parts))), index
+
+
+def _parse_scalar_field(
+    lines: list[str], start: int, end: int, value: str, parent_indent: int = 0
+) -> tuple[str, int]:
+    cleaned = _strip_yaml_comment(value)
+    if cleaned.lstrip().startswith((">", "|")):
+        return _parse_block_scalar(lines, start, end, cleaned, parent_indent)
+    if cleaned.startswith(('"', "'")) and not _quoted_scalar_complete(cleaned):
+        return _parse_multiline_quoted_scalar(lines, start, end, cleaned, parent_indent)
+    parsed = _parse_inline_scalar(cleaned)
+    continuation: list[tuple[str, bool]] = [(parsed, False)]
+    index = start
+    inferred_indent: int | None = None
+    while index < end:
+        line = lines[index]
+        if not line.strip():
+            lookahead = index + 1
+            while lookahead < end and not lines[lookahead].strip():
+                lookahead += 1
+            if lookahead >= end or not lines[lookahead][:1].isspace():
+                break
+            continuation.append(("", False))
+            index += 1
+            continue
+        if line.lstrip().startswith("#"):
+            break
+        if not line[:1].isspace():
+            break
+        if line.startswith("\t"):
+            raise ValueError("frontmatter scalar indentation is invalid")
+        indentation = len(line) - len(line.lstrip(" "))
+        if indentation <= parent_indent:
+            break
+        if inferred_indent is None:
+            inferred_indent = indentation
+        elif indentation < inferred_indent:
+            raise ValueError("frontmatter scalar indentation is invalid")
+        continuation.append((line.strip(), indentation > inferred_indent))
+        index += 1
+    if len(continuation) == 1:
+        return parsed, index
+    return _fold_block_lines(continuation), index
+
+
+def _parse_mapping_line(line: str) -> tuple[str, str] | None:
+    if "\t" in line:
+        raise ValueError("frontmatter tabs are invalid")
+    match = FRONTMATTER_FIELD.match(line)
+    if not match:
+        return None
+    raw_key, value = match.groups()
+    key = _parse_inline_scalar(raw_key.strip())
+    if not key:
+        raise ValueError("frontmatter field name is empty")
+    return key, value
+
+
 def _parse_metadata_map(lines: list[str], start: int, end: int) -> tuple[dict[str, str], int]:
     """Parse the supported string-to-string form of the optional metadata map."""
     metadata: dict[str, str] = {}
@@ -265,7 +369,7 @@ def _parse_metadata_map(lines: list[str], start: int, end: int) -> tuple[dict[st
     expected_indent: int | None = None
     while index < end:
         line = lines[index]
-        if not line.strip():
+        if not line.strip() or line.lstrip().startswith("#"):
             index += 1
             continue
         if not line[:1].isspace():
@@ -277,17 +381,13 @@ def _parse_metadata_map(lines: list[str], start: int, end: int) -> tuple[dict[st
             expected_indent = indent
         if indent != expected_indent:
             raise ValueError("frontmatter metadata indentation is invalid")
-        match = METADATA_FIELD.match(line[indent:])
-        if not match:
+        parsed_line = _parse_mapping_line(line[indent:])
+        if parsed_line is None:
             raise ValueError("frontmatter metadata must be a mapping of scalar values")
-        key, value = (part.strip() for part in match.groups())
+        key, value = parsed_line
         if key in metadata:
             raise ValueError(f"frontmatter metadata key {key!r} is duplicated")
-        if value.lstrip().startswith((">", "|")):
-            metadata[key], index = _parse_block_scalar(lines, index + 1, end, value, indent)
-        else:
-            metadata[key] = _parse_inline_scalar(value)
-            index += 1
+        metadata[key], index = _parse_scalar_field(lines, index + 1, end, value, indent)
     return metadata, index
 
 
@@ -327,15 +427,15 @@ def parse_frontmatter(path: Path) -> tuple[str, str]:
     index = 1
     while index < end:
         line = lines[index]
-        if not line.strip() or line.startswith("#"):
+        if not line.strip() or line.lstrip().startswith("#"):
             index += 1
             continue
         if line[:1].isspace():
             raise ValueError("frontmatter indentation is invalid")
-        match = FRONTMATTER_FIELD.match(line)
-        if not match:
+        parsed_line = _parse_mapping_line(line)
+        if parsed_line is None:
             raise ValueError("frontmatter line is not a valid YAML field")
-        field, value = match.groups()
+        field, value = parsed_line
         if field not in ALLOWED_FRONTMATTER_FIELDS:
             raise ValueError(f"frontmatter field {field!r} is not supported")
         if field in fields:
@@ -351,10 +451,9 @@ def parse_frontmatter(path: Path) -> tuple[str, str]:
         elif value.lstrip().startswith((">", "|")):
             if field == "name":
                 raise ValueError("frontmatter name must be an inline scalar")
-            fields[field], index = _parse_block_scalar(lines, index + 1, end, value)
+            fields[field], index = _parse_scalar_field(lines, index + 1, end, value)
         else:
-            fields[field] = _parse_inline_scalar(value)
-            index += 1
+            fields[field], index = _parse_scalar_field(lines, index + 1, end, value)
 
     if "name" not in fields:
         raise ValueError("frontmatter name is missing")

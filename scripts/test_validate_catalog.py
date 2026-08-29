@@ -109,6 +109,43 @@ class CatalogValidatorTests(unittest.TestCase):
                 )
                 self.assertEqual(parse_frontmatter(path), ("example", expected))
 
+    def test_parses_comments_quoted_keys_and_multiline_scalars(self) -> None:
+        cases = (
+            (
+                "---\n"
+                "  # indented comment before the first field\n"
+                '"name": example # inline comment\n'
+                "  # indented comment between fields\n"
+                '"description": This description is\n'
+                "  comfortably longer than forty characters.\n"
+                "# comment before an optional field\n"
+                'license: "MIT"\n'
+                "---\n"
+                "# Example\n",
+                (
+                    "example",
+                    "This description is comfortably longer than forty characters.",
+                ),
+            ),
+            (
+                "---\n"
+                "name: example\n"
+                'description: "This description is\n'
+                "  comfortably longer than forty characters.\"\n"
+                "---\n"
+                "# Example\n",
+                (
+                    "example",
+                    "This description is comfortably longer than forty characters.",
+                ),
+            ),
+        )
+        for content, expected in cases:
+            with self.subTest(content=content), TemporaryDirectory() as directory:
+                path = Path(directory) / "SKILL.md"
+                path.write_text(content, encoding="utf-8")
+                self.assertEqual(parse_frontmatter(path), expected)
+
     def test_preserves_block_scalar_boundaries(self) -> None:
         with TemporaryDirectory() as directory:
             path = Path(directory) / "SKILL.md"
