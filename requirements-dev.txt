@@ -1,4 +1,3 @@
-# The catalog gate delegates Agent Skills YAML parsing and specification checks
-# to the upstream reference implementation.
-skills-ref==0.1.1
+# Pinned tooling for catalog validation and linting.
+PyYAML==6.0.3
 ruff==0.16.4
