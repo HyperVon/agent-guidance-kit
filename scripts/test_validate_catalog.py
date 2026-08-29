@@ -165,6 +165,24 @@ class CatalogValidatorTests(unittest.TestCase):
                 "first line with enough words to pass the minimum.\n  more indented line\nfinal line.",
             )
 
+    def test_preserves_explicit_block_indent_after_leading_blank(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "SKILL.md"
+            path.write_text(
+                "---\n"
+                "name: example\n"
+                "description: >2-\n"
+                "\n"
+                "    first line with enough words to pass the minimum.\n"
+                "---\n"
+                "# Example\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                parse_frontmatter(path)[1],
+                "\n  first line with enough words to pass the minimum.",
+            )
+
     def test_rejects_malformed_frontmatter_and_invalid_names(self) -> None:
         cases = (
             (

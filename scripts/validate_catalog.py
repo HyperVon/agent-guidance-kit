@@ -190,7 +190,9 @@ def _fold_block_lines(lines: list[tuple[str, bool]]) -> str:
                 end += 1
             next_is_more_indented = end < len(lines) and lines[end][1]
             newline_count = end - index
-            if end < len(lines) and (last_was_more_indented or next_is_more_indented):
+            if end < len(lines) and last_was_content and (
+                last_was_more_indented or next_is_more_indented
+            ):
                 newline_count += 1
             result.append("\n" * newline_count)
             last_was_content = False
