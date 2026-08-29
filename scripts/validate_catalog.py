@@ -50,10 +50,22 @@ def _require_reference_validator() -> None:
         ) from _REFERENCE_IMPORT_ERROR
 
 
+def _validate_frontmatter_fence(content: str) -> None:
+    """Keep the repository's closing fence exact before skills-ref parses YAML."""
+    lines = content.splitlines()
+    for line in lines[1:]:
+        if line == "---":
+            return
+        if line.startswith("---"):
+            raise ValueError("frontmatter closing marker is invalid")
+    raise ValueError("frontmatter closing --- is missing")
+
+
 def _reference_properties(path: Path, *, check_directory: bool) -> tuple[str, str, str]:
     """Parse and validate one skill through skills-ref, then apply local body checks."""
     _require_reference_validator()
     content = path.read_text(encoding="utf-8")
+    _validate_frontmatter_fence(content)
     try:
         metadata, body = _reference_parse_frontmatter(content)
     except Exception as exc:  # skills-ref wraps parser-specific YAML exceptions inconsistently across releases.

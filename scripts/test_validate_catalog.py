@@ -215,6 +215,20 @@ class CatalogValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "start with YAML frontmatter"):
                 parse_frontmatter(path)
 
+    def test_rejects_invalid_closing_marker(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "SKILL.md"
+            path.write_text(
+                "---\n"
+                "name: example\n"
+                "description: This description is comfortably longer than forty characters.\n"
+                "---not-a-delimiter\n"
+                "# Example\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "closing marker"):
+                parse_frontmatter(path)
+
     def test_rejects_literal_frontmatter_control_characters(self) -> None:
         with TemporaryDirectory() as directory:
             path = Path(directory) / "SKILL.md"
