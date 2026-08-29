@@ -40,6 +40,10 @@ and do not silently substitute another method when evidence is missing.
   modeling, and risk and impact analysis.
 - Combining methods requires an explicit request or a stated reason. Mark
   unsupported stages or categories as unassessed.
+- Personal-data flows are an explicit reason to append a LINDDUN/privacy pass,
+  even when STRIDE is the default. Assess applicable LINDDUN categories and
+  record the added method in the report; if privacy analysis is out of scope,
+  state that gap and the reason.
 
 When using **STRIDE**, apply it systematically across every identified trust
 boundary:

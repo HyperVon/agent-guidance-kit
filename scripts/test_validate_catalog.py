@@ -42,6 +42,25 @@ class CatalogValidatorTests(unittest.TestCase):
                 )
                 self.assertEqual(len(parse_frontmatter(path)[1]), length)
 
+    def test_ignores_optional_frontmatter_fields_after_description(self) -> None:
+        description = "x" * 1024
+        compatibility = "y" * 500
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "SKILL.md"
+            path.write_text(
+                "---\n"
+                "name: example\n"
+                "description: >-\n"
+                f"  {description}\n"
+                f"compatibility: {compatibility}\n"
+                "metadata:\n"
+                "  owner: platform\n"
+                "---\n"
+                "# Example\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(parse_frontmatter(path), ("example", description))
+
     def test_rejects_description_outside_length_boundaries(self) -> None:
         for length in (39, 1025):
             with self.subTest(length=length), TemporaryDirectory() as directory:

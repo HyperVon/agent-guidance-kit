@@ -55,8 +55,13 @@ def parse_frontmatter(path: Path) -> tuple[str, str]:
             in_description = True
             if value not in {"", ">-", ">", "|-", "|"}:
                 description_parts.append(value)
-        elif in_description and line.strip():
+        elif in_description and line.strip() and line[:1].isspace():
             description_parts.append(line.strip())
+        elif in_description:
+            # A non-indented frontmatter key ends a folded description. Ignore
+            # optional fields such as compatibility or metadata instead of
+            # counting them toward the description limit.
+            in_description = False
 
     if not name:
         raise ValueError("frontmatter name is missing")
