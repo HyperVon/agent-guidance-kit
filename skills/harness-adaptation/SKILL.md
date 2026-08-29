@@ -40,8 +40,9 @@ use the [unknown-harness fallback](references/capability-contract.md) in the ref
 
 If the harness already discovers repository guidance (e.g. `AGENTS.md` and a
 `skills/` directory), adopt skills directly and add at most a thin pointer. No
-duplication or adapter file is needed. Confirm discovery with a harmless task before
-adding anything.
+duplication or adapter file is needed. Collect discovery evidence at the level
+defined in step 5 before adding anything; a harmless task alone does not prove
+which instruction source caused the behavior.
 
 ### 3. Add the smallest projection only if needed
 
@@ -75,9 +76,20 @@ projection's expected round-trip behavior.
 Report a capability table (evidence, existing owner, proposed projection, confidence),
 list every file to create/edit, and stop for approval before changing the target.
 Apply only the approved changes, then verify discovery from the harness boundary:
-validate links, follow the documented reload behavior, and confirm a harmless task
-routes to a known skill. Report each capability as `VERIFIED`, `DOCUMENTED`,
-`BEST_EFFORT`, or `UNSUPPORTED`.
+validate links and follow the documented reload behavior. Classify each capability
+as:
+
+- `RUNTIME_VERIFIED` — a clean positive/negative control or harness trace proves
+  the canonical guidance affected routing or behavior;
+- `DOCUMENTED` — authoritative harness documentation promises discovery, but it
+  was not observed;
+- `BEST_EFFORT` — observed behavior is compatible with the skill, but causality
+  could not be isolated; or
+- `UNSUPPORTED` — discovery is absent or contradicted.
+
+A harmless task can support `BEST_EFFORT`, but it cannot by itself establish
+automatic discovery. Do not report `RUNTIME_VERIFIED` when the same result could
+come from model defaults, copied context, or another instruction source.
 
 This skill is opt-in; a target repository may mandate it via its own `AGENTS.md`
 policy.

@@ -131,6 +131,14 @@ Two failure modes to avoid:
 - Parse the frontmatter and confirm the name, description, and non-empty body.
 - Test routing with one matching request, one neighboring request, and one
   ambiguous request with a stated tie-breaker.
+- For a material decision, authority, or stop-condition change, run the smallest
+  available clean-context behavioral qualification in addition to static routing:
+  a matching request exercising the changed behavior, a neighboring non-trigger,
+  an ambiguous tie-breaker, an authority or stop-condition path, and a
+  missing-evidence or blocked path. Use the same task and artifacts for
+  candidate-versus-reference comparison. If no suitable harness is available,
+  report `BEHAVIOR_UNVERIFIED`; do not add evaluator infrastructure without
+  separate approval.
 - Check every relative link and referenced script or option against the current
   tree. Remove unverifiable claims and unfinished placeholders.
 - Check the entrypoint's context cost and move low-frequency detail behind a

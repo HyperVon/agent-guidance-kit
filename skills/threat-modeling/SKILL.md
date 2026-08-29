@@ -26,9 +26,27 @@ description: >-
 - **Side effects:** read-only by default; do not contact external systems,
   access credentials, or modify files without separate explicit authority.
 
-## Threat categorization and AI vectors
+## Method selection, threat categories, and AI vectors
 
-Apply **STRIDE** systematically across every identified trust boundary:
+Use the method explicitly requested by the user; use STRIDE as the default only
+when no method is specified. Do not relabel a STRIDE table as PASTA or LINDDUN,
+and do not silently substitute another method when evidence is missing.
+
+- A **LINDDUN** review considers linkability, identifiability, non-repudiation,
+  detectability, disclosure of information, unawareness, and non-compliance
+  across applicable personal-data flows.
+- A **PASTA** review structures evidence through objectives, technical scope,
+  application decomposition, threat analysis, vulnerability analysis, attack
+  modeling, and risk and impact analysis.
+- Combining methods requires an explicit request or a stated reason. Mark
+  unsupported stages or categories as unassessed.
+- Personal-data flows are an explicit reason to append a LINDDUN/privacy pass,
+  even when STRIDE is the default. Assess applicable LINDDUN categories and
+  record the added method in the report; if privacy analysis is out of scope,
+  state that gap and the reason.
+
+When using **STRIDE**, apply it systematically across every identified trust
+boundary:
 
 - **S**poofing: Impersonating users, services, webhook senders, agent
   identities, or non-network identities (forged email/notification senders,
@@ -41,9 +59,6 @@ Apply **STRIDE** systematically across every identified trust boundary:
   line the model can see).
 - **D**enial of Service: Exhausting API rate limits, computational budgets, worker memory, or token context windows.
 - **E**levation of Privilege: Escaping container/sandbox boundaries, escalating API roles, or executing unauthorized agent tools.
-
-- **Privacy (LINDDUN):** Where personal data is collected or shared, assess
-  linkability, identifiability, and data-minimization non-compliance as abuse paths.
 
 For **AI and Agentic Workflows**, explicitly evaluate:
 
@@ -88,8 +103,9 @@ For **AI and Agentic Workflows**, explicitly evaluate:
 
 ## Threat model report template
 
-Format the report with the following sections and tables. Use the exact
-heading structure; populate each table with findings from the analysis:
+Use the following structure for the default or STRIDE method. For an explicitly
+requested PASTA or LINDDUN review, preserve that method's stages or categories and
+adapt the evidence tables rather than forcing a STRIDE-only report:
 
 ### 1. System decomposition & trust boundaries
 
@@ -103,7 +119,7 @@ heading structure; populate each table with findings from the analysis:
 
 ### 3. Prioritized abuse paths
 
-| Threat ID | STRIDE Category | Trust Boundary | Preconditions | Abuse Path & Impact | Likelihood | Existing Control | Recommended Mitigation |
+| Threat ID | Method / Category | Trust Boundary | Preconditions | Abuse Path & Impact | Likelihood | Existing Control | Recommended Mitigation |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 
 ### 4. Residual risks, assumptions, & unverified areas

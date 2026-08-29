@@ -75,6 +75,14 @@ its decision impact, and the smallest validation that would close the gap.
    - *Data-at-rest migration:* Does the plan require lossy schema transformation or offline table locking?
    - *Network boundary inflation:* Does the proposal convert fast in-process method calls into distributed RPCs without latency/circuit-breaker justification?
 
+   When an alternative adds or moves a network, queue, datastore, or
+   third-party-service boundary, record the applicable latency and availability
+   budget, timeout behavior, retry or backoff policy, idempotency or
+   duplicate-delivery handling, failure containment, observability, consumer
+   migration, and rollback path. Require only controls justified by the actual
+   boundary and failure model; do not prescribe a circuit breaker, retry, or
+   distributed subsystem merely because one is common.
+
 5. **Filter and deliver.** Drop taste-only churn, fashionable technology
    swaps, and proposals unsupported by a concrete quality, security,
    operability, correctness, or maintainability delta. Prefer fewer, sharper

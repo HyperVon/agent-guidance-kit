@@ -61,14 +61,16 @@ requests, not only the single-request happy path.
 Treat a reproducible stale-response overwrite, cross-context update, or failed
 optimistic rollback as a correctness defect rather than visual polish.
 
-    **Core interaction & accessibility checklist:**
-   - *Keyboard navigation:* Focus traps in modals/dialogs (missing `Escape` listener, missing focus restore on close); interactive elements reachable and operable via `Tab`/`Enter`/`Space`.
-   - *Form controls:* Every input/select/textarea must have a programmatic label (`<label for="...">`, `aria-label`, or `aria-labelledby`); placeholder text is not an accessible label.
-   - *Dynamic state & alerts:* Async status, error banners, and toast notifications must announce via `aria-live="polite"` or `role="alert"`.
-   - *Semantic interactive elements:* Buttons and links must use `<button>` and `<a>` (or explicit `role="button"` with `tabIndex="0"` and keyboard handlers); do not use bare `<div onClick=...>` without keyboard equivalents.
-   - *Visible focus:* `outline: none` (or `box-shadow`/`border` removal) on `:focus` without an equally visible `:focus-visible` or `:focus` replacement makes keyboard focus invisible. Treat removal of the native focus indicator as a P1 defect unless a clearly visible focus style is provided.
-   - *Async form protection:* Submit buttons must disable or indicate pending state during in-flight async requests to prevent duplicate submission or double charging.
-   - *Form error recovery:* On validation failure, focus must be programmatically moved to the error summary or first invalid field, and invalid inputs must declare `aria-invalid="true"`.
+#### Core interaction and accessibility checklist
+
+- *Keyboard navigation:* Focus traps in modals/dialogs (missing `Escape` listener, missing focus restore on close); interactive elements reachable and operable via `Tab`/`Enter`/`Space`.
+- *Form controls:* Every input/select/textarea must have a programmatic label (`<label for="...">`, `aria-label`, or `aria-labelledby`); placeholder text is not an accessible label.
+- *Dynamic state & alerts:* Async status, error banners, and toast notifications must announce via `aria-live="polite"` or `role="alert"`.
+- *Semantic interactive elements:* Buttons and links must use `<button>` and `<a>` (or explicit `role="button"` with `tabIndex="0"` and keyboard handlers); do not use bare `<div onClick=...>` without keyboard equivalents.
+- *Visible focus:* `outline: none` (or `box-shadow`/`border` removal) on `:focus` without an equally visible `:focus-visible` or `:focus` replacement makes keyboard focus invisible. Treat removal of the native focus indicator as a P1 defect unless a clearly visible focus style is provided.
+- *Async form protection:* Submit buttons must disable or indicate pending state during in-flight async requests to prevent duplicate submission or double charging.
+- *Form error recovery:* On validation failure, focus must be programmatically moved to the error summary or first invalid field, and invalid inputs must declare `aria-invalid="true"`.
+
 4. **Review responsive and accessible behavior.** Check semantic controls,
    labels, focus visibility and order, keyboard reachability, contrast, zoom or
    text resizing, reduced motion, touch targets, responsive overflow, and
@@ -84,6 +86,14 @@ optimistic rollback as a correctness defect rather than visual polish.
    spacing, density, imagery, motion, consistency, layout stability, and
    obvious waterfall or rendering cost against the stated product intent. Do
    not call a distinctive design defective merely because it is unfamiliar.
+   Base performance findings on the project's stated budget, a repeatable runtime
+   measurement, or a clearly identified unverified risk. Do not infer a measured
+   regression from source shape alone, and do not require lazy loading universally
+   when eager loading may be necessary for above-the-fold content. When
+   localization or variable user content is in scope, check text expansion,
+   pluralization, right-to-left layout, locale-aware dates and numbers,
+   truncation, and accessible names. If the product does not support localization,
+   state that boundary instead of inventing a requirement.
 6. **Report and stop.** For every finding give severity, exact path or state,
    evidence, user impact, smallest correction, and verification probe. State
    missing references, untested states, and unresolved assumptions. Stop in

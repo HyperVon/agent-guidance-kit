@@ -42,6 +42,28 @@ Produce an overview grounded in repository evidence covering:
 - **operational concerns** — deployment, observability, failure modes.
 - **unknowns** — what could not be confirmed from the available evidence.
 
+## Orientation workflow
+
+1. Inventory applicable repository guidance, tracked top-level areas, workspace
+   or multi-package manifests, runtime and toolchain pins, package-manager
+   configuration, build configuration, and CI entrypoints. Identify generated or
+   vendored areas that should be excluded.
+2. When multiple packages or projects exist, map the workspace root and member
+   boundaries, which member owns each relevant dependency, build artifact, and
+   test suite, and whether commands run from the root with a selector or from a
+   member directory. Do not assume globally installed toolchains when the
+   repository declares a managed runtime or container environment.
+3. Identify the primary entrypoint or consumer journey and trace at least one
+   representative end-to-end flow through its state, integration, and output
+   boundaries.
+4. Sample additional ownership areas according to scope and risk—not alphabetical
+   order, line count, or language-specific filename patterns.
+5. Record paths inspected, commands used, execution roots, excluded areas,
+   sampling limits, and untraced workflows.
+
+A partial inventory must be described as partial; a manifest or filename search
+is not proof of architectural or workspace coverage.
+
 ## Rules
 
 - **Verify claims from repository evidence.** Read source, configuration, tests,

@@ -65,13 +65,29 @@ Before `git bisect`, checking out an older revision, or otherwise moving HEAD:
 A correctly identified regressing commit does not justify leaving the caller's
 repository in detached HEAD, bisect mode, or a modified diagnostic state.
 
+### Historical-execution safety
+
+Treat historical revisions as untrusted executable code. Before an automated
+bisect, inspect the fixed driver and the historical build or test entrypoint it
+invokes. Prefer a disposable worktree, container, or VM with no ambient
+credentials, a minimal environment, constrained write access, and network disabled
+when feasible. Keep the bisect driver outside the changing checkout. If historical
+revisions cannot be executed safely, use read-only history inspection or report the
+automated bisect as `BLOCKED`; worktree isolation alone is not process isolation.
+
 4. Establish the change and data path. Inspect the relevant diff, recent
    changes, configuration, dependencies, and a known-working neighboring path.
    Trace the bad value or state backward to its first incorrect origin.
 5. State one falsifiable hypothesis: “X is the root cause because Y.” Run the
    smallest diagnostic or test that can distinguish it from the alternatives.
-   For performance regressions, capture a comparable baseline and change one
-   variable at a time. Do not bundle multiple fixes into the experiment.
+   For performance regressions, keep commit, input data, environment, dependency
+   state, and load comparable; include appropriate warm-up and repeated
+   measurements. Choose a metric and distribution appropriate to the system and
+   use the project's supported profiler when attribution is needed. A single
+   timing sample is not sufficient evidence. Record measurement commands and
+   relevant tool versions, distinguish signal from variance, and do not generate
+   production load without explicit authority. Change one variable at a time and
+   do not bundle multiple fixes into the experiment.
 6. Once the cause is confirmed, add or update the smallest regression test or
    repeatable reproduction at the failing seam. Apply the minimal root-cause
    correction, then run the focused test, the original reproduction, and the

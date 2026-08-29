@@ -1,8 +1,12 @@
 version: 2
-# Monitor the repository's GitHub Actions. The product has no runtime package
-# dependencies; the static catalog gate uses Python's standard library.
+# Monitor the repository's GitHub Actions and pinned development tooling. The
+# product has no runtime package dependencies.
 updates:
   - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"

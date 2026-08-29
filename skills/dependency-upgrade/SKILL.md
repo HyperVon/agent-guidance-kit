@@ -19,6 +19,14 @@ lockfiles forward. It does not own architecture, feature work, or deployment.
 Work only in the requested scope and preserve behavior, wire formats, and
 distinct tests.
 
+## Step 0 — Freeze the baseline
+
+Record the branch, HEAD, working-tree state, relevant runtime and package-manager
+versions, owning manifests, and lockfiles. Run the smallest complete existing
+gate before changing dependency state. If it is already red, separate the
+pre-existing failure from upgrade regressions and do not attribute it to the
+candidate change.
+
 ## Step 1 — Security alerts first
 
 Triage **all** open security alerts, then prioritize. Where GitHub Dependabot
@@ -28,13 +36,16 @@ target repository or ecosystem's authoritative vulnerability or advisory source
 security tooling). A useful GitHub example:
 
 ```bash
-gh api repos/{owner}/{repo}/dependabot/alerts --jq \
+gh api --paginate repos/{owner}/{repo}/dependabot/alerts --jq \
   '.[] | select(.state == "open") | [.number, .security_advisory.severity, .dependency.package.name, .dependency.manifest_path, (.security_vulnerability.vulnerable_version_range // "?")] | @tsv'
 ```
 
 - Triage all open alerts; prioritize `critical` and `high` severity and
   document blockers or unfixable alerts with owner and next step rather than
   ignoring medium or low findings without triage.
+- If authentication, permissions, pagination, or source availability prevents
+  complete enumeration, report alert triage as `BLOCKED`; do not claim that all
+  alerts were reviewed.
 - An alert identifies a vulnerable range, not the fixed version — confirm a supported remediation version or dependency path exists and can be expressed through the owning manifest or lockfile before changing dependency state.
 - Never delete a security pin to make the build pass.
 

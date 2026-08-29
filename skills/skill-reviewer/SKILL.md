@@ -57,6 +57,14 @@ explicit request to review as permission to inspect, not permission to edit.
 
 1. Define the mode, bounded paths, and any skipped candidates.
 2. **Ground in implementation truth:** Read the actual rules, skill bodies, references, tests, scripts, and codebase files the guidance governs. Verify that every referenced script, command flag, directory path, and tool action exists and works in the current repository. Do not review guidance in an abstract vacuum.
+   Label material evidence as `CATALOG_LOCAL`, `CONSUMER_GROUNDED`,
+   `PRIMARY_SOURCE`, or `UNVERIFIED/BLOCKED`. Catalog-local evidence can prove
+   wording, routing, links, contradictions, and structural coverage; it cannot by
+   itself prove behavior in an unseen consumer repository. Narrow or defer claims
+   whose governed code, tests, runtime, or authoritative interface is unavailable.
+   For a multi-skill review, include a coverage table naming every requested
+   skill, body and reference files read, governed artifacts inspected, and status
+   (`REVIEWED`, `PARTIAL`, or `BLOCKED`).
 3. **Probe for domain and agent failure modes:** Ask what a capable engineer *or* an AI agent will still get wrong after following only this guidance:
    - *Agent failure traps:* Does the skill prevent sycophantic agreement, premature stopping after one green test, defensive exception suppression (`try/except: pass`), speculative trial-and-error editing, tool hallucination, or unverified claims?
    - *Domain traps:* Look for missing boundaries, concurrency races, state persistence errors, transaction rollbacks, secret leaks, missing edge cases, and omitted cleanup procedures.

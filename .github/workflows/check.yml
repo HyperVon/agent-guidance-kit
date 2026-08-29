@@ -20,9 +20,8 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - name: Install lint dependency
-        run: |
-          pip install ruff==0.16.4
+      - name: Install validation dependencies
+        run: pip install -r requirements-dev.txt
       - name: Validate skill catalog
         run: python scripts/validate_catalog.py
       - name: Run static validator tests

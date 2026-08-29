@@ -40,6 +40,16 @@ description: >-
    - secrets from acquisition to storage, transport, logs, errors, and cleanup;
    - sensitive data across persistence, APIs, caches, telemetry, and exports;
    - dependencies, updates, network egress, and agent authority boundaries.
+
+   **Confirmed credential exposure:**
+   When an actual credential has been exposed, deleting or redacting one source
+   copy is not complete remediation. Map likely copies in version history, logs,
+   build artifacts, caches, error reports, and model or agent context. Recommend
+   owner-controlled revocation or rotation and authorized cleanup of retained
+   copies. Report rotation and purge status separately as `VERIFIED`,
+   `UNVERIFIED`, or `BLOCKED`. Never display the credential or perform external
+   rotation without explicit authority.
+
 5. Test only safe local properties that can support a finding: validation,
    permissions, redaction, path containment, dependency metadata, configuration
    parsing, and negative tests. Preserve sensitive values and redact evidence.
@@ -84,6 +94,14 @@ description: >-
 - Are secrets absent from source, fixtures, logs, errors, artifacts, and URLs?
 - Are secret tokens, signatures, and password hashes compared using constant-time comparison functions (`hmac.compare_digest`, `crypto.timingSafeEqual`) to prevent timing side-channel attacks?
 - Is cryptographically secure randomness (`secrets`, `crypto.getRandomValues`) used for tokens, nonces, and session IDs instead of pseudo-random generators (`random.random()`, `Math.random()`)?
+- When comparison, password verification, token generation, or randomness is
+  encapsulated by a library or wrapper, is the guarantee established at the
+  primitive that owns the operation using version-matched authoritative
+  documentation or source evidence? Do not require a redundant call-site
+  constant-time comparison or randomness operation when the underlying primitive
+  already provides it. If the guarantee cannot be established, label it
+  `UNVERIFIED`; retain a finding when the implementation is custom or the owning
+  primitive is documented not to provide it.
 - In multi-tenant systems, is tenant isolation enforced at the database query layer (e.g. mandatory `tenant_id` filter) rather than relying on application-level routing?
 - Can an agent, script, dependency, or CI job gain more authority than the
   user intended?
