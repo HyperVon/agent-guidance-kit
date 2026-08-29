@@ -1,0 +1,4 @@
+# The catalog gate delegates Agent Skills YAML parsing and specification checks
+# to the upstream reference implementation.
+skills-ref==0.1.1
+ruff==0.16.4

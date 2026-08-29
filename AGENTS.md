@@ -13,6 +13,12 @@ This repository is a portable library of agent skills. When working here:
 
 ## Deterministic Gate
 
+Install the pinned validation dependencies before running the gate:
+
+```text
+python3 -m pip install -r requirements-dev.txt
+```
+
 Run the product-only gate before committing and again before pushing:
 
 ```text
