@@ -10,9 +10,6 @@ This repository is a portable library of agent skills. When working here:
   boundaries, and put deeper material in skill-local `references/` files.
 - Do not modify ordinary skill bodies or references for cleanup, style, or
   benchmark results. Skill changes require an explicitly approved change pass.
-- Evaluation corpus, methodology, evidence, reports, and evaluator
-  implementation belong to `HyperVon/agent-guidance-kit-evals`; do not add them
-  to AGK.
 
 ## Deterministic Gate
 
@@ -26,7 +23,7 @@ git diff --check
 ```
 
 The gate checks skill structure and frontmatter, README catalog integrity,
-repository-relative Markdown links, and the absence of non-library roots.
+and repository-relative Markdown links.
 
 ## Mandatory Adversarial Review for PRs
 

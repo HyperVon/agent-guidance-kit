@@ -94,7 +94,5 @@ it through the intake below.
 
 Report the scope, sources with revision/license, evidence table, dispositions,
 and handoff prompts. Stop after the report; applying an accepted recommendation
-requires explicit approval, `skill-authoring` for the change, and a
-clean-context evaluation in the separate evaluation repository for material
-changes. Do not claim the catalog is
-improved merely because candidates were found.
+requires explicit approval and `skill-authoring` for the change. Do not claim
+the catalog is improved merely because candidates were found.

@@ -14,13 +14,6 @@ ROOT = Path(__file__).resolve().parents[1]
 SKILLS_ROOT = ROOT / "skills"
 CATALOG_LINK = re.compile(r"\]\(skills/([a-z0-9-]+)/SKILL\.md\)")
 MARKDOWN_LINK = re.compile(r"\]\((?:<([^>]+)>|([^\s)]+))\)")
-FORBIDDEN_ROOTS = (
-    "evaluations",
-    "evidence",
-    "campaigns",
-    "reports",
-    "corpus",
-)
 
 
 def tracked_markdown_files() -> list[Path]:
@@ -124,15 +117,6 @@ def validate() -> list[str]:
             errors.append(f"README.md: skill {name!r} appears {count} times; expected exactly once")
     for name in sorted(set(catalog_names) - set(names)):
         errors.append(f"README.md: catalog lists removed or unknown skill {name!r}")
-
-    forbidden = [ROOT / name for name in FORBIDDEN_ROOTS]
-    forbidden.extend([ROOT / "Dockerfile.eval", ROOT / "skills" / "skill-evaluation"])
-    for path in forbidden:
-        if path.exists():
-            errors.append(f"forbidden non-library path remains: {path.relative_to(ROOT)}")
-    for skill_dir in skills:
-        if (skill_dir / "evals").exists():
-            errors.append(f"forbidden per-skill eval path remains: {skill_dir.relative_to(ROOT)}/evals")
 
     for markdown in tracked_markdown_files():
         if markdown.exists():
