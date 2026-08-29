@@ -61,6 +61,47 @@ class CatalogValidatorTests(unittest.TestCase):
             )
             self.assertEqual(parse_frontmatter(path), ("example", description))
 
+    def test_rejects_overlong_folded_description_with_blank_line(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "SKILL.md"
+            path.write_text(
+                "---\n"
+                "name: example\n"
+                "description: >-\n"
+                f"  {'x' * 40}\n"
+                "\n"
+                f"  {'y' * 2000}\n"
+                "---\n"
+                "# Example\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "description length"):
+                parse_frontmatter(path)
+
+    def test_parses_quoted_scalars_and_inline_comments(self) -> None:
+        cases = (
+            (
+                '"A description with a # marker and enough characters to pass."',
+                "A description with a # marker and enough characters to pass.",
+            ),
+            (
+                "'A description with doubled '' quotes and enough characters.' # comment",
+                "A description with doubled ' quotes and enough characters.",
+            ),
+            (
+                "A description with enough characters to pass here. # comment",
+                "A description with enough characters to pass here.",
+            ),
+        )
+        for value, expected in cases:
+            with self.subTest(value=value), TemporaryDirectory() as directory:
+                path = Path(directory) / "SKILL.md"
+                path.write_text(
+                    f"---\nname: example\ndescription: {value}\n---\n# Example\n",
+                    encoding="utf-8",
+                )
+                self.assertEqual(parse_frontmatter(path), ("example", expected))
+
     def test_rejects_description_outside_length_boundaries(self) -> None:
         for length in (39, 1025):
             with self.subTest(length=length), TemporaryDirectory() as directory:

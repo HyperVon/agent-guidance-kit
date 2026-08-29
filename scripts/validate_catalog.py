@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -14,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SKILLS_ROOT = ROOT / "skills"
 CATALOG_LINK = re.compile(r"\]\(skills/([a-z0-9-]+)/SKILL\.md\)")
 MARKDOWN_LINK = re.compile(r"\]\((?:<([^>]+)>|([^\s)]+))\)")
+FRONTMATTER_FIELD = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(.*)$")
 MIN_DESCRIPTION_CHARS = 40
 MAX_DESCRIPTION_CHARS = 1024
 
@@ -33,6 +35,150 @@ def tracked_markdown_files() -> list[Path]:
     return [ROOT / line for line in result.stdout.splitlines() if line]
 
 
+def _strip_yaml_comment(value: str) -> str:
+    """Remove a YAML comment while preserving # characters inside quotes."""
+    value = value.lstrip()
+    quote = ""
+    escaped = False
+    index = 0
+    while index < len(value):
+        character = value[index]
+        if quote == '"':
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = ""
+        elif quote == "'":
+            if character == quote:
+                if index + 1 < len(value) and value[index + 1] == quote:
+                    index += 1
+                else:
+                    quote = ""
+        elif index == 0 and character in {'"', "'"}:
+            quote = character
+        elif character == "#" and (index == 0 or value[index - 1].isspace()):
+            return value[:index].rstrip()
+        index += 1
+    return value.strip()
+
+
+def _parse_inline_scalar(value: str) -> str:
+    """Parse the scalar forms used by required frontmatter fields."""
+    value = _strip_yaml_comment(value)
+    if not value:
+        return ""
+    if value.startswith('"'):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError("frontmatter quoted scalar is invalid") from exc
+        if not isinstance(parsed, str):
+            raise ValueError("frontmatter scalar must be a string")
+        return parsed
+    if value.startswith("'"):
+        if len(value) < 2 or not value.endswith("'"):
+            raise ValueError("frontmatter quoted scalar is invalid")
+        return value[1:-1].replace("''", "'")
+    return value
+
+
+def _parse_block_header(value: str) -> tuple[str, int | None, str]:
+    header = _strip_yaml_comment(value)
+    if not header or header[0] not in {">", "|"}:
+        raise ValueError("frontmatter block scalar header is invalid")
+    style = header[0]
+    indentation: int | None = None
+    chomping = ""
+    for character in header[1:]:
+        if character.isspace():
+            continue
+        if character in {"+", "-"}:
+            if chomping:
+                raise ValueError("frontmatter block scalar header is invalid")
+            chomping = character
+        elif character in "123456789":
+            if indentation is not None:
+                raise ValueError("frontmatter block scalar header is invalid")
+            indentation = int(character)
+        else:
+            raise ValueError("frontmatter block scalar header is invalid")
+    return style, indentation, chomping
+
+
+def _fold_block_lines(lines: list[str]) -> str:
+    """Apply the relevant folded-scalar line-break semantics."""
+    result: list[str] = []
+    index = 0
+    last_was_content = False
+    while index < len(lines):
+        if lines[index] == "":
+            end = index
+            while end < len(lines) and lines[end] == "":
+                end += 1
+            result.append("\n" * (end - index))
+            last_was_content = False
+            index = end
+            continue
+        if last_was_content:
+            result.append(" ")
+        result.append(lines[index])
+        last_was_content = True
+        index += 1
+    return "".join(result)
+
+
+def _apply_chomping(value: str, chomping: str) -> str:
+    if not value:
+        return ""
+    if chomping == "-":
+        return value.rstrip("\n")
+    if chomping == "+":
+        return value.rstrip("\n") + "\n" * (len(value) - len(value.rstrip("\n")) + 1)
+    return value.rstrip("\n") + "\n"
+
+
+def _parse_block_scalar(lines: list[str], start: int, end: int, header: str) -> tuple[str, int]:
+    style, explicit_indent, chomping = _parse_block_header(header)
+    raw_lines: list[str] = []
+    index = start
+    while index < end:
+        line = lines[index]
+        if not line.strip():
+            raw_lines.append("")
+            index += 1
+            continue
+        if not line[:1].isspace():
+            if line.startswith("#"):
+                index += 1
+                continue
+            break
+        if explicit_indent is not None:
+            leading_spaces = len(line) - len(line.lstrip(" "))
+            if leading_spaces < explicit_indent:
+                break
+        raw_lines.append(line)
+        index += 1
+
+    if not raw_lines:
+        return "", index
+    nonblank_indents = [len(line) - len(line.lstrip(" ")) for line in raw_lines if line.strip()]
+    indentation = explicit_indent or min(nonblank_indents, default=0)
+    values: list[str] = []
+    for line in raw_lines:
+        if not line.strip():
+            values.append("")
+            continue
+        leading_spaces = len(line) - len(line.lstrip(" "))
+        if leading_spaces < indentation:
+            raise ValueError("frontmatter block scalar indentation is invalid")
+        values.append(line[indentation:])
+
+    value = "\n".join(values) if style == "|" else _fold_block_lines(values)
+    return _apply_chomping(value, chomping), index
+
+
 def parse_frontmatter(path: Path) -> tuple[str, str]:
     lines = path.read_text(encoding="utf-8").splitlines()
     if not lines or lines[0].strip() != "---":
@@ -44,31 +190,31 @@ def parse_frontmatter(path: Path) -> tuple[str, str]:
         raise ValueError("frontmatter closing --- is missing") from exc
 
     name = ""
-    description_parts: list[str] = []
-    in_description = False
-    for line in lines[1:end]:
-        if line.startswith("name:"):
-            name = line.partition(":")[2].strip()
-            in_description = False
-        elif line.startswith("description:"):
-            value = line.partition(":")[2].strip()
-            in_description = True
-            if value not in {"", ">-", ">", "|-", "|"}:
-                description_parts.append(value)
-        elif in_description and line.strip() and line[:1].isspace():
-            description_parts.append(line.strip())
-        elif in_description:
-            # A non-indented frontmatter key ends a folded description. Ignore
-            # optional fields such as compatibility or metadata instead of
-            # counting them toward the description limit.
-            in_description = False
+    description = ""
+    index = 1
+    while index < end:
+        match = FRONTMATTER_FIELD.match(lines[index])
+        if not match or lines[index][:1].isspace():
+            index += 1
+            continue
+        field, value = match.groups()
+        if field == "name":
+            name = _parse_inline_scalar(value)
+            index += 1
+        elif field == "description":
+            if value.lstrip().startswith((">", "|")):
+                description, index = _parse_block_scalar(lines, index + 1, end, value)
+            else:
+                description = _parse_inline_scalar(value)
+                index += 1
+        else:
+            index += 1
 
     if not name:
         raise ValueError("frontmatter name is missing")
-    if not description_parts:
+    if not description:
         raise ValueError("frontmatter description is empty")
 
-    description = " ".join(description_parts)
     if not MIN_DESCRIPTION_CHARS <= len(description) <= MAX_DESCRIPTION_CHARS:
         raise ValueError(
             "frontmatter description length "
