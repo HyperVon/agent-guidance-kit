@@ -417,8 +417,11 @@ def parse_frontmatter(path: Path) -> tuple[str, str]:
     the catalog gate cannot accept a file that the reference validator rejects.
     """
     lines = path.read_text(encoding="utf-8").splitlines()
-    if not lines or lines[0].strip() != "---":
+    if not lines or not lines[0].startswith("---"):
         raise ValueError("frontmatter must start with ---")
+    opening_suffix = lines[0][3:]
+    if "\t" in opening_suffix or (opening_suffix.strip() and not opening_suffix.lstrip().startswith("#")):
+        raise ValueError("frontmatter opening marker is invalid")
 
     try:
         end = lines.index("---", 1)
@@ -443,13 +446,12 @@ def parse_frontmatter(path: Path) -> tuple[str, str]:
         if field in fields:
             raise ValueError(f"frontmatter field {field!r} is duplicated")
         if field == "metadata":
-            if value.strip() not in {"{}", "{ }"}:
-                if value.strip():
-                    raise ValueError("frontmatter metadata must be an indented mapping")
-                fields[field], index = _parse_metadata_map(lines, index + 1, end)
-            else:
-                fields[field] = {}
-                index += 1
+            cleaned_metadata = _strip_yaml_comment(value)
+            if cleaned_metadata in {"{}", "{ }"}:
+                raise ValueError("frontmatter metadata must be an indented mapping")
+            if cleaned_metadata:
+                raise ValueError("frontmatter metadata must be an indented mapping")
+            fields[field], index = _parse_metadata_map(lines, index + 1, end)
         elif value.lstrip().startswith((">", "|")):
             if field == "name":
                 raise ValueError("frontmatter name must be an inline scalar")
