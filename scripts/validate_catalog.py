@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 import subprocess
 import sys
@@ -17,6 +16,7 @@ SKILLS_ROOT = ROOT / "skills"
 CATALOG_LINK = re.compile(r"\]\(skills/([a-z0-9-]+)/SKILL\.md\)")
 MARKDOWN_LINK = re.compile(r"\]\((?:<([^>]+)>|([^\s)]+))\)")
 FRONTMATTER_FIELD = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(.*)$")
+METADATA_FIELD = re.compile(r"^(.+?)\s*:\s*(.*)$")
 ALLOWED_FRONTMATTER_FIELDS = {
     "name",
     "description",
@@ -29,6 +29,25 @@ MAX_NAME_CHARS = 64
 MIN_DESCRIPTION_CHARS = 40
 MAX_DESCRIPTION_CHARS = 1024
 MAX_COMPATIBILITY_CHARS = 500
+YAML_DOUBLE_QUOTE_ESCAPES = {
+    "0": "\0",
+    "a": "\a",
+    "b": "\b",
+    "t": "\t",
+    "n": "\n",
+    "v": "\v",
+    "f": "\f",
+    "r": "\r",
+    "e": "\x1b",
+    " ": " ",
+    '"': '"',
+    "/": "/",
+    "\\": "\\",
+    "N": "\u0085",
+    "_": "\u00a0",
+    "L": "\u2028",
+    "P": "\u2029",
+}
 
 
 def tracked_markdown_files() -> list[Path]:
@@ -81,13 +100,36 @@ def _parse_inline_scalar(value: str) -> str:
     if not value:
         return ""
     if value.startswith('"'):
-        try:
-            parsed = json.loads(value)
-        except json.JSONDecodeError as exc:
-            raise ValueError("frontmatter quoted scalar is invalid") from exc
-        if not isinstance(parsed, str):
-            raise ValueError("frontmatter scalar must be a string")
-        return parsed
+        if len(value) < 2 or not value.endswith('"'):
+            raise ValueError("frontmatter quoted scalar is invalid")
+        inner = value[1:-1]
+        parsed: list[str] = []
+        index = 0
+        while index < len(inner):
+            character = inner[index]
+            if character == '"':
+                raise ValueError("frontmatter quoted scalar is invalid")
+            if character != "\\":
+                parsed.append(character)
+                index += 1
+                continue
+            index += 1
+            if index >= len(inner):
+                raise ValueError("frontmatter quoted scalar is invalid")
+            escape = inner[index]
+            if escape in YAML_DOUBLE_QUOTE_ESCAPES:
+                parsed.append(YAML_DOUBLE_QUOTE_ESCAPES[escape])
+                index += 1
+                continue
+            width = {"x": 2, "u": 4, "U": 8}.get(escape)
+            if width is None or index + width >= len(inner):
+                raise ValueError("frontmatter quoted scalar is invalid")
+            digits = inner[index + 1 : index + width + 1]
+            if not re.fullmatch(rf"[0-9A-Fa-f]{{{width}}}", digits):
+                raise ValueError("frontmatter quoted scalar is invalid")
+            parsed.append(chr(int(digits, 16)))
+            index += width + 1
+        return "".join(parsed)
     if value.startswith("'"):
         if len(value) < 2 or not value.endswith("'"):
             raise ValueError("frontmatter quoted scalar is invalid")
@@ -101,7 +143,9 @@ def _parse_inline_scalar(value: str) -> str:
                 raise ValueError("frontmatter quoted scalar is invalid")
             index += 2
         return inner.replace("''", "'")
-    if value[0] in "[{&*!" or re.search(r":\s", value):
+    if value.startswith(("- ", "? ", ": ", ",", "[", "]", "{", "}", "&", "*", "!", "%", "@", "`")):
+        raise ValueError("frontmatter scalar must be a string")
+    if re.search(r":\s", value):
         raise ValueError("frontmatter scalar must be a string")
     return value
 
@@ -143,7 +187,11 @@ def _fold_block_lines(lines: list[tuple[str, bool]]) -> str:
             end = index
             while end < len(lines) and lines[end][0] == "":
                 end += 1
-            result.append("\n" * (end - index))
+            next_is_more_indented = end < len(lines) and lines[end][1]
+            newline_count = end - index
+            if last_was_more_indented or next_is_more_indented:
+                newline_count += 1
+            result.append("\n" * newline_count)
             last_was_content = False
             index = end
             continue
@@ -166,8 +214,11 @@ def _apply_chomping(value: str, chomping: str) -> str:
     return value.rstrip("\n") + "\n"
 
 
-def _parse_block_scalar(lines: list[str], start: int, end: int, header: str) -> tuple[str, int]:
+def _parse_block_scalar(
+    lines: list[str], start: int, end: int, header: str, parent_indent: int = 0
+) -> tuple[str, int]:
     style, explicit_indent, chomping = _parse_block_header(header)
+    required_indent = parent_indent + explicit_indent if explicit_indent is not None else None
     raw_lines: list[str] = []
     index = start
     while index < end:
@@ -178,9 +229,13 @@ def _parse_block_scalar(lines: list[str], start: int, end: int, header: str) -> 
             continue
         if not line[:1].isspace():
             break
-        if explicit_indent is not None:
-            leading_spaces = len(line) - len(line.lstrip(" "))
-            if leading_spaces < explicit_indent:
+        if line.startswith("\t"):
+            raise ValueError("frontmatter block scalar indentation is invalid")
+        leading_spaces = len(line) - len(line.lstrip(" "))
+        if leading_spaces <= parent_indent:
+            break
+        if required_indent is not None:
+            if leading_spaces < required_indent:
                 break
         raw_lines.append(line)
         index += 1
@@ -188,7 +243,7 @@ def _parse_block_scalar(lines: list[str], start: int, end: int, header: str) -> 
     if not raw_lines:
         return "", index
     nonblank_indents = [len(line) - len(line.lstrip(" ")) for line in raw_lines if line.strip()]
-    indentation = explicit_indent or min(nonblank_indents, default=0)
+    indentation = required_indent or min(nonblank_indents, default=0)
     values: list[tuple[str, bool]] = []
     for line in raw_lines:
         if not line.strip():
@@ -222,16 +277,17 @@ def _parse_metadata_map(lines: list[str], start: int, end: int) -> tuple[dict[st
             expected_indent = indent
         if indent != expected_indent:
             raise ValueError("frontmatter metadata indentation is invalid")
-        match = FRONTMATTER_FIELD.match(line[indent:])
+        match = METADATA_FIELD.match(line[indent:])
         if not match:
             raise ValueError("frontmatter metadata must be a mapping of scalar values")
-        key, value = match.groups()
-        if not value.strip():
-            raise ValueError("frontmatter metadata values must be scalar strings")
+        key, value = (part.strip() for part in match.groups())
         if key in metadata:
             raise ValueError(f"frontmatter metadata key {key!r} is duplicated")
-        metadata[key] = _parse_inline_scalar(value)
-        index += 1
+        if value.lstrip().startswith((">", "|")):
+            metadata[key], index = _parse_block_scalar(lines, index + 1, end, value, indent)
+        else:
+            metadata[key] = _parse_inline_scalar(value)
+            index += 1
     return metadata, index
 
 
@@ -308,7 +364,7 @@ def parse_frontmatter(path: Path) -> tuple[str, str]:
     if "description" not in fields:
         raise ValueError("frontmatter description is empty")
     description = fields["description"]
-    if not isinstance(description, str) or not description:
+    if not isinstance(description, str) or not description.strip():
         raise ValueError("frontmatter description is empty")
     if "compatibility" in fields:
         compatibility = fields["compatibility"]

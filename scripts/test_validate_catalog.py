@@ -54,7 +54,10 @@ class CatalogValidatorTests(unittest.TestCase):
                 f"  {description}\n"
                 f"compatibility: {compatibility}\n"
                 "metadata:\n"
-                "  owner: platform\n"
+                "  owner name: platform\n"
+                "  empty value:\n"
+                "  notes: >-\n"
+                "    metadata block value\n"
                 "---\n"
                 "# Example\n",
                 encoding="utf-8",
@@ -83,6 +86,10 @@ class CatalogValidatorTests(unittest.TestCase):
             (
                 '"A description with a # marker and enough characters to pass."',
                 "A description with a # marker and enough characters to pass.",
+            ),
+            (
+                '"A description with a YAML escape \\x41 and enough characters."',
+                "A description with a YAML escape A and enough characters.",
             ),
             (
                 "'A description with doubled '' quotes and enough characters.' # comment",
@@ -136,6 +143,14 @@ class CatalogValidatorTests(unittest.TestCase):
                 "block scalar header",
             ),
             (
+                "name: example\ndescription: - This description is comfortably longer than forty characters.\n",
+                "string",
+            ),
+            (
+                "name: example\ndescription: >-\n\tThis description is comfortably longer than forty characters.\n",
+                "indentation",
+            ),
+            (
                 "name: foo--bar\ndescription: This description is comfortably longer than forty characters.\n",
                 "consecutive hyphens",
             ),
@@ -154,6 +169,10 @@ class CatalogValidatorTests(unittest.TestCase):
             (
                 f"name: {'x' * 65}\ndescription: This description is comfortably longer than forty characters.\n",
                 "exceeds 64",
+            ),
+            (
+                "name: example\ndescription: \"                                        \"\n",
+                "description is empty",
             ),
         )
         for frontmatter, message in cases:
