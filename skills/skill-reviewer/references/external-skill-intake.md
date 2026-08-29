@@ -82,6 +82,16 @@ Then include:
 - unverifiable claims and required follow-up evidence;
 - a smallest-first apply order.
 
+### Persist the admission record
+
+Before handoff, name the adopter's canonical provenance record and provide
+publishable source URL, publisher, retrieval date, reviewed revision, paths,
+license, and disposition. Prefer an existing approved mechanism such as a
+provenance file, decision record, change proposal, or PR record. Do not place
+private filesystem paths or copied candidate prose in the portable skill body. If
+no destination exists or is authorized, report `PROVENANCE_NOT_PERSISTED` and
+request a decision rather than claiming the intake lifecycle is complete.
+
 Stop after the report. Applying an accepted recommendation requires explicit
 approval, `skill-authoring`, clean-context evaluation for material changes, and
 the repository's complete validation and public-hygiene gates.

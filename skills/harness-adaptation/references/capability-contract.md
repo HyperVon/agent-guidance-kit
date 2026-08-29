@@ -48,7 +48,7 @@ skills:
 composition: <links/imports/projection behavior>
 reload: <immediate/reload/new task/unknown>
 verification: <safe observable check>
-support: VERIFIED | DOCUMENTED | BEST_EFFORT | UNSUPPORTED
+support: RUNTIME_VERIFIED | DOCUMENTED | BEST_EFFORT | UNSUPPORTED
 evidence_date: <date>
 ```
 

@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SKILLS_ROOT = ROOT / "skills"
 CATALOG_LINK = re.compile(r"\]\(skills/([a-z0-9-]+)/SKILL\.md\)")
 MARKDOWN_LINK = re.compile(r"\]\((?:<([^>]+)>|([^\s)]+))\)")
+MIN_DESCRIPTION_CHARS = 40
+MAX_DESCRIPTION_CHARS = 1024
 
 
 def tracked_markdown_files() -> list[Path]:
@@ -60,7 +62,19 @@ def parse_frontmatter(path: Path) -> tuple[str, str]:
         raise ValueError("frontmatter name is missing")
     if not description_parts:
         raise ValueError("frontmatter description is empty")
-    return name, " ".join(description_parts)
+
+    description = " ".join(description_parts)
+    if not MIN_DESCRIPTION_CHARS <= len(description) <= MAX_DESCRIPTION_CHARS:
+        raise ValueError(
+            "frontmatter description length "
+            f"{len(description)} is outside "
+            f"{MIN_DESCRIPTION_CHARS}-{MAX_DESCRIPTION_CHARS} characters"
+        )
+
+    if not any(line.strip() for line in lines[end + 1 :]):
+        raise ValueError("skill body is empty")
+
+    return name, description
 
 
 def local_link_errors(path: Path) -> list[str]:

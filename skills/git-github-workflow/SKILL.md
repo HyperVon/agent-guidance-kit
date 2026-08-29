@@ -28,10 +28,11 @@ history or publish without authority.
 ## Workflow
 
 1. **Establish state and authority.** Read `git status --porcelain`, `git branch --show-current`,
-   `git log --oneline -5`, remote, and protection rules. Confirm the canonical
-   base is `main` and whether a clean worktree is required. Confirm the user has
-   authorized any `push`, `publish`, or `PR` creation; otherwise stop after the
-   draft.
+   `git log --oneline -5`, remote, and protection rules. Resolve the canonical
+   base from repository policy, existing PR metadata, the remote default, or an
+   explicit user instruction, and determine whether a clean worktree is required.
+   Confirm the user has authorized any `push`, `publish`, or `PR` creation;
+   otherwise stop after the draft.
 
    **Worktree safety and pre-flight checklist:**
    - Run `git status --porcelain` to identify untracked, modified, and staged files.
@@ -39,8 +40,9 @@ history or publish without authority.
      - Ask the user whether to commit, stash (`git stash -u` to include untracked files), or discard.
      - Never run destructive commands (`git checkout -- .`, `git clean -fd`, `git reset --hard`) without explicit approval.
    - Confirm the target branch does not already exist locally or remotely (`git branch --list <name>`, `git ls-remote --heads origin <name>`).
-2. **Plan the branch and commits.** Use trunk-based branches (`feat/`, `fix/`,
-   `docs/`) from `main`. Keep commits atomic and conventional
+2. **Plan the branch and commits.** Use the repository's established branch
+   naming from the resolved base; when no convention exists, propose a concise
+   purpose-based name. Keep commits atomic and conventional
    (`feat:`, `fix:`, `docs:`, `chore:`). Never use `reset --hard`,
    `filter-branch`, `rebase --force`, or history rewriting on shared branches
    without explicit approval.
@@ -78,30 +80,45 @@ history or publish without authority.
      failing or skipped gate as a blocker: resolve the findings (or, for a genuine
      false positive, record the exact reason) before commit/push. Never commit or
      push with the gate red or skipped.
-6. **Apply repository-required adversarial review gates.** Inspect local
-    policy (for example `AGENTS.md` or `CONTRIBUTING.md`) before pushing a branch
-    that will open or update a pull request. When that policy requires
-    `adversarial-pr-review`, invoke it on the final diff before the initial push
-    and every later update push, and require a completed fresh-context review
-    (verdict, findings, and convergence evidence) before pushing. If the
-    reviewer-independence or convergence evidence is missing, block the push. The
-    reviewer-independence, convergence, track-iteration, and grading mechanics are
-    owned by [adversarial-pr-review](../adversarial-pr-review/SKILL.md); this
-    gate does not replace the separate user authorization to push.
-7. **Publish only with approval.** Run the full gate, then `git fetch <remote> <base>` and reconcile with the latest base BEFORE pushing or opening the PR, not after, so the PR diff is against current `main`. Do not open or update a PR while the full gate is red or skipped, or while the branch is behind its base. Push to the approved remote/branch, set upstream only when requested, and open the PR with `gh pr create` using the approved body. Report branch, commit, remote, base SHA reconciled onto, and checks.
+6. **Reconcile, verify, and freeze the publish candidate.** Fetch the resolved
+   base from the approved remote and reconcile before the final gate or review.
+   Record the reconciled `BASE_SHA` and candidate `HEAD_SHA`, then run the full
+   repository gate against that exact state. Inspect local policy (for example
+   `AGENTS.md` or `CONTRIBUTING.md`) and, when it requires
+   `adversarial-pr-review`, invoke it on the exact `BASE_SHA...HEAD_SHA` diff
+   before the initial push and every later update push. Require a completed
+   fresh-context verdict and convergence evidence. Any later commit, amend,
+   merge, rebase, conflict resolution, generated-file change, or other diff
+   mutation invalidates the final gate and review and returns the workflow to
+   this step. The review mechanics are owned by
+   [adversarial-pr-review](../adversarial-pr-review/SKILL.md); this gate does not
+   replace separate authorization to push.
+7. **Publish only the frozen candidate with approval.** Confirm that HEAD still
+   equals the recorded `HEAD_SHA` and that the current remote base tip still
+   equals `BASE_SHA`; if either moved, return to step 6. Do not open or update a
+   PR while a required gate is red, skipped, stale, or blocked. Push to the
+   approved remote and branch, set upstream only when requested, and open the PR
+   with `gh pr create` using the approved body. Report branch, commit, remote,
+   reconciled base SHA, reviewed diff range, and checks.
 
 ## Boundaries and gotchas
 
 - Never run `git add .` or `git add -A` from repository root. Explicitly stage only the files owned by the task (`git add path/to/file1 path/to/file2`).
 - Check `git diff --cached` before committing to verify zero unintended files, debug logs, or credentials are staged.
 - Use explicit issue closing keywords in PR bodies (`Fixes #123`, `Closes #456`) rather than vague issue references.
-- Do not `push --force`, `push --force-with-lease` on `main`, or rewrite
-  published history without explicit approval and a backup branch.
+- Do not `push --force`, use `push --force-with-lease` on the resolved base or
+  protected default branch, or rewrite published history without explicit
+  approval and a backup branch.
 - Do not use a quick or skipped variant of the gate as the pre-commit or pre-push
   check; run the full gate and confirm it passes before committing or pushing.
   Skipping lint or structural validation is where guidance edits most often fail.
-- Before any `push --force-with-lease` (non-main) or history rewrite, create an explicit backup branch (`git branch backup/<branch>-<date>`) and name it in the report; never rely on the reflog alone.
-- Before opening or updating a PR, `git fetch <remote> <base>` and reconcile the branch with the current base (merge or rebase) so the PR diff is against latest `main`; report the base SHA you rebased onto.
+- Before any authorized `push --force-with-lease` on a non-base branch or other
+  history rewrite, create an explicit backup branch
+  (`git branch backup/<branch>-<date>`) and name it in the report; never rely on
+  the reflog alone.
+- Before opening or updating a PR, fetch and reconcile the resolved base, then
+  freeze and report the exact `BASE_SHA...HEAD_SHA` range that passed the final
+  gate and any required review.
 - Do not commit secrets, `.env`, `id_rsa`, `*.pem`, or personal filesystem
   paths. Redact examples.
 - Do not create a remote, tag, or release (`git tag`/`gh release`) without

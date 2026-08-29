@@ -40,6 +40,16 @@ generic advice. Include sections as the evidence supports them:
 - **build/deployment information** — how the project builds and ships, when present.
 - **agent-specific rules** — directives the project wants an agent to follow.
 
+## Scope and precedence
+
+Inventory every applicable guidance file from the repository root to the target
+path before authoring. Put repository-wide rules at the root and narrower commands
+or constraints nearest the subtree that owns them. Nested guidance may refine its
+parent within that subtree, but it must not silently contradict higher-authority
+instructions. Do not restate system, user, or harness policy as repository policy.
+When two applicable sources conflict and precedence cannot be established, show
+both claims and stop for a decision.
+
 ## Critical rule: facts versus policy
 
 Separate what is **discovered** from what **requires a human decision**:

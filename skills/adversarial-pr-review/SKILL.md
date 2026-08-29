@@ -55,7 +55,11 @@ remains opt-in unless the local policy adopts it.
   the parent validates, de-duplicates, ranks, and integrates.
 - **No external publication.** Workers do not push, merge, approve, or post
   external comments.
-- **Approval and delegation consistent with `parallel-multi-agent` and `OPERATING.md`.** Delegation requires user or repository-policy authorization to use workers, disjoint ownership, and parent-owned integration and final verification. Do not invent an additional approval gate for routine PRs merely because this skill exists in the catalog.
+- **Approval and delegation consistent with `parallel-multi-agent` and applicable
+  repository-local operating guidance, when present.** Delegation requires user
+  or repository-policy authorization to use workers, disjoint ownership, and
+  parent-owned integration and final verification. Do not invent an additional
+  approval gate for routine PRs merely because this skill exists in the catalog.
 
 ## Track matrix
 
@@ -72,10 +76,9 @@ parent cannot substitute for the review.
 
 For review work, also record iteration cap and stop condition per track.
 Document the matrix and obtain approval before the first parallel worker
-launch unless the user explicitly requested this workflow. Approval of the
-track matrix is proposal-first per `OPERATING.md` — a routine PR does
-not implicitly require this extra approval unless the repository has adopted
-the policy above.
+launch unless the user explicitly requested this workflow or applicable
+repository policy already authorizes it. A routine PR does not implicitly require
+this extra approval unless the repository has adopted the policy above.
 
 ## Adversarial inspection lenses
 
@@ -102,6 +105,16 @@ When delegating track scopes, assign each worker a concrete adversarial lens bas
    - *Line anchor check:* Verify that the referenced line and code snippet match HEAD/merge-base diff.
    - *Reachability check:* Verify whether caller context, type definitions, or upstream middleware already neutralize the alleged defect.
    - *Contract verification:* Reject findings based on personal style or ungrounded assumptions; require a concrete failing scenario or violated invariant.
+   - *Intentional contract-change check:* Treat a PR description, issue, or
+     comment as evidence of intent, not by itself as proof of authorization or
+     correctness. Determine whether a breaking change or deprecation is explicitly
+     within user- or repository-approved scope and consistent with the repository's
+     source-of-truth contract and versioning policy. Even when intentional, verify
+     affected callers and consumers, migration or compatibility handling, tests and
+     documentation, release implications, and rollback or recovery. Retain the
+     finding when authorization is unclear or migration evidence is incomplete;
+     when the change is authorized and fully accounted for, reject the alleged
+     accidental-regression finding with those anchors.
    - *Deduplication:* Merge duplicate findings across track boundaries into a single anchored item with primary ownership.
 5. **Report and stop (Review Phase).** Return review scope, track matrix,
    per-track verdicts, and ranked findings anchored to `path:line` with

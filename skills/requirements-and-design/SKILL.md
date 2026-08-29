@@ -27,20 +27,37 @@ implementation or the execution plan (that is `implementation-planning`).
 ## Workflow
 
 1. **Frame the outcome.** Name the user/business outcome, not the proposed
-   mechanism. Reframe solution-shaped requests into the underlying need.
+   mechanism. Reframe solution-shaped requests into the underlying need. For an
+   existing system, first record current behavior and constraints from source,
+   tests, configuration, interfaces, and operational evidence; do not design
+   against narrative documentation alone.
 2. **Elicit requirements.**
    - *Functional:* what the system must do.
    - *Non-functional:* performance, security, reliability, usability, compliance.
    - *Constraints:* fixed stack, deadlines, legal, legacy compatibility.
-   - *Assumptions:* what is taken as true and should be validated.
+   - *Assumptions:* what is taken as true; give every material assumption the
+     smallest practical falsification probe and identify who or what can resolve
+     it.
+   For each material non-functional requirement, state the metric, measurement
+   method, and failure threshold when meaningful; otherwise explain why
+   qualitative evidence is appropriate.
+   Evaluate material requirements as a set, not only one at a time. When two
+   constraints cannot both be satisfied, name the smallest conflicting pair,
+   explain the trade-off, and mark the decision `BLOCKED` until an authorized
+   owner chooses which constraint yields. Do not recommend an impossible
+   compromise. Based on risk, define applicable failure and recovery behavior,
+   scale or concurrency boundaries, and security or tenancy guarantees; skip
+   dimensions that cannot materially affect the outcome.
 3. **Define acceptance criteria.** Each criterion must be testable and tied to the
    outcome, so a later implementation agent knows when "done" is reached.
 4. **Consider alternatives.** Enumerate plausible approaches, including doing less
    or nothing, and record why each was or was not chosen. Scale this analysis with
    the change's risk and impact; do not stand up a heavyweight decision process for
    a trivial change.
-5. **Recommend an approach.** Select one, state the trade-offs accepted, and list
-   any unresolved decisions that block implementation.
+5. **Recommend an approach.** Select one, state the trade-offs accepted, and label
+   every unresolved choice `PROPOSED`, `APPROVED`, or `BLOCKED`. Do not describe
+   a recommendation as approved without user or repository authority, and do not
+   hand a blocked design to implementation planning as settled.
 
 ## Required output
 

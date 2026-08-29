@@ -59,6 +59,22 @@ exactly one disposition per item:
 | `needs-clarification` | The comment is ambiguous or missing the evidence needed to act; ask a precise question. |
 | `deferred` | Valid but out of scope for this change; record it as a tracked follow-up. |
 
+### Reconcile dispositions as a set
+
+After assigning independent dispositions, evaluate all `accepted` items together
+before implementation. Two individually plausible suggestions may still require
+incompatible changes.
+
+- Identify the source-of-truth contract, repository policy, or authorized
+  decision that controls the conflict.
+- When one suggestion conflicts with that authority, retain the supported item
+  and mark the other `rejected-with-evidence`.
+- When the controlling contract or intended behavior is genuinely unclear, mark
+  the conflicting items `needs-clarification` and do not implement either one.
+- Do not invent a hybrid compromise that satisfies neither contract.
+- Keep valid but out-of-scope architectural work `deferred`; recording it in the
+  report does not authorize creating an issue or another remote follow-up artifact.
+
 Maintain three separated streams and do not blur them:
 
 - **review feedback** — what the reviewer said and your disposition of it;

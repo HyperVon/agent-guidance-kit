@@ -15,10 +15,56 @@ class CatalogValidatorTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "SKILL.md"
             path.write_text(
-                "---\nname: example\ndescription: >-\n  First line.\n  Second line.\n---\n",
+                "---\n"
+                "name: example\n"
+                "description: >-\n"
+                "  First line supplies a valid description.\n"
+                "  Second line completes it.\n"
+                "---\n"
+                "# Example\n",
                 encoding="utf-8",
             )
-            self.assertEqual(parse_frontmatter(path), ("example", "First line. Second line."))
+            self.assertEqual(
+                parse_frontmatter(path),
+                (
+                    "example",
+                    "First line supplies a valid description. Second line completes it.",
+                ),
+            )
+
+    def test_accepts_description_length_boundaries(self) -> None:
+        for length in (40, 1024):
+            with self.subTest(length=length), TemporaryDirectory() as directory:
+                path = Path(directory) / "SKILL.md"
+                path.write_text(
+                    f"---\nname: example\ndescription: {'x' * length}\n---\n# Example\n",
+                    encoding="utf-8",
+                )
+                self.assertEqual(len(parse_frontmatter(path)[1]), length)
+
+    def test_rejects_description_outside_length_boundaries(self) -> None:
+        for length in (39, 1025):
+            with self.subTest(length=length), TemporaryDirectory() as directory:
+                path = Path(directory) / "SKILL.md"
+                path.write_text(
+                    f"---\nname: example\ndescription: {'x' * length}\n---\n# Example\n",
+                    encoding="utf-8",
+                )
+                with self.assertRaisesRegex(ValueError, "description length"):
+                    parse_frontmatter(path)
+
+    def test_rejects_empty_skill_body(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "SKILL.md"
+            path.write_text(
+                "---\n"
+                "name: example\n"
+                "description: This description is comfortably longer than forty characters.\n"
+                "---\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "skill body is empty"):
+                parse_frontmatter(path)
 
     def test_repository_catalog_passes(self) -> None:
         result = subprocess.run(
